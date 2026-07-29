@@ -32,6 +32,9 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
+import java.util.Objects;
+import java.util.Locale;
 import java.util.StringJoiner;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -40,13 +43,27 @@ import java.util.stream.Stream;
 @RestControllerAdvice
 public class RestErrorHandler {
 
+    /**
+     * Champs dont la valeur refusée ne doit jamais être renvoyée à l'appelant.
+     *
+     * <p>Une erreur de validation sur un mot de passe renvoyait sa valeur en clair dans la
+     * réponse HTTP — et donc potentiellement dans les journaux d'accès, les outils de
+     * supervision et l'historique du navigateur. Un simple mot de passe trop long suffisait à
+     * l'exposer.
+     */
+    private static final Set<String> SENSITIVE_FIELDS =
+            Set.of("password", "newpassword", "oldpassword", "confirmpassword", "pin", "otp",
+                    "secret", "token", "apikey", "webhooksecret");
+
+    private static final String REDACTED = "***";
+
     private List<ErrorDetail> getErrorDetails(BindingResult bindingResult) {
 
         Stream<ErrorDetail> fieldErrors = bindingResult.getFieldErrors().stream().map(error -> ErrorDetail.builder()
                 .code(error.getCode())
                 .defaultMessage(error.getDefaultMessage())
                 .field(error.getField())
-                .rejectValue(error.getRejectedValue())
+                .rejectValue(maskIfSensitive(error.getField(), error.getRejectedValue()))
                 .build());
 
         Stream<ErrorDetail> globalErrors = bindingResult.getGlobalErrors().stream().map(error -> ErrorDetail.builder()
@@ -56,6 +73,21 @@ public class RestErrorHandler {
                 .build());
 
         return Stream.concat(fieldErrors, globalErrors).collect(Collectors.toList());
+    }
+
+    /**
+     * Le nom du champ est normalisé avant comparaison : la validation peut le remonter sous des
+     * formes variées ({@code password}, {@code changePasswordForm.newPassword}, {@code new_password}),
+     * et laisser passer une seule de ces variantes suffirait à réexposer la valeur.
+     */
+    private static Object maskIfSensitive(String field, Object rejectedValue) {
+        if (Objects.isNull(rejectedValue) || Objects.isNull(field)) {
+            return rejectedValue;
+        }
+        String normalized = field.substring(field.lastIndexOf('.') + 1)
+                .replace("_", "")
+                .toLowerCase(Locale.ROOT);
+        return SENSITIVE_FIELDS.contains(normalized) ? REDACTED : rejectedValue;
     }
 
     @ExceptionHandler(ValidationException.class)

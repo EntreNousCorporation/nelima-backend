@@ -28,6 +28,7 @@ import com.ypyit.neoelima.domain.transverse.dto.CheckResourceStatus;
 import com.ypyit.neoelima.domain.transverse.enums.GlobalParameterKey;
 import com.ypyit.neoelima.domain.transverse.service.GlobalParameterService;
 import com.ypyit.neoelima.domain.user.dto.UserDto;
+import com.ypyit.neoelima.domain.user.entity.AdminUserEntity;
 import com.ypyit.neoelima.domain.user.entity.ContactEntity;
 import com.ypyit.neoelima.domain.user.entity.EstablishmentUserEntity;
 import com.ypyit.neoelima.domain.user.entity.PasswordEntity;
@@ -37,6 +38,7 @@ import com.ypyit.neoelima.domain.user.entity.UserEntity;
 import com.ypyit.neoelima.domain.user.enums.ContactType;
 import com.ypyit.neoelima.domain.user.enums.RoleTarget;
 import com.ypyit.neoelima.domain.user.enums.RoleType;
+import com.ypyit.neoelima.domain.user.enums.UserType;
 import com.ypyit.neoelima.domain.user.form.ChangePasswordForm;
 import com.ypyit.neoelima.domain.user.form.ContactCreationForm;
 import com.ypyit.neoelima.domain.user.form.ContactUpdateForm;
@@ -325,12 +327,35 @@ public class UserServiceImpl implements UserService {
     @Override
     public UserDto getMe() throws BusinessException {
         try {
-            return this.userMapper.toDto(this.identityService.getCurrentUser());
+            UserEntity current = this.identityService.getCurrentUser();
+            UserDto dto = this.userMapper.toDto(current);
+            // Le type et l'établissement ne sont pas portés par UserEntity mais par ses
+            // sous-classes : MapStruct ne peut pas les déduire, on les pose ici.
+            dto.setUserType(userTypeOf(current));
+            if (current instanceof EstablishmentUserEntity establishmentUser
+                    && Objects.nonNull(establishmentUser.getEstablishment())) {
+                dto.setEstablishmentId(establishmentUser.getEstablishment().getId());
+                dto.setEstablishmentName(establishmentUser.getEstablishment().getName());
+            }
+            return dto;
         } catch (UnAuthenticatedUserException e) {
             throw e;
         } catch (Exception e) {
             throw new BusinessException(e);
         }
+    }
+
+    private static String userTypeOf(UserEntity user) {
+        if (user instanceof AdminUserEntity) {
+            return UserType.ADMIN_USER;
+        }
+        if (user instanceof EstablishmentUserEntity) {
+            return UserType.ESTABLISHMENT_USER;
+        }
+        if (user instanceof StudentParentUserEntity) {
+            return UserType.STUDENT_PARENT_USER;
+        }
+        return null;
     }
 
     @Override

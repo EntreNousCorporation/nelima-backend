@@ -9,6 +9,7 @@ import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 
 import java.util.Set;
+import java.util.UUID;
 
 @Getter
 @Setter
@@ -22,4 +23,18 @@ public class UserDto extends BaseDto {
     private String firstName;
     private String lastName;
     private Set<ContactDto> contacts;
+
+    /**
+     * Nature du compte : {@code ADMIN_USER}, {@code ESTABLISHMENT_USER} ou
+     * {@code STUDENT_PARENT_USER}.
+     *
+     * <p>Indispensable aux frontaux : chaque surface n'accepte qu'un type de compte. Sans cette
+     * information, le portail établissement laisserait entrer un administrateur YPYit ou un parent.
+     */
+    private String userType;
+
+    /** Renseigné pour les seuls utilisateurs d'établissement. */
+    private UUID establishmentId;
+
+    private String establishmentName;
 }
