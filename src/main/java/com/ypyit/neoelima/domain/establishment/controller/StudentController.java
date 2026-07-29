@@ -13,6 +13,9 @@ import jakarta.validation.Valid;
 import com.ypyit.neoelima.domain.establishment.service.StudentCsvImporter;
 import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.web.multipart.MultipartFile;
+import com.ypyit.neoelima.domain.establishment.form.StudentClaimForm;
+import com.ypyit.neoelima.domain.establishment.service.StudentClaimService;
+import com.ypyit.neoelima.domain.establishment.mapper.StudentMapper;
 import lombok.RequiredArgsConstructor;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Page;
@@ -41,6 +44,8 @@ public class StudentController {
     private final StudentService studentService;
     private final StudentFeeService studentFeeService;
     private final StudentCsvImporter studentCsvImporter;
+    private final StudentClaimService studentClaimService;
+    private final StudentMapper studentMapper;
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<StudentDto> findByEstablishment(@ModelAttribute @ParameterObject EstablishmentStudentSearchForm searchForm) {
@@ -66,6 +71,22 @@ public class StudentController {
         var response = this.studentService.create(creationForm);
         URI uri = ControllerUtils.buildMvcPathComponent(response.getId(), StudentController.class);
         return ResponseEntity.created(uri).body(response);
+    }
+
+    @PostMapping(value = "/claim", consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Rattache un enfant au compte du parent authentifié",
+            description = "La preuve est le triplet établissement + matricule + date de naissance, "
+                    + "revérifié côté serveur : un identifiant d'élève seul ne suffit pas. "
+                    + "Le rattachement fait du parent un destinataire des reçus et des rappels.")
+    public ResponseEntity<StudentDto> claim(@RequestBody @Valid StudentClaimForm claimForm) {
+        return ResponseEntity.ok(this.studentMapper.toDto(this.studentClaimService.claim(claimForm)));
+    }
+
+    @GetMapping(value = "/mine", produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Élèves rattachés au compte du parent authentifié")
+    public ResponseEntity<List<StudentDto>> myChildren() {
+        return ResponseEntity.ok(this.studentMapper.toDtos(this.studentClaimService.myChildren()));
     }
 
     @PostMapping(value = "/import-csv", consumes = MediaType.MULTIPART_FORM_DATA_VALUE,

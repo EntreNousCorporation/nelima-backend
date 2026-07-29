@@ -17,6 +17,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.ypyit.neoelima.domain.payment.dto.PaymentChannelDto;
+import com.ypyit.neoelima.domain.payment.service.PaymentChannelCatalogue;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -27,6 +32,7 @@ public class PaymentController {
     private final OnlinePaymentService onlinePaymentService;
     private final OfflineCollectionService offlineCollectionService;
     private final ReceiptMapper receiptMapper;
+    private final PaymentChannelCatalogue paymentChannelCatalogue;
 
     @PostMapping(value = "/installments/{installmentId}/online", produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "Démarre le règlement en ligne d'une tranche",
@@ -34,8 +40,18 @@ public class PaymentController {
                     + "webview, ainsi que le détail des montants. Le parent est débité de la "
                     + "tranche augmentée de la commission YPYit. Tout utilisateur authentifié peut "
                     + "payer pour un élève, il n'a pas à en être le tuteur déclaré.")
-    public ResponseEntity<PaymentInitiationDto> initiateOnline(@PathVariable UUID installmentId) {
-        return ResponseEntity.ok(this.onlinePaymentService.initiate(installmentId));
+    public ResponseEntity<PaymentInitiationDto> initiateOnline(
+            @PathVariable UUID installmentId,
+            @RequestParam(value = "channel", required = false) String channel) {
+        return ResponseEntity.ok(this.onlinePaymentService.initiate(installmentId, channel));
+    }
+
+    @GetMapping(value = "/channels", produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Canaux de paiement mobile proposés au parent",
+            description = "Liste servie au choix d'opérateur dans l'application. Le code est "
+                    + "transmis tel quel à l'agrégateur lors de l'initiation.")
+    public ResponseEntity<List<PaymentChannelDto>> channels() {
+        return ResponseEntity.ok(this.paymentChannelCatalogue.available());
     }
 
     @PostMapping(value = "/offline", consumes = MediaType.APPLICATION_JSON_VALUE,

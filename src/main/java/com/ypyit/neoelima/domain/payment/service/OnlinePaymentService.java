@@ -23,6 +23,7 @@ import com.ypyit.neoelima.domain.user.entity.UserEntity;
 import com.ypyit.neoelima.domain.user.enums.ContactType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -59,7 +60,7 @@ public class OnlinePaymentService {
     private final BillingProperties billingProperties;
 
     @Transactional
-    public PaymentInitiationDto initiate(UUID installmentId) {
+    public PaymentInitiationDto initiate(UUID installmentId, String paymentMethod) {
         InstallmentEntity installment = this.installmentRepository.findById(installmentId)
                 .orElseThrow(() -> new NotFoundException(
                         String.format("Installment with provided id %s not found", installmentId)));
@@ -94,7 +95,9 @@ public class OnlinePaymentService {
                 this.customerOf(payer),
                 this.billingProperties.getPaymentSuccessUrl(),
                 this.billingProperties.getPaymentErrorUrl(),
-                null,
+                // Canal choisi par le parent. Jeko en exige toujours un : à défaut, PaySwitch
+                // retombe sur celui configuré par défaut sur le fournisseur actif.
+                StringUtils.trimToNull(paymentMethod),
                 this.metadataOf(intent, installment, student, establishment)));
 
         intent.setInternalReference(response.internalReference());
