@@ -73,6 +73,12 @@ public class InstallmentServiceImpl implements InstallmentService {
             if (Objects.nonNull(establishmentScope)) {
                 builder.and(installment.studentFee.student.establishment.id.eq(establishmentScope));
             }
+            if (Objects.nonNull(searchForm.getStatus())) {
+                builder.and(installment.status.eq(searchForm.getStatus()));
+            }
+            if (Objects.nonNull(searchForm.getDueBefore())) {
+                builder.and(installment.dueDate.before(searchForm.getDueBefore()));
+            }
             Page<InstallmentEntity> result = this.installmentRepository.findAll(builder, pageable);
 
             List<InstallmentDto> response = result.get()

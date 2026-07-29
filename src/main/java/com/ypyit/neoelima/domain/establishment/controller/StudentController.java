@@ -10,6 +10,9 @@ import com.ypyit.neoelima.domain.establishment.service.StudentService;
 import com.ypyit.neoelima.domain.storage.form.StorageCreationForm;
 import com.ypyit.neoelima.domain.utils.ControllerUtils;
 import jakarta.validation.Valid;
+import com.ypyit.neoelima.domain.establishment.service.StudentCsvImporter;
+import io.swagger.v3.oas.annotations.Operation;
+import org.springframework.web.multipart.MultipartFile;
 import lombok.RequiredArgsConstructor;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Page;
@@ -37,6 +40,7 @@ public class StudentController {
 
     private final StudentService studentService;
     private final StudentFeeService studentFeeService;
+    private final StudentCsvImporter studentCsvImporter;
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<StudentDto> findByEstablishment(@ModelAttribute @ParameterObject EstablishmentStudentSearchForm searchForm) {
@@ -62,6 +66,17 @@ public class StudentController {
         var response = this.studentService.create(creationForm);
         URI uri = ControllerUtils.buildMvcPathComponent(response.getId(), StudentController.class);
         return ResponseEntity.created(uri).body(response);
+    }
+
+    @PostMapping(value = "/import-csv", consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Importe une liste d'élèves au format CSV",
+            description = "Colonnes attendues, séparées par des points-virgules : "
+                    + "matricule;nom;prenom;date_naissance;lieu_naissance;niveau. "
+                    + "L'import est tout ou rien : à la moindre ligne invalide, rien n'est écrit "
+                    + "et le message désigne les lignes fautives.")
+    public ResponseEntity<StudentCsvImporter.ImportReport> importCsv(@RequestParam("file") MultipartFile file) {
+        return ResponseEntity.ok(this.studentCsvImporter.importFrom(file));
     }
 
     @PostMapping(value = "/import", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
