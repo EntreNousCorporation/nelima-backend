@@ -1,0 +1,122 @@
+springdoc:
+  api-docs:
+    enabled: true
+  packages-to-scan:
+    - com.ypyit.neoelima
+  swagger-ui:
+    disable-swagger-default-url: true
+    display-request-duration: true
+
+spring:
+  application:
+    name: neo-elima-account-api
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    username: ${DB_USERNAME:username}
+    password: ${DB_PASSWORD:password}
+    type: com.zaxxer.hikari.HikariDataSource
+    hikari:
+      max-lifetime: 1200000
+      validation-timeout: 300000
+      maximum-pool-size: 10
+      pool-name: NeoElimaConnectionPool
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:neo_elima_account_db}
+  data:
+    redis:
+      port: 6379
+      password: d9AcjBUF6f67WhwX
+      host: localhost
+      timeout: 6000
+      repositories:
+        enabled: false
+  jpa:
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          time_zone: UTC
+        enable_lazy_load_no_trans: true
+        event:
+          merge:
+            entity_copy_observer: allow
+    hibernate:
+      ddl-auto: update
+    database: postgresql
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+  mail:
+    properties:
+      from: no-reply@ypy-it.com
+      mail:
+        smtp:
+          starttls:
+            enable: true
+          timeout: 60000
+          auth: true
+          ssl:
+            enable: true
+          connectiontimeout: 60000
+          writetimeout: 60000
+    host: ${SMTP_HOST:localhost}
+    username: ${SMTP_USERNAME:username}
+    password: ${SMTP_PASSWORD:password}
+    port: ${SMTP_PORT:25}
+  cloud:
+    consul:
+      discovery:
+        prefer-ip-address: true
+        instance-id: ${spring.application.name}-${server.port}—${random.int[1,99]}
+        health-check-tls-skip-verify: true
+      config:
+        enabled: false
+      port: ${CONSUL_PORT:8500}
+      host: ${CONSUL_HOST:-}
+
+# Security cfg
+security:
+  jwt:
+    secret: secret
+    expiration-date: 86400000
+    token-prefix: Bearer
+    header-value: Authorization
+    issuer: localhost
+server:
+  forward-headers-strategy: framework
+  port: 8082
+
+neo-elima:
+  initialize-data: true
+  default-admin-pwd: Api@2024
+  web-client-timeout: 1
+
+payment-api:
+  base-url: localhost:8081
+
+main-domain: ypyit.com
+
+email-config:
+  support-email: info@ypy-it.com
+  platform-name: neo-elima
+  platform-address: https://${main-domain}
+  email-from: info@ypy-it.com
+  reset-password-uri: connexion/reset
+  reset-password-admin-url: https://oauthdebugger.com/
+  reset-password-partner-url: https://oauthdebugger.com/
+
+storage:
+  bucket-name: bucketName
+  url: localhost:9000
+  api-key: apiKey
+  api-secret: apiSecret
+
+sms:
+  base-url: https://api.orange.com
+  token-uri: oauth/v3/token
+  username: username
+  password: password
+  send-uri: smsmessaging/v1/outbound/tel:+2250000/requests
+
+management:
+  health:
+    mail:
+      enabled: false

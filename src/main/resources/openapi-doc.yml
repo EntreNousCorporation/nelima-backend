@@ -1,0 +1,15 @@
+openAPI:
+  info:
+    version: '2024-09'
+    title: 'NeoElima Account API'
+    description: 'NeoElima Account API for Mobile and Back office'
+    termsOfService: https://ypy-it.com/cgu
+    contact:
+      email: info@ypy-it.com
+      name: NeoElima
+    licence:
+      name: API TERMS OF SERVICE
+      url: https://www.apache.org/licenses/LICENSE-2.0
+  servers:
+    - description: "NeoElima API"
+      url: "https://ypy-it.com"

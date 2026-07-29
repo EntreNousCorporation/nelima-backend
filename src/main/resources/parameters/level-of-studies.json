@@ -1,0 +1,162 @@
+[
+  {
+    "code": "PETITE_SECTION",
+    "name": {
+      "fr": "Petite Section",
+      "en": "Petite Section"
+    },
+    "position": 1,
+    "previous": null,
+    "next": "MOYENNE_SECTION"
+  },
+  {
+    "code": "MOYENNE_SECTION",
+    "name": {
+      "fr": "Moyenne Section",
+      "en": "Moyenne Section"
+    },
+    "previous": "PETITE_SECTION",
+    "next": "GRANDE_SECTION",
+    "position": 2
+  },
+  {
+    "code": "GRANDE_SECTION",
+    "name": {
+      "fr": "Grande Section",
+      "en": "Grande Section"
+    },
+    "previous": "MOYENNE_SECTION",
+    "next": "CP1",
+    "position": 3
+  },
+  {
+    "code": "CP1",
+    "name": {
+      "fr": "CP1",
+      "en": "CP1"
+    },
+    "previous": "GRANDE_SECTION",
+    "next": "CP2",
+    "position": 4
+  },
+  {
+    "code": "CP2",
+    "name": {
+      "fr": "CP2",
+      "en": "CP2"
+    },
+    "previous": "CP1",
+    "next": "CE1",
+    "position": 5
+  },
+  {
+    "code": "CE1",
+    "name": {
+      "fr": "CE1",
+      "en": "CE1"
+    },
+    "previous": "CP2",
+    "next": "CE2",
+    "position": 6
+  },
+  {
+    "code": "CE2",
+    "name": {
+      "fr": "CE2",
+      "en": "CE2"
+    },
+    "previous": "CE1",
+    "next": "CM1",
+    "position": 7
+  },
+  {
+    "code": "CM1",
+    "name": {
+      "fr": "CM1",
+      "en": "CM1"
+    },
+    "previous": "CE2",
+    "next": "CM2",
+    "position": 8
+  },
+  {
+    "code": "CM2",
+    "name": {
+      "fr": "CM2",
+      "en": "CM2"
+    },
+    "previous": "CM1",
+    "next": "SIXIEME",
+    "position": 9
+  },
+  {
+    "code": "SIXIEME",
+    "name": {
+      "fr": "6 em",
+      "en": "6 em"
+    },
+    "previous": "CM2",
+    "next": "CINQUIEME",
+    "position": 10
+  },
+  {
+    "code": "CINQUIEME",
+    "name": {
+      "fr": "5 em",
+      "en": "5 em"
+    },
+    "previous": "SIXIEME",
+    "next": "QUATRIEME",
+    "position": 11
+  },
+  {
+    "code": "QUATRIEME",
+    "name": {
+      "fr": "4 em",
+      "en": "4 em"
+    },
+    "previous": "CINQUIEME",
+    "next": "TROISIEME",
+    "position": 12
+  },
+  {
+    "code": "TROISIEME",
+    "name": {
+      "fr": "3 em",
+      "en": "3 em"
+    },
+    "previous": "QUATRIEME",
+    "next": "SECONDE",
+    "position": 13
+  },
+  {
+    "code": "SECONDE",
+    "name": {
+      "fr": "Seconde",
+      "en": "Seconde"
+    },
+    "previous": "TROISIEME",
+    "next": "PREMIERE",
+    "position": 14
+  },
+  {
+    "code": "PREMIERE",
+    "name": {
+      "fr": "Première",
+      "en": "Première"
+    },
+    "previous": "SECONDE",
+    "next": "TERMINALE",
+    "position": 15
+  },
+  {
+    "code": "TERMINALE",
+    "name": {
+      "fr": "Terminale",
+      "en": "Terminale"
+    },
+    "previous": "PREMIERE",
+    "next": null,
+    "position": 16
+  }
+]

@@ -1,0 +1,16 @@
+[
+  {
+    "code": "farm_owner",
+    "name": {
+      "fr": "Propriétaire de ferme",
+      "en": "Farm owner"
+    }
+  },
+  {
+    "name": {
+      "fr": "Propriétaire de boutiue",
+      "en": "Store owner"
+    },
+    "code": "store_owner"
+  }
+]

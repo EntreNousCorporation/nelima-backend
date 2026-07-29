@@ -1,0 +1,12 @@
+[
+  {
+    "name": "Temps d'expiration du token de réinitialisation de mot de passe par email (minutes)",
+    "code": "RESET_USER_PWD_TOKEN_DELAY",
+    "value": "60"
+  },
+  {
+    "name": "Temps d'expiration du code otp de réinitialisation ou définition du mot de passe par sms (minutes)",
+    "code": "RESET_USER_PWD_OTP_DELAY",
+    "value": "5"
+  }
+]

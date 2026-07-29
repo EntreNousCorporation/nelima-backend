@@ -1,0 +1,26 @@
+[
+  {
+    "code": "ADMIN",
+    "name": {
+      "fr": "Administrateur",
+      "en": "Administrator"
+    },
+    "permissions": []
+  },
+  {
+    "code": "ESTABLISHMENT_ROOT",
+    "name": {
+      "fr": "Administrateur d'établissement",
+      "en": "Establishment administrator"
+    },
+    "permissions": []
+  },
+  {
+    "code": "STUDENT_PARENT",
+    "name": {
+      "fr": "Parent d'élève",
+      "en": "Student parent"
+    },
+    "permissions": []
+  }
+]
