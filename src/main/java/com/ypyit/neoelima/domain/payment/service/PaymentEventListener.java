@@ -4,11 +4,7 @@ import com.ypy.paygw.payswitch.api.UnifiedTransaction;
 import com.ypy.paygw.payswitch.api.event.PaymentCancelledEvent;
 import com.ypy.paygw.payswitch.api.event.PaymentFailedEvent;
 import com.ypy.paygw.payswitch.api.event.PaymentSucceededEvent;
-import com.ypyit.neoelima.domain.establishment.entity.InstallmentEntity;
-import com.ypyit.neoelima.domain.establishment.enums.InstallmentStatus;
-import com.ypyit.neoelima.domain.establishment.repository.InstallmentRepository;
 import com.ypyit.neoelima.domain.payment.entity.PaymentIntentEntity;
-import com.ypyit.neoelima.domain.payment.entity.ReceiptEntity;
 import com.ypyit.neoelima.domain.payment.enums.PaymentIntentStatus;
 import com.ypyit.neoelima.domain.payment.repository.PaymentIntentRepository;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +13,6 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
 import java.util.Optional;
 
 /**
@@ -28,85 +23,38 @@ import java.util.Optional;
  * PaySwitch republie l'événement à chaque réception. Un traitement naïf solderait deux fois la
  * même tranche et émettrait deux reçus pour un seul encaissement.
  *
- * <p>La protection est double : la tentative de paiement n'est traitée que si elle est encore en
- * attente, et {@link ReceiptIssuer} rend le reçu déjà émis au lieu d'en créer un second.
+ * <p>La décision elle-même est déléguée à {@link PaymentSettlementService}, que partage la
+ * réconciliation : les deux chemins doivent aboutir au même état.
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class PaymentEventListener {
 
+    private static final String ORIGIN = "webhook";
+
     private final PaymentIntentRepository paymentIntentRepository;
-    private final InstallmentRepository installmentRepository;
-    private final ReceiptIssuer receiptIssuer;
+    private final PaymentSettlementService settlementService;
 
     @EventListener
     @Transactional
     public void on(PaymentSucceededEvent event) {
-        UnifiedTransaction transaction = event.transaction();
-        Optional<PaymentIntentEntity> maybeIntent = this.locate(transaction);
-        if (maybeIntent.isEmpty()) {
-            return;
-        }
-        PaymentIntentEntity intent = maybeIntent.get();
-
-        if (!PaymentIntentStatus.PENDING.equals(intent.getStatus())) {
-            log.info("PAYMENT_REPLAY_IGNORED: reference {} is already {}",
-                    transaction.internalReference(), intent.getStatus());
-            return;
-        }
-
-        Instant settledAt = Instant.now();
-        intent.setStatus(PaymentIntentStatus.SUCCEEDED);
-        intent.setSettledAt(settledAt);
-        this.paymentIntentRepository.saveAndFlush(intent);
-
-        InstallmentEntity installment = intent.getInstallment();
-        // La tranche a pu être encaissée au guichet entre-temps : le paiement en ligne est alors
-        // un doublon à rembourser, pas un encaissement à enregistrer. On ne l'écrase pas.
-        if (!InstallmentStatus.PENDING.equals(installment.getStatus())) {
-            log.warn("PAYMENT_ON_SETTLED_INSTALLMENT: installment {} was already {} when reference {} succeeded",
-                    installment.getId(), installment.getStatus(), transaction.internalReference());
-            return;
-        }
-
-        installment.setStatus(InstallmentStatus.PAID);
-        installment.setPaidAt(settledAt);
-        installment.setPaymentId(intent.getId());
-        this.installmentRepository.saveAndFlush(installment);
-
-        ReceiptEntity receipt = this.receiptIssuer.issueFor(intent);
-        log.info("PAYMENT_SUCCEEDED: reference {} settled installment {}, receipt {}",
-                transaction.internalReference(), installment.getId(), receipt.getNumber());
+        this.locate(event.transaction())
+                .ifPresent(intent -> this.settlementService.settle(intent, ORIGIN));
     }
 
     @EventListener
     @Transactional
     public void on(PaymentFailedEvent event) {
-        this.close(event.transaction(), PaymentIntentStatus.FAILED);
+        this.locate(event.transaction())
+                .ifPresent(intent -> this.settlementService.close(intent, PaymentIntentStatus.FAILED, ORIGIN));
     }
 
     @EventListener
     @Transactional
     public void on(PaymentCancelledEvent event) {
-        this.close(event.transaction(), PaymentIntentStatus.CANCELLED);
-    }
-
-    /**
-     * Clôt une tentative sans suite. La tranche reste due : elle n'est jamais touchée par un échec,
-     * le parent doit pouvoir réessayer.
-     */
-    private void close(UnifiedTransaction transaction, PaymentIntentStatus outcome) {
-        this.locate(transaction).ifPresent(intent -> {
-            if (!PaymentIntentStatus.PENDING.equals(intent.getStatus())) {
-                log.info("PAYMENT_REPLAY_IGNORED: reference {} is already {}",
-                        transaction.internalReference(), intent.getStatus());
-                return;
-            }
-            intent.setStatus(outcome);
-            this.paymentIntentRepository.saveAndFlush(intent);
-            log.info("PAYMENT_CLOSED: reference {} ended as {}", transaction.internalReference(), outcome);
-        });
+        this.locate(event.transaction())
+                .ifPresent(intent -> this.settlementService.close(intent, PaymentIntentStatus.CANCELLED, ORIGIN));
     }
 
     /**
