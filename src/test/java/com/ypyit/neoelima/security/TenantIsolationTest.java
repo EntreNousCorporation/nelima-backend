@@ -5,6 +5,8 @@ import com.ypyit.neoelima.domain.establishment.dto.StudentDto;
 import com.ypyit.neoelima.domain.establishment.entity.EstablishmentEntity;
 import com.ypyit.neoelima.domain.establishment.entity.StudentEntity;
 import com.ypyit.neoelima.domain.establishment.form.FeeCreationForm;
+import com.ypyit.neoelima.domain.establishment.form.InstallmentSearchForm;
+import com.ypyit.neoelima.domain.establishment.service.InstallmentService;
 import com.ypyit.neoelima.domain.establishment.form.StudentSearchForm;
 import com.ypyit.neoelima.domain.establishment.entity.LevelOfStudyEntity;
 import com.ypyit.neoelima.domain.establishment.repository.FeeRepository;
@@ -36,6 +38,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
@@ -63,6 +66,8 @@ class TenantIsolationTest extends AbstractIntegrationTest {
     private FeeRepository feeRepository;
     @Autowired
     private LevelOfStudyRepository levelOfStudyRepository;
+    @Autowired
+    private InstallmentService installmentService;
 
     private EstablishmentEntity victorLoba;
     private EstablishmentEntity sainteMarie;
@@ -151,6 +156,19 @@ class TenantIsolationTest extends AbstractIntegrationTest {
                 .allSatisfy(fee -> assertThat(fee.getEstablishment().getId())
                         .as("le frais doit appartenir à l'école de l'utilisateur")
                         .isEqualTo(victorLoba.getId()));
+    }
+
+    @Test
+    @DisplayName("la recherche de tranches filtre sur l'établissement sans échouer")
+    void installmentSearchResolvesDeepEstablishmentPath() {
+        authenticateAs(saveSchoolUser("comptable@victorloba.ci", victorLoba));
+
+        // Le filtre traverse installment.studentFee.student.establishment. QueryDSL n'initialise
+        // pas ce chemin par défaut : sans @QueryInit sur InstallmentEntity.studentFee, l'appel
+        // échoue en NullPointerException à l'exécution alors qu'il compile sans avertissement.
+        assertThatCode(() -> installmentService.findAll(
+                InstallmentSearchForm.builder().build(), PageRequest.of(0, 20)))
+                .doesNotThrowAnyException();
     }
 
     private EstablishmentUserEntity saveSchoolUser(String email, EstablishmentEntity establishment) {

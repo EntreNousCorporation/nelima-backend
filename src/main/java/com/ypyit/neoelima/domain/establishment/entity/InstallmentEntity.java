@@ -1,5 +1,6 @@
 package com.ypyit.neoelima.domain.establishment.entity;
 
+import com.querydsl.core.annotations.QueryInit;
 import com.ypyit.neoelima.common.entity.BaseEntity;
 import com.ypyit.neoelima.domain.establishment.enums.InstallmentStatus;
 import jakarta.persistence.Column;
@@ -58,8 +59,15 @@ public class InstallmentEntity extends BaseEntity {
     /** Horodatage de l'encaissement, en ligne comme au guichet. */
     private Instant paidAt;
 
+    /**
+     * {@code @QueryInit} est indispensable : QueryDSL n'initialise les chemins imbriqués que sur
+     * une profondeur limitée. Sans lui, {@code installment.studentFee.student} vaut null dans le
+     * métamodèle et toute requête filtrant sur l'établissement de l'élève échoue en
+     * NullPointerException — à l'exécution seulement, la compilation ne signale rien.
+     */
     @ManyToOne
     @ToString.Exclude
+    @QueryInit("student.establishment")
     @JoinColumn(name = "student_fee_id", referencedColumnName = "id")
     private StudentFeeEntity studentFee;
 
