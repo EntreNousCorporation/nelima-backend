@@ -23,7 +23,7 @@ import java.util.UUID;
 @AllArgsConstructor
 public class FeeCreationForm {
 
-    @NotNull
+    /** Facultatif pour un utilisateur d'établissement : le serveur impose le sien. */
     private UUID establishmentId;
     @NoXssContent
     private String startLevelOfStudy;

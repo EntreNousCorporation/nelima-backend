@@ -4,7 +4,12 @@ import com.ypyit.neoelima.AbstractIntegrationTest;
 import com.ypyit.neoelima.domain.establishment.dto.StudentDto;
 import com.ypyit.neoelima.domain.establishment.entity.EstablishmentEntity;
 import com.ypyit.neoelima.domain.establishment.entity.StudentEntity;
+import com.ypyit.neoelima.domain.establishment.form.FeeCreationForm;
 import com.ypyit.neoelima.domain.establishment.form.StudentSearchForm;
+import com.ypyit.neoelima.domain.establishment.entity.LevelOfStudyEntity;
+import com.ypyit.neoelima.domain.establishment.repository.FeeRepository;
+import com.ypyit.neoelima.domain.establishment.repository.LevelOfStudyRepository;
+import com.ypyit.neoelima.domain.establishment.service.FeeService;
 import com.ypyit.neoelima.domain.establishment.repository.EstablishmentRepository;
 import com.ypyit.neoelima.domain.establishment.repository.StudentRepository;
 import com.ypyit.neoelima.domain.establishment.service.StudentService;
@@ -28,6 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -51,6 +57,12 @@ class TenantIsolationTest extends AbstractIntegrationTest {
     private StudentRepository studentRepository;
     @Autowired
     private UserRepository userRepository;
+    @Autowired
+    private FeeService feeService;
+    @Autowired
+    private FeeRepository feeRepository;
+    @Autowired
+    private LevelOfStudyRepository levelOfStudyRepository;
 
     private EstablishmentEntity victorLoba;
     private EstablishmentEntity sainteMarie;
@@ -113,6 +125,32 @@ class TenantIsolationTest extends AbstractIntegrationTest {
                 StudentSearchForm.builder().establishmentId(victorLoba.getId()).build(),
                 PageRequest.of(0, 50)))
                 .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("un frais est créé dans l'établissement du principal, pas dans celui demandé")
+    void feeIsCreatedInCallerEstablishment() {
+        String levelCode = "CE2-" + UUID.randomUUID().toString().substring(0, 6);
+        LevelOfStudyEntity level = levelOfStudyRepository.saveAndFlush(
+                LevelOfStudyEntity.builder().code(levelCode).position(1).build());
+        victorLoba.getLevelOfStudies().add(level);
+        establishmentRepository.saveAndFlush(victorLoba);
+
+        authenticateAs(saveSchoolUser("comptable@victorloba.ci", victorLoba));
+
+        // L'établissement visé est celui d'une autre école : il doit être ignoré.
+        feeService.create(FeeCreationForm.builder()
+                .establishmentId(sainteMarie.getId())
+                .name("Scolarité annuelle")
+                .price(new java.math.BigDecimal("150000"))
+                .levelOfStudiesCodes(java.util.Set.of(levelCode))
+                .build());
+
+        assertThat(feeRepository.findAll())
+                .filteredOn(fee -> "Scolarité annuelle".equals(fee.getName()))
+                .allSatisfy(fee -> assertThat(fee.getEstablishment().getId())
+                        .as("le frais doit appartenir à l'école de l'utilisateur")
+                        .isEqualTo(victorLoba.getId()));
     }
 
     private EstablishmentUserEntity saveSchoolUser(String email, EstablishmentEntity establishment) {

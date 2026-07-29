@@ -7,6 +7,7 @@ import com.ypyit.neoelima.common.exception.BusinessException;
 import com.ypyit.neoelima.common.exception.DuplicateResourceException;
 import com.ypyit.neoelima.common.exception.NotFoundException;
 import com.ypyit.neoelima.common.exception.ValidationException;
+import com.ypyit.neoelima.config.security.CurrentUserProvider;
 import com.ypyit.neoelima.domain.establishment.dto.FeeDto;
 import com.ypyit.neoelima.domain.establishment.entity.EstablishmentEntity;
 import com.ypyit.neoelima.domain.establishment.entity.FeeEntity;
@@ -32,11 +33,13 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.util.Pair;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.HashSet;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -54,19 +57,27 @@ public class FeeServiceImpl implements FeeService {
     private final StudentRepository studentRepository;
     private final StudentFeeRepository studentFeeRepository;
     private final LevelOfStudyService levelOfStudyService;
+    private final CurrentUserProvider currentUserProvider;
 
     @Override
     public FeeDto create(FeeCreationForm creationForm) throws BusinessException {
         try {
-            if (this.feeRepository.existsByEstablishment_IdAndNameIgnoreCase(creationForm.getEstablishmentId(), creationForm.getName())) {
+            // Portée dérivée de l'utilisateur authentifié : sans cela, un utilisateur
+            // d'établissement créerait des frais dans une autre école.
+            UUID establishmentId = this.currentUserProvider
+                    .resolveEstablishmentScope(creationForm.getEstablishmentId());
+            if (Objects.isNull(establishmentId)) {
+                throw new AccessDeniedException("An explicit establishment is required to create a fee");
+            }
+            if (this.feeRepository.existsByEstablishment_IdAndNameIgnoreCase(establishmentId, creationForm.getName())) {
                 throw new DuplicateResourceException(String.format("Fee with name %s already exists for this company", creationForm.getName()));
             }
             if (CollectionUtils.isEmpty(creationForm.getLevelOfStudiesCodes()) &&
                     (StringUtils.isBlank(creationForm.getStartLevelOfStudy()) && StringUtils.isBlank(creationForm.getEndLevelOfStudy()))) {
                 throw new ValidationException("levelOfStudy", "Level of studies must have at least one level of study");
             }
-            EstablishmentEntity establishment = this.establishmentRepository.findById(creationForm.getEstablishmentId())
-                    .orElseThrow(() -> new NotFoundException(String.format("Establishment with id %s not found", creationForm.getEstablishmentId())));
+            EstablishmentEntity establishment = this.establishmentRepository.findById(establishmentId)
+                    .orElseThrow(() -> new NotFoundException(String.format("Establishment with id %s not found", establishmentId)));
             FeeEntity fee = this.feeMapper.toEntity(creationForm);
             fee.setEstablishment(establishment);
             Pair<Set<LevelOfStudyEntity>, Set<String>> selectedValues = this.levelOfStudyService.selectValues(LevelOfStudySelectForm.builder()
@@ -75,15 +86,18 @@ public class FeeServiceImpl implements FeeService {
                     .startLevelOfStudy(creationForm.getStartLevelOfStudy())
                     .build()
             );
-            Set<String> finalLevelOfStudyCodes = selectedValues.getSecond();
+            // Copie mutable : selectValues peut renvoyer un ensemble immuable, et l'addAll qui
+            // suit échouait alors en UnsupportedOperationException — donc sur tout appel
+            // fournissant des codes de niveaux, c'est-à-dire le cas normal depuis l'interface.
+            Set<String> finalLevelOfStudyCodes = new HashSet<>(selectedValues.getSecond());
             fee.getLevelOfStudies().addAll(selectedValues.getFirst());
             if (CollectionUtils.isNotEmpty(creationForm.getLevelOfStudiesCodes())) {
                 finalLevelOfStudyCodes.addAll(creationForm.getLevelOfStudiesCodes());
             }
             FeeEntity savedFee = this.feeRepository.saveAndFlush(fee);
-            this.createStudentFees(savedFee, creationForm.getEstablishmentId(), finalLevelOfStudyCodes);
+            this.createStudentFees(savedFee, establishmentId, finalLevelOfStudyCodes);
             return this.feeMapper.toDto(savedFee);
-        } catch (NotFoundException | ValidationException | DuplicateResourceException e) {
+        } catch (NotFoundException | ValidationException | DuplicateResourceException | AccessDeniedException e) {
             throw e;
         } catch (Exception e) {
             throw new BusinessException(e);
@@ -126,8 +140,10 @@ public class FeeServiceImpl implements FeeService {
             if (Objects.nonNull(searchForm.getAcademical())) {
                 builder.and(fee.academical.eq(searchForm.getAcademical()));
             }
-            if (Objects.nonNull(searchForm.getEstablishmentId())) {
-                builder.and(fee.establishment.id.eq(searchForm.getEstablishmentId()));
+            UUID establishmentScope = this.currentUserProvider
+                    .resolveEstablishmentScope(searchForm.getEstablishmentId());
+            if (Objects.nonNull(establishmentScope)) {
+                builder.and(fee.establishment.id.eq(establishmentScope));
             }
             List<Predicate> levelOfStudies = new ArrayList<>();
             if (CollectionUtils.isNotEmpty(searchForm.getLevelOfStudies())) {
