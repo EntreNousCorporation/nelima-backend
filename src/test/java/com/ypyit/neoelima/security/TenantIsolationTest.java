@@ -1,5 +1,6 @@
 package com.ypyit.neoelima.security;
 
+import com.ypyit.neoelima.AbstractIntegrationTest;
 import com.ypyit.neoelima.domain.establishment.dto.StudentDto;
 import com.ypyit.neoelima.domain.establishment.entity.EstablishmentEntity;
 import com.ypyit.neoelima.domain.establishment.entity.StudentEntity;
@@ -17,18 +18,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.annotation.Transactional;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -45,25 +40,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * pouvait lire les élèves d'une autre école en changeant le paramètre. Ces tests échouent si cette
  * dérivation depuis le principal est retirée.
  */
-@Testcontainers
-@SpringBootTest
 @Transactional
-class TenantIsolationIT {
-
-    @Container
-    @SuppressWarnings("resource")
-    static PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16.4-alpine")
-            .withDatabaseName("nelima_test")
-            .withUsername("nelima")
-            .withPassword("nelima");
-
-    @DynamicPropertySource
-    static void datasource(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
-        registry.add("spring.datasource.username", POSTGRES::getUsername);
-        registry.add("spring.datasource.password", POSTGRES::getPassword);
-        registry.add("nelima.initialize-data", () -> "false");
-    }
+class TenantIsolationTest extends AbstractIntegrationTest {
 
     @Autowired
     private StudentService studentService;
