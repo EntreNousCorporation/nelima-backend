@@ -7,25 +7,18 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 
-import com.ypyit.neoelima.domain.establishment.enums.InstallmentStatus;
-
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.time.LocalDate;
-import java.util.UUID;
 
 @Getter
 @Setter
 @SuperBuilder
 @NoArgsConstructor
 @AllArgsConstructor
-public class InstallmentDto extends BaseDto {
+public class FeeScheduleDto extends BaseDto {
 
     private String label;
     private BigDecimal amount;
     private LocalDate dueDate;
-    private InstallmentStatus status;
-    private Instant paidAt;
-    private StudentFeeDto studentFee;
-    private UUID paymentId;
+    private Integer position;
 }
