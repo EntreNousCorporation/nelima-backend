@@ -6,6 +6,7 @@ import com.ypyit.neoelima.domain.establishment.entity.StudentEntity;
 import com.ypyit.neoelima.domain.payment.entity.PaymentIntentEntity;
 import com.ypyit.neoelima.domain.payment.entity.ReceiptEntity;
 import com.ypyit.neoelima.domain.payment.repository.ReceiptRepository;
+import com.ypyit.neoelima.domain.user.entity.EstablishmentUserEntity;
 import com.ypyit.neoelima.domain.user.entity.UserEntity;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
@@ -59,11 +60,7 @@ public class ReceiptIssuer {
                 .issuedAt(issuedAt)
                 .studentLabel(fullNameOf(student))
                 .studentRegistrationNumber(student.getRegistrationNumber())
-                // Le payeur déclaré au comptoir primes sur l'utilisateur qui a saisi :
-                // c'est la famille qui doit apparaître sur sa pièce comptable.
-                .payerLabel(StringUtils.isNotBlank(paymentIntent.getPayerName())
-                        ? paymentIntent.getPayerName().trim()
-                        : fullNameOf(paymentIntent.getPayer()))
+                .payerLabel(payerLabelOf(paymentIntent))
                 .build());
 
         log.info("RECEIPT_ISSUED: receipt {} for installment {} of establishment {}",
@@ -74,6 +71,23 @@ public class ReceiptIssuer {
         // à chaque chemin d'appel. L'envoi lui-même est asynchrone et tolère l'échec.
         this.receiptMailer.send(receipt);
         return receipt;
+    }
+
+    /**
+     * Qui figure comme ayant réglé.
+     *
+     * <p>Le nom déclaré au comptoir l'emporte. À défaut, on ne retient le compte que s'il ne
+     * s'agit pas d'un utilisateur d'établissement : l'agent qui saisit une entrée en espèces n'a
+     * pas payé, et l'inscrire comme payeur rendrait le reçu faux aux yeux de la famille. Qui a
+     * encaissé reste tracé sur la tentative de paiement, qui est la pièce d'audit.
+     */
+    private static String payerLabelOf(PaymentIntentEntity paymentIntent) {
+        if (StringUtils.isNotBlank(paymentIntent.getPayerName())) {
+            return paymentIntent.getPayerName().trim();
+        }
+        return paymentIntent.getPayer() instanceof EstablishmentUserEntity
+                ? null
+                : fullNameOf(paymentIntent.getPayer());
     }
 
     private static String fullNameOf(StudentEntity student) {

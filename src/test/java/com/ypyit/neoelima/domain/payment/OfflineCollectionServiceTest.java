@@ -205,6 +205,13 @@ class OfflineCollectionServiceTest extends AbstractIntegrationTest {
                 .contains("Matricule")
                 .contains("Espèces")
                 .contains("50 000 FCFA");
+
+        // Aucun payeur n'a été déclaré au comptoir : le reçu ne doit pas désigner l'agent comme
+        // ayant réglé. Il a saisi l'opération, il n'a pas payé.
+        assertThat(platEtNormalise)
+                .as("l'agent qui encaisse n'est pas le payeur")
+                .doesNotContain("Awa Traoré")
+                .doesNotContain("Réglé par");
         assertThat(receiptPdfRenderer.fileNameOf(receipt))
                 .isEqualTo("recu-" + receipt.getNumber() + ".pdf");
     }
