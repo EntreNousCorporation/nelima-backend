@@ -9,7 +9,7 @@ import java.time.Duration;
 @Service
 public class HttpClientService {
 
-    @Value("${neo-elima.web-client-timeout}")
+    @Value("${nelima.web-client-timeout}")
     private long clientTimeout;
 
 

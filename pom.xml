@@ -5,14 +5,14 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.3.2</version>
+        <version>3.4.5</version>
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
     <groupId>com.ypyit</groupId>
-    <artifactId>neo-elima-account</artifactId>
+    <artifactId>nelima-backend</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>neo-elima-account</name>
-    <description>neo-elima-account</description>
+    <name>nelima-backend</name>
+    <description>Nelima — monolithe modulaire (scolarité, facturation, paiement)</description>
     <url/>
     <licenses>
         <license/>
@@ -27,12 +27,11 @@
         <url/>
     </scm>
     <properties>
-        <java.version>17</java.version>
-        <mapstruct-processor.version>1.5.3.Final</mapstruct-processor.version>
-        <jsonwebtoken.version>0.9.1</jsonwebtoken.version>
+        <java.version>21</java.version>
+        <mapstruct-processor.version>1.6.3</mapstruct-processor.version>
+        <jsonwebtoken.version>0.12.6</jsonwebtoken.version>
         <commons-collections.version>4.4</commons-collections.version>
         <open-api.version>2.6.0</open-api.version>
-        <jaxb-api.version>2.4.0-b180830.0359</jaxb-api.version>
         <bcprov-jdk15on.version>1.70</bcprov-jdk15on.version>
         <commons-lang.version>3.12.0</commons-lang.version>
         <logstash.version>7.3</logstash.version>
@@ -41,10 +40,8 @@
         <jsoup.version>1.16.1</jsoup.version>
         <spring-retry.version>2.0.0</spring-retry.version>
         <datatype-jsr310.version>2.16.0</datatype-jsr310.version>
-        <apt-maven-plugin.version>1.1.3</apt-maven-plugin.version>
-        <querydsl.version>5.0.0</querydsl.version>
-        <javax.ws.rs-api.version>2.1.1</javax.ws.rs-api.version>
-        <persistence-api.version>2.2</persistence-api.version>
+        <querydsl.version>5.1.0</querydsl.version>
+        <jakarta-persistence.version>3.1.0</jakarta-persistence.version>
         <guava.version>31.1-jre</guava.version>
         <httpclient.version>4.5.14</httpclient.version>
         <commons-validator.version>1.9.0</commons-validator.version>
@@ -52,17 +49,6 @@
         <minio.version>8.5.11</minio.version>
         <okhttp3.version>4.12.0</okhttp3.version>
     </properties>
-    <dependencyManagement>
-        <dependencies>
-            <dependency>
-                <groupId>org.springframework.cloud</groupId>
-                <artifactId>spring-cloud-dependencies</artifactId>
-                <version>2023.0.2</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-        </dependencies>
-    </dependencyManagement>
     <dependencies>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -81,10 +67,6 @@
             <artifactId>spring-boot-starter-thymeleaf</artifactId>
         </dependency>
         <dependency>
-            <groupId>org.springframework.cloud</groupId>
-            <artifactId>spring-cloud-starter-openfeign</artifactId>
-        </dependency>
-        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
@@ -99,10 +81,6 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-validation</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.cloud</groupId>
-            <artifactId>spring-cloud-starter-consul-all</artifactId>
         </dependency>
         <dependency>
             <groupId>org.apache.httpcomponents</groupId>
@@ -143,18 +121,20 @@
 
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
-            <artifactId>jjwt</artifactId>
+            <artifactId>jjwt-api</artifactId>
             <version>${jsonwebtoken.version}</version>
         </dependency>
         <dependency>
-            <groupId>javax.xml.bind</groupId>
-            <artifactId>jaxb-api</artifactId>
-            <version>${jaxb-api.version}</version>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>${jsonwebtoken.version}</version>
+            <scope>runtime</scope>
         </dependency>
         <dependency>
-            <groupId>javax.persistence</groupId>
-            <artifactId>javax.persistence-api</artifactId>
-            <version>${persistence-api.version}</version>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>${jsonwebtoken.version}</version>
+            <scope>runtime</scope>
         </dependency>
         <dependency>
             <groupId>org.springdoc</groupId>
@@ -208,6 +188,15 @@
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
             <scope>runtime</scope>
         </dependency>
         <dependency>
@@ -350,30 +339,28 @@
                             <artifactId>mapstruct-processor</artifactId>
                             <version>${mapstruct-processor.version}</version>
                         </path>
+                        <!-- Génère les Q-classes QueryDSL. Remplace com.mysema:apt-maven-plugin,
+                             incompatible avec Java 21. -->
+                        <path>
+                            <groupId>com.querydsl</groupId>
+                            <artifactId>querydsl-apt</artifactId>
+                            <version>${querydsl.version}</version>
+                            <classifier>jakarta</classifier>
+                        </path>
+                        <path>
+                            <groupId>jakarta.persistence</groupId>
+                            <artifactId>jakarta.persistence-api</artifactId>
+                            <version>${jakarta-persistence.version}</version>
+                        </path>
                     </annotationProcessorPaths>
+                    <!-- Ordre significatif : Lombok doit passer avant MapStruct. -->
                     <annotationProcessors>
                         <annotationProcessor>lombok.launch.AnnotationProcessorHider$AnnotationProcessor
                         </annotationProcessor>
+                        <annotationProcessor>com.querydsl.apt.jpa.JPAAnnotationProcessor</annotationProcessor>
                         <annotationProcessor>org.mapstruct.ap.MappingProcessor</annotationProcessor>
                     </annotationProcessors>
                 </configuration>
-            </plugin>
-            <plugin>
-                <groupId>com.mysema.maven</groupId>
-                <artifactId>apt-maven-plugin</artifactId>
-                <version>${apt-maven-plugin.version}</version>
-                <executions>
-                    <execution>
-                        <phase>generate-sources</phase>
-                        <goals>
-                            <goal>process</goal>
-                        </goals>
-                        <configuration>
-                            <outputDirectory>target/generated-sources/java</outputDirectory>
-                            <processor>com.querydsl.apt.jpa.JPAAnnotationProcessor</processor>
-                        </configuration>
-                    </execution>
-                </executions>
             </plugin>
         </plugins>
     </build>

@@ -18,7 +18,7 @@ import org.springframework.context.annotation.PropertySource;
 @PropertySource(factory = YamlPropertySourceFactory.class, value = "classpath:openapi-doc.yml")
 public class OpenApiConfiguration {
 
-    private static final String APPLICATION_NAME = "neo-elima-account";
+    private static final String APPLICATION_NAME = "nelima-backend";
     private static final String SECURITY_SCHEME_NAME = "Bearer Authentication";
     private static final String BEARER_FORMAT = "JWT";
     private static final String SCHEME_VALUE = "bearer";

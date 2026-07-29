@@ -12,7 +12,7 @@ import com.ypyit.neoelima.common.exception.UnAuthenticatedUserException;
 import com.ypyit.neoelima.common.exception.ValidationException;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.MalformedJwtException;
-import io.jsonwebtoken.SignatureException;
+import io.jsonwebtoken.security.SignatureException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;

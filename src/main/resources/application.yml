@@ -9,7 +9,7 @@ springdoc:
 
 spring:
   application:
-    name: neo-elima-account-api
+    name: nelima-backend
   datasource:
     driver-class-name: org.postgresql.Driver
     username: ${DB_USERNAME:username}
@@ -19,16 +19,20 @@ spring:
       max-lifetime: 1200000
       validation-timeout: 300000
       maximum-pool-size: 10
-      pool-name: NeoElimaConnectionPool
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:neo_elima_account_db}
+      pool-name: NelimaConnectionPool
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:nelima_db}
   data:
     redis:
-      port: 6379
-      password: d9AcjBUF6f67WhwX
-      host: localhost
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      host: ${REDIS_HOST:localhost}
       timeout: 6000
       repositories:
         enabled: false
+  flyway:
+    enabled: true
+    baseline-on-migrate: false
+    locations: classpath:db/migration
   jpa:
     show-sql: false
     properties:
@@ -40,8 +44,10 @@ spring:
         event:
           merge:
             entity_copy_observer: allow
+    # Le schéma est piloté par Flyway. Ne jamais repasser en `update` :
+    # `validate` échoue au démarrage si une entité diverge d'une migration.
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     database: postgresql
     database-platform: org.hibernate.dialect.PostgreSQLDialect
   mail:
@@ -61,42 +67,30 @@ spring:
     username: ${SMTP_USERNAME:username}
     password: ${SMTP_PASSWORD:password}
     port: ${SMTP_PORT:25}
-  cloud:
-    consul:
-      discovery:
-        prefer-ip-address: true
-        instance-id: ${spring.application.name}-${server.port}—${random.int[1,99]}
-        health-check-tls-skip-verify: true
-      config:
-        enabled: false
-      port: ${CONSUL_PORT:8500}
-      host: ${CONSUL_HOST:-}
 
 # Security cfg
 security:
   jwt:
-    secret: secret
+    # Clé HMAC-SHA256 : 32 caractères minimum, jamais de valeur par défaut en production.
+    secret: ${JWT_SECRET:dev-only-secret-change-me-32-chars-min}
     expiration-date: 86400000
     token-prefix: Bearer
     header-value: Authorization
-    issuer: localhost
+    issuer: ${JWT_ISSUER:nelima}
 server:
   forward-headers-strategy: framework
-  port: 8082
+  port: ${SERVER_PORT:8082}
 
-neo-elima:
-  initialize-data: true
-  default-admin-pwd: Api@2024
+nelima:
+  initialize-data: ${INITIALIZE_DATA:true}
+  default-admin-pwd: ${DEFAULT_ADMIN_PWD:Api@2024}
   web-client-timeout: 1
 
-payment-api:
-  base-url: localhost:8081
-
-main-domain: ypyit.com
+main-domain: ${MAIN_DOMAIN:ypyit.com}
 
 email-config:
   support-email: info@ypy-it.com
-  platform-name: neo-elima
+  platform-name: Nelima
   platform-address: https://${main-domain}
   email-from: info@ypy-it.com
   reset-password-uri: connexion/reset

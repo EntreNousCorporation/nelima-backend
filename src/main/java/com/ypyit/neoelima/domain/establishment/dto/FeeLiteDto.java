@@ -22,6 +22,4 @@ public class FeeLiteDto extends BaseDto {
     private UUID id;
     private String name;
     private BigDecimal price;
-    private UUID businessId;
-    private String apiKey;
 }

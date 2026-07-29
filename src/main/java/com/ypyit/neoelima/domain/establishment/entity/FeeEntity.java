@@ -42,8 +42,6 @@ public class FeeEntity extends BaseEntity {
     private String name;
     private BigDecimal price;
     private boolean optional;
-    private UUID businessId;
-    private String apiKey;
     private boolean academical;
     @ManyToOne
     @ToString.Exclude

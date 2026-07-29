@@ -299,8 +299,9 @@ public class UserServiceImpl implements UserService {
             }
             user.getPasswordValue().setValue(newPassword);
             this.userRepository.save(user);
+            // Le jeton de réinitialisation est neutralisé par la suppression de sa clé de cache
+            // ci-dessus : un JWT est stateless et ne peut pas être révoqué par lui-même.
             this.cacheService.delete(key);
-            this.authService.invalidateToken(resetPasswordForm.getToken());
             return this.userMapper.toDto(user);
         } catch (NotFoundException | BadRequestException e) {
             throw e;

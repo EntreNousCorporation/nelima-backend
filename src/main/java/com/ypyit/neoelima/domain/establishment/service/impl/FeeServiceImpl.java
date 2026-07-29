@@ -8,7 +8,6 @@ import com.ypyit.neoelima.common.exception.DuplicateResourceException;
 import com.ypyit.neoelima.common.exception.NotFoundException;
 import com.ypyit.neoelima.common.exception.ValidationException;
 import com.ypyit.neoelima.domain.establishment.dto.FeeDto;
-import com.ypyit.neoelima.domain.establishment.dto.TenantDto;
 import com.ypyit.neoelima.domain.establishment.entity.EstablishmentEntity;
 import com.ypyit.neoelima.domain.establishment.entity.FeeEntity;
 import com.ypyit.neoelima.domain.establishment.entity.LevelOfStudyEntity;
@@ -26,8 +25,6 @@ import com.ypyit.neoelima.domain.establishment.repository.StudentFeeRepository;
 import com.ypyit.neoelima.domain.establishment.repository.StudentRepository;
 import com.ypyit.neoelima.domain.establishment.service.FeeService;
 import com.ypyit.neoelima.domain.establishment.service.LevelOfStudyService;
-import com.ypyit.neoelima.domain.user.form.TenantCreationForm;
-import com.ypyit.neoelima.domain.user.service.impl.TenantServiceConnector;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -57,7 +54,6 @@ public class FeeServiceImpl implements FeeService {
     private final StudentRepository studentRepository;
     private final StudentFeeRepository studentFeeRepository;
     private final LevelOfStudyService levelOfStudyService;
-    private final TenantServiceConnector tenantServiceConnector;
 
     @Override
     public FeeDto create(FeeCreationForm creationForm) throws BusinessException {
@@ -85,13 +81,6 @@ public class FeeServiceImpl implements FeeService {
                 finalLevelOfStudyCodes.addAll(creationForm.getLevelOfStudiesCodes());
             }
             FeeEntity savedFee = this.feeRepository.saveAndFlush(fee);
-            TenantDto tenant = this.tenantServiceConnector.createTenant(TenantCreationForm.builder()
-                    .name(establishment.getName())
-                    .description(establishment.getName())
-                    .companyId(creationForm.getEstablishmentId())
-                    .build());
-            fee.setBusinessId(tenant.getBusinessId());
-            fee.setApiKey(tenant.getApiKey());
             this.createStudentFees(savedFee, creationForm.getEstablishmentId(), finalLevelOfStudyCodes);
             return this.feeMapper.toDto(savedFee);
         } catch (NotFoundException | ValidationException | DuplicateResourceException e) {

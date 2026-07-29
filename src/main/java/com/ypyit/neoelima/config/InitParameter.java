@@ -40,10 +40,10 @@ import java.util.Set;
 @Component
 @Transactional
 @RequiredArgsConstructor
-@ConditionalOnProperty(value = "neo-elima.initialize-data", havingValue = "true")
+@ConditionalOnProperty(value = "nelima.initialize-data", havingValue = "true")
 public class InitParameter implements CommandLineRunner {
 
-    @Value("${neo-elima.default-admin-pwd}")
+    @Value("${nelima.default-admin-pwd}")
     private String defaultAdminPwd;
 
     private final PermissionRepository permissionRepository;

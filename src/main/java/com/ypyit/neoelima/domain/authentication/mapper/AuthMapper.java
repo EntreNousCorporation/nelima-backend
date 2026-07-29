@@ -12,7 +12,7 @@ public class AuthMapper {
     public TokenIntrospection toIntrospection(Jws<Claims> claimsJws) {
         return TokenIntrospection
                 .builder()
-                .username((String) claimsJws.getBody().get(CustomClaims.USERNAME))
+                .username((String) claimsJws.getPayload().get(CustomClaims.USERNAME))
                 .build();
     }
 }

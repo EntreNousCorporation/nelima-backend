@@ -12,18 +12,19 @@ import com.ypyit.neoelima.domain.utils.CustomClaims;
 import com.ypyit.neoelima.domain.utils.FunctionalUtils;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
-import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
-import io.jsonwebtoken.SignatureException;
+import io.jsonwebtoken.security.Keys;
+import io.jsonwebtoken.security.SignatureException;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.stereotype.Service;
 import org.springframework.util.Assert;
 
+import javax.crypto.SecretKey;
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -39,10 +40,23 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AuthService {
 
+    /** HMAC-SHA256 impose une clé d'au moins 256 bits, soit 32 octets. */
+    private static final int MIN_SECRET_BYTES = 32;
+
     private final SessionService sessionService;
     private final UserDetailsServiceImpl userDetailsService;
     private final AuthMapper authMapper;
     private final SecurityProperties securityProperties;
+
+    private SecretKey signingKey;
+
+    @PostConstruct
+    void initSigningKey() {
+        byte[] secretBytes = this.securityProperties.getSecret().getBytes(StandardCharsets.UTF_8);
+        Assert.isTrue(secretBytes.length >= MIN_SECRET_BYTES,
+                "security.jwt.secret doit faire au moins " + MIN_SECRET_BYTES + " caractères");
+        this.signingKey = Keys.hmacShaKeyFor(secretBytes);
+    }
 
     public String extractUsername(String token) {
         return extractClaim(token, (Claims claims) -> claims.get(CustomClaims.USERNAME, String.class));
@@ -70,7 +84,11 @@ public class AuthService {
     }
 
     private Claims extractAllClaims(String token) {
-        return Jwts.parser().setSigningKey(this.securityProperties.getSecret()).parseClaimsJws(token).getBody();
+        return Jwts.parser()
+                .verifyWith(this.signingKey)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
     }
 
     public Boolean tokenHasNotExpired(String token) {
@@ -101,13 +119,13 @@ public class AuthService {
 
         String tokenStringValue = Jwts
                 .builder()
-                .setClaims(claims)
-                .setSubject(String.valueOf(user.getId()))
-                .setIssuedAt(new Date(startDate))
-                .setExpiration(new Date(tokenDuration))
-                .setIssuer(this.securityProperties.getIssuer())
-                .signWith(SignatureAlgorithm.HS256, this.securityProperties.getSecret()).compact();
-
+                .claims(claims)
+                .subject(String.valueOf(user.getId()))
+                .issuedAt(new Date(startDate))
+                .expiration(new Date(tokenDuration))
+                .issuer(this.securityProperties.getIssuer())
+                .signWith(this.signingKey)
+                .compact();
 
         return Token.builder()
                 .accessToken(tokenStringValue)
@@ -160,29 +178,22 @@ public class AuthService {
 
         return Jwts
                 .builder()
-                .setClaims(claims)
-                .setSubject(String.valueOf(resetPwdRequest.getUser().getId()))
-                .setIssuedAt(new Date(startDate))
-                .setExpiration(new Date(tokenDuration))
-                .setIssuer(this.securityProperties.getIssuer())
-                .signWith(SignatureAlgorithm.HS256, this.securityProperties.getSecret()).compact();
+                .claims(claims)
+                .subject(String.valueOf(resetPwdRequest.getUser().getId()))
+                .issuedAt(new Date(startDate))
+                .expiration(new Date(tokenDuration))
+                .issuer(this.securityProperties.getIssuer())
+                .signWith(this.signingKey)
+                .compact();
 
     }
 
     public TokenIntrospection parseJwt(String token) {
         return this.authMapper
                 .toIntrospection(Jwts.parser()
-                        .setSigningKey(this.securityProperties.getSecret())
-                        .parseClaimsJws(token));
-    }
-
-    public void invalidateToken(String token) {
-        try {
-            Jws<Claims> jws = Jwts.parser().setSigningKey(this.securityProperties.getSecret()).parseClaimsJws(token);
-            jws.getBody().setExpiration(new Date()).getSubject();
-        } catch (Exception e) {
-            log.error("Error while invalidate jwt {}", ExceptionUtils.getMessage(e));
-        }
+                        .verifyWith(this.signingKey)
+                        .build()
+                        .parseSignedClaims(token));
     }
 
 }
