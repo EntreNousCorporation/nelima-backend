@@ -7,6 +7,7 @@ import com.ypyit.neoelima.domain.payment.enums.PaymentIntentStatus;
 import com.ypyit.neoelima.domain.user.entity.UserEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.JoinColumn;
@@ -86,7 +87,7 @@ public class PaymentIntentEntity extends BaseEntity {
 
     private Instant settledAt;
 
-    @ManyToOne(optional = false)
+    @ManyToOne(optional = false, fetch = FetchType.LAZY)
     @ToString.Exclude
     @JoinColumn(name = "installment_id", referencedColumnName = "id")
     private InstallmentEntity installment;
@@ -95,7 +96,7 @@ public class PaymentIntentEntity extends BaseEntity {
      * Auteur du règlement. Le paiement est découplé du tutorat : n'importe quel utilisateur
      * authentifié peut payer pour un élève, il n'a pas à en être le tuteur déclaré.
      */
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @ToString.Exclude
     @JoinColumn(name = "payer_user_id", referencedColumnName = "id")
     private UserEntity payer;

@@ -19,6 +19,8 @@ import com.ypyit.neoelima.domain.payment.enums.PaymentIntentStatus;
 import com.ypyit.neoelima.domain.payment.form.OfflineCollectionForm;
 import com.ypyit.neoelima.domain.payment.repository.PaymentIntentRepository;
 import com.ypyit.neoelima.domain.payment.service.OfflineCollectionService;
+import com.ypyit.neoelima.domain.payment.service.ReceiptService;
+import org.springframework.data.domain.PageRequest;
 import com.ypyit.neoelima.domain.user.entity.ContactEntity;
 import com.ypyit.neoelima.domain.user.entity.EstablishmentUserEntity;
 import com.ypyit.neoelima.domain.user.enums.ContactType;
@@ -64,6 +66,8 @@ class OfflineCollectionServiceTest extends AbstractIntegrationTest {
     private PaymentIntentRepository paymentIntentRepository;
     @Autowired
     private UserRepository userRepository;
+    @Autowired
+    private ReceiptService receiptService;
 
     private EstablishmentEntity establishment;
     private InstallmentEntity installment;
@@ -149,6 +153,21 @@ class OfflineCollectionServiceTest extends AbstractIntegrationTest {
         assertThatThrownBy(() -> offlineCollectionService.collect(OfflineCollectionForm.builder()
                 .installmentId(installment.getId()).channel(PaymentChannel.ONLINE).build()))
                 .isInstanceOf(BadRequestException.class);
+    }
+
+    @Test
+    @DisplayName("la liste des reçus se lit sans entraîner tout le graphe d'objets")
+    void listsReceiptsWithoutDraggingTheWholeGraph() {
+        offlineCollectionService.collect(OfflineCollectionForm.builder()
+                .installmentId(installment.getId()).channel(PaymentChannel.CASH).build());
+
+        // Avec les relations en chargement immédiat, lire un reçu tirait la tentative de paiement,
+        // la tranche, l'élève, l'établissement et ses collections : Hibernate produisait une
+        // requête au produit cartésien qui ne rendait jamais la main.
+        var page = receiptService.search(null, PageRequest.of(0, 20));
+
+        assertThat(page.getContent()).hasSize(1);
+        assertThat(page.getContent().get(0).getNumber()).matches("\\d{4}-\\d{6}");
     }
 
     private InstallmentEntity anInstallmentOf(EstablishmentEntity school, BigDecimal amount) {

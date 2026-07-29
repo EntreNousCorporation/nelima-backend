@@ -4,6 +4,7 @@ import com.ypyit.neoelima.common.entity.BaseEntity;
 import com.ypyit.neoelima.domain.establishment.entity.EstablishmentEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToOne;
@@ -67,12 +68,22 @@ public class ReceiptEntity extends BaseEntity {
 
     private String payerLabel;
 
-    @ManyToOne(optional = false)
+    /**
+     * Chargement paresseux volontaire. Un reçu porte déjà les libellés dont il a besoin, recopiés
+     * à l'émission : rien ne justifie de joindre l'établissement pour l'afficher.
+     */
+    @ManyToOne(optional = false, fetch = FetchType.LAZY)
     @ToString.Exclude
     @JoinColumn(name = "establishment_id", referencedColumnName = "id")
     private EstablishmentEntity establishment;
 
-    @OneToOne(optional = false)
+    /**
+     * Paresseux impérativement. En chargement immédiat — le défaut pour OneToOne — lire un reçu
+     * entraînait la tentative de paiement, puis la tranche, la dette, l'élève, l'établissement et
+     * ses collections : Hibernate produisait une seule requête au produit cartésien qui ne rendait
+     * jamais la main. Le simple affichage de la liste des reçus bloquait le serveur.
+     */
+    @OneToOne(optional = false, fetch = FetchType.LAZY)
     @ToString.Exclude
     @JoinColumn(name = "payment_intent_id", referencedColumnName = "id")
     private PaymentIntentEntity paymentIntent;
