@@ -4,6 +4,10 @@ import com.ypyit.neoelima.domain.user.service.impl.UserDetailsServiceImpl;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authorization.AuthorizationDecision;
+import org.springframework.security.authorization.AuthorizationManager;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
@@ -25,9 +29,12 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.Collections;
+import java.util.Objects;
 import java.util.List;
 
 import static com.ypyit.neoelima.domain.utils.SecurityUtils.AUTH_RESOURCES;
+import static com.ypyit.neoelima.domain.utils.SecurityUtils.PAYMENT_ADMIN_RESOURCES;
+import static com.ypyit.neoelima.domain.utils.SecurityUtils.PAYMENT_WEBHOOK_RESOURCES;
 import static com.ypyit.neoelima.domain.utils.SecurityUtils.GLOBAL_RESOURCES;
 import static com.ypyit.neoelima.domain.utils.SecurityUtils.SWAGGER_RESOURCES;
 import static com.ypyit.neoelima.domain.utils.SecurityUtils.USER_GET_RESOURCES;
@@ -44,6 +51,29 @@ public class SecurityConfiguration {
     private final JwtAuthFilter jwtAuthFilter;
 
     private final UserDetailsServiceImpl userService;
+
+    private final CurrentUserProvider currentUserProvider;
+
+    /**
+     * Réserve l'accès à l'équipe YPYit.
+     *
+     * <p>On s'appuie sur le type d'utilisateur et non sur une autorité portée par le jeton : les
+     * rôles seedés n'ont aujourd'hui aucune permission associée, un {@code hasAuthority} ne
+     * protégerait donc rien du tout.
+     */
+    private AuthorizationManager<RequestAuthorizationContext> platformAdminOnly() {
+        return (authentication, context) -> {
+            Authentication current = authentication.get();
+            if (Objects.isNull(current) || !current.isAuthenticated()) {
+                return new AuthorizationDecision(false);
+            }
+            try {
+                return new AuthorizationDecision(this.currentUserProvider.isPlatformAdmin());
+            } catch (RuntimeException e) {
+                return new AuthorizationDecision(false);
+            }
+        };
+    }
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -74,6 +104,12 @@ public class SecurityConfiguration {
                             .requestMatchers(HttpMethod.GET, USER_GET_RESOURCES).permitAll()
                             .requestMatchers(SWAGGER_RESOURCES).permitAll()
                             .requestMatchers(AUTH_RESOURCES).permitAll()
+                            // L'agrégateur appelle sans jeton Nelima ; c'est la signature HMAC de
+                            // la charge utile, vérifiée par PaySwitch, qui fait foi.
+                            .requestMatchers(PAYMENT_WEBHOOK_RESOURCES).permitAll()
+                            // Ces routes exposent les credentials de l'agrégateur et permettent de
+                            // basculer le provider actif. Le starter ne les protège pas.
+                            .requestMatchers(PAYMENT_ADMIN_RESOURCES).access(platformAdminOnly())
                             .requestMatchers(HttpMethod.GET, GLOBAL_RESOURCES).permitAll();
                     authorize
                             .anyRequest()

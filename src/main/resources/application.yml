@@ -29,10 +29,8 @@ spring:
       timeout: 6000
       repositories:
         enabled: false
-  flyway:
-    enabled: true
-    baseline-on-migrate: false
-    locations: classpath:db/migration
+  # Les migrations Nelima sont pilotées par FlywayConfiguration et non par l'autoconfiguration
+  # Spring Boot, que le bean Flyway de PaySwitch désactive. Voir FlywayConfiguration.
   jpa:
     show-sql: false
     properties:
@@ -85,6 +83,27 @@ nelima:
   initialize-data: ${INITIALIZE_DATA:true}
   default-admin-pwd: ${DEFAULT_ADMIN_PWD:Api@2024}
   web-client-timeout: 1
+  billing:
+    # Commission YPYit sur les encaissements en ligne, exprimée en fraction.
+    # Elle s'ajoute au montant de la tranche et est affichée au parent avant paiement.
+    # Aucune commission sur les encaissements au guichet.
+    commission-rate: ${COMMISSION_RATE:0.02}
+    currency: XOF
+    # Destination du parent après le tunnel de paiement de l'agrégateur.
+    # Sur mobile ce sont des liens profonds, pas des URLs web.
+    payment-success-url: ${PAYMENT_SUCCESS_URL:https://app.nelima.ci/paiement/succes}
+    payment-error-url: ${PAYMENT_ERROR_URL:https://app.nelima.ci/paiement/echec}
+
+payswitch:
+  public-base-url: ${PAYSWITCH_PUBLIC_BASE_URL:https://api.nelima.ci}
+  jeko:
+    # Jeko exige toujours un canal de paiement, soit ici, soit à chaque transaction.
+    default-payment-method: ${JEKO_DEFAULT_PAYMENT_METHOD:wave}
+    environment: ${JEKO_ENVIRONMENT:SANDBOX}
+    api-key: ${JEKO_API_KEY:}
+    api-key-id: ${JEKO_API_KEY_ID:}
+    webhook-secret: ${JEKO_WEBHOOK_SECRET:}
+    store-id: ${JEKO_STORE_ID:}
 
 main-domain: ${MAIN_DOMAIN:ypyit.com}
 

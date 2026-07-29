@@ -40,6 +40,7 @@
         <jsoup.version>1.16.1</jsoup.version>
         <spring-retry.version>2.0.0</spring-retry.version>
         <datatype-jsr310.version>2.16.0</datatype-jsr310.version>
+        <payswitch.version>0.1.0-SNAPSHOT</payswitch.version>
         <querydsl.version>5.1.0</querydsl.version>
         <jakarta-persistence.version>3.1.0</jakarta-persistence.version>
         <guava.version>31.1-jre</guava.version>
@@ -49,6 +50,24 @@
         <minio.version>8.5.11</minio.version>
         <okhttp3.version>4.12.0</okhttp3.version>
     </properties>
+    <!--
+        PaySwitch est publié sur GitHub Packages, sous l'organisation EntreNousCorporation.
+        Consommer l'artefact suppose un PAT classique avec le scope read:packages dans
+        ~/.m2/settings.xml, y compris sur la machine de build du VPS.
+    -->
+    <repositories>
+        <repository>
+            <id>github</id>
+            <url>https://maven.pkg.github.com/EntreNousCorporation/payswitch</url>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+        </repository>
+    </repositories>
+
     <dependencies>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -189,6 +208,16 @@
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
             <scope>runtime</scope>
+        </dependency>
+        <!--
+            Unifie les agrégateurs de paiement (Jeko en V1) derrière PaymentService. Embarqué dans
+            le monolithe : il gère ses propres migrations, la persistance des transactions et la
+            vérification de signature des webhooks.
+        -->
+        <dependency>
+            <groupId>com.ypy.paygw</groupId>
+            <artifactId>payswitch-spring-boot-starter</artifactId>
+            <version>${payswitch.version}</version>
         </dependency>
         <dependency>
             <groupId>org.flywaydb</groupId>
