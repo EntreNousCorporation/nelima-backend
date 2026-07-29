@@ -41,6 +41,7 @@
         <spring-retry.version>2.0.0</spring-retry.version>
         <datatype-jsr310.version>2.16.0</datatype-jsr310.version>
         <payswitch.version>0.1.0-SNAPSHOT</payswitch.version>
+        <openhtmltopdf.version>1.0.10</openhtmltopdf.version>
         <querydsl.version>5.1.0</querydsl.version>
         <jakarta-persistence.version>3.1.0</jakarta-persistence.version>
         <guava.version>31.1-jre</guava.version>
@@ -218,6 +219,17 @@
             <groupId>com.ypy.paygw</groupId>
             <artifactId>payswitch-spring-boot-starter</artifactId>
             <version>${payswitch.version}</version>
+        </dependency>
+        <!--
+            Rendu PDF depuis du XHTML : le reçu est décrit dans un gabarit Thymeleaf, comme les
+            emails, plutôt que dessiné par des appels de positionnement. Une pièce comptable
+            évolue (mentions, logo, coordonnées) et doit rester modifiable sans recompiler une
+            mise en page programmatique. Licence Apache 2.0, contrairement à iText.
+        -->
+        <dependency>
+            <groupId>com.openhtmltopdf</groupId>
+            <artifactId>openhtmltopdf-pdfbox</artifactId>
+            <version>${openhtmltopdf.version}</version>
         </dependency>
         <dependency>
             <groupId>org.flywaydb</groupId>

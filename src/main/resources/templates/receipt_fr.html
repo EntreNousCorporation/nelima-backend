@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8" />
+    <title>Reçu de paiement</title>
+</head>
+<body style="font-family: Helvetica, Arial, sans-serif; color:#14281f; line-height:1.5;">
+
+<p>Bonjour,</p>
+
+<p>
+    Nous confirmons le règlement de
+    <strong th:text="${amountTotal}">—</strong>
+    pour <strong th:text="${studentLabel}">l'élève</strong>
+    (matricule <span th:text="${studentRegistrationNumber}">—</span>).
+</p>
+
+<p>
+    Votre reçu n° <strong th:text="${receiptNumber}">—</strong> est joint à ce message,
+    au format PDF. Conservez-le : il atteste du paiement auprès de l'établissement
+    <strong th:text="${establishmentName}">—</strong>.
+</p>
+
+<p style="margin-top:24px; font-size:13px; color:#6b7a72;">
+    Ce message est envoyé automatiquement, il est inutile d'y répondre. Pour toute question
+    sur ce paiement, contactez directement l'établissement.
+</p>
+
+</body>
+</html>

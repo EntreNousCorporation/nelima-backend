@@ -1,5 +1,9 @@
 package com.ypyit.neoelima.common.service.email.service.impl;
 
+import org.springframework.core.io.ByteArrayResource;
+import java.nio.charset.StandardCharsets;
+import java.util.Objects;
+
 
 import com.ypyit.neoelima.common.service.email.enums.EmailTemplateType;
 import com.ypyit.neoelima.common.service.email.service.EmailConstants;
@@ -47,6 +51,18 @@ public class EmailServiceImpl implements EmailService {
 
     @Override
     public void send(@NonNull Context context, @NonNull EmailTemplateType type) {
+        this.dispatch(context, type, null, null, null);
+    }
+
+    @Override
+    public void sendWithAttachment(@NonNull Context context, @NonNull EmailTemplateType type,
+                                   @NonNull String fileName, @NonNull byte[] content,
+                                   @NonNull String contentType) {
+        this.dispatch(context, type, fileName, content, contentType);
+    }
+
+    private void dispatch(Context context, EmailTemplateType type,
+                          String fileName, byte[] attachment, String contentType) {
         Locale locale = CurrentLocale.getValue();
         String email = (String) context.getVariable(EmailConstants.EMAIL);
         log.info("Send email to " + email + " with locale " + locale.getLanguage());
@@ -65,7 +81,10 @@ public class EmailServiceImpl implements EmailService {
             javaMailSender.setJavaMailProperties(this.getMailProperties());
 
             MimeMessage message = javaMailSender.createMimeMessage();
-            MimeMessageHelper msgHelper = new MimeMessageHelper(message, false);
+            boolean multipart = Objects.nonNull(attachment);
+            MimeMessageHelper msgHelper = multipart
+                    ? new MimeMessageHelper(message, true, StandardCharsets.UTF_8.name())
+                    : new MimeMessageHelper(message, false);
 
             String platformName = (String) context.getVariable(EmailConstants.PLATFORM_NAME);
 
@@ -82,6 +101,9 @@ public class EmailServiceImpl implements EmailService {
 
             String body = this.templateEngine.process(template, context);
             msgHelper.setText(body, true);
+            if (multipart) {
+                msgHelper.addAttachment(fileName, new ByteArrayResource(attachment), contentType);
+            }
             javaMailSender.send(message);
             log.info("Successfully send email to {}", email);
 

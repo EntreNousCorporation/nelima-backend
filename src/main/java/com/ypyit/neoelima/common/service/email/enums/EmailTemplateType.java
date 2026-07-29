@@ -12,7 +12,8 @@ public enum EmailTemplateType {
     WELCOME_MOBILE_USER("welcome-mobile-user"),
     RESET_MOBILE_PASSWORD("reset-mobile-password"),
     RESEND_MOBILE_OTP("resend-mobile-otp"),
-    INVITE_STUDENT_PARENT("invite-student-parent");
+    INVITE_STUDENT_PARENT("invite-student-parent"),
+    RECEIPT("receipt");
 
     private final String value;
 }

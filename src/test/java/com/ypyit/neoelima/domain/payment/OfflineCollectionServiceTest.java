@@ -19,6 +19,7 @@ import com.ypyit.neoelima.domain.payment.enums.PaymentIntentStatus;
 import com.ypyit.neoelima.domain.payment.form.OfflineCollectionForm;
 import com.ypyit.neoelima.domain.payment.repository.PaymentIntentRepository;
 import com.ypyit.neoelima.domain.payment.service.OfflineCollectionService;
+import com.ypyit.neoelima.domain.payment.service.ReceiptPdfRenderer;
 import com.ypyit.neoelima.domain.payment.service.ReceiptService;
 import org.springframework.data.domain.PageRequest;
 import com.ypyit.neoelima.domain.user.entity.ContactEntity;
@@ -68,6 +69,8 @@ class OfflineCollectionServiceTest extends AbstractIntegrationTest {
     private UserRepository userRepository;
     @Autowired
     private ReceiptService receiptService;
+    @Autowired
+    private ReceiptPdfRenderer receiptPdfRenderer;
 
     private EstablishmentEntity establishment;
     private InstallmentEntity installment;
@@ -168,6 +171,42 @@ class OfflineCollectionServiceTest extends AbstractIntegrationTest {
 
         assertThat(page.getContent()).hasSize(1);
         assertThat(page.getContent().get(0).getNumber()).matches("\\d{4}-\\d{6}");
+    }
+
+    @Test
+    @DisplayName("le reçu se rend en PDF exploitable")
+    void rendersReceiptAsPdf() throws Exception {
+        ReceiptEntity receipt = offlineCollectionService.collect(OfflineCollectionForm.builder()
+                .installmentId(installment.getId()).channel(PaymentChannel.CASH).build());
+
+        byte[] pdf = receiptPdfRenderer.render(receipt);
+
+        assertThat(new String(pdf, 0, 5, java.nio.charset.StandardCharsets.US_ASCII)).isEqualTo("%PDF-");
+
+        // On lit le texte réellement rendu plutôt que de se contenter de la signature et d'une
+        // taille : un gabarit cassé produit une page blanche, qui est un PDF parfaitement valide
+        // et de taille plausible. Sans cette lecture, le test validerait un reçu vide.
+        String texte;
+        // PDFBox 2.x est la version tirée par openhtmltopdf : le chargement passe par
+        // PDDocument.load, `Loader` n'apparaissant qu'en 3.x.
+        try (org.apache.pdfbox.pdmodel.PDDocument document =
+                     org.apache.pdfbox.pdmodel.PDDocument.load(pdf)) {
+            texte = new org.apache.pdfbox.text.PDFTextStripper().getText(document);
+        }
+
+        // Les retours à la ligne du rendu tombent où la mise en page les place : on normalise
+        // les espaces avant de comparer, sinon un simple recadrage du gabarit casse le test.
+        String platEtNormalise = texte.replaceAll("\\s+", " ");
+
+        assertThat(platEtNormalise)
+                .contains("REÇU DE PAIEMENT")
+                .contains(receipt.getNumber())
+                .contains("Aaron Koffi")
+                .contains("Matricule")
+                .contains("Espèces")
+                .contains("50 000 FCFA");
+        assertThat(receiptPdfRenderer.fileNameOf(receipt))
+                .isEqualTo("recu-" + receipt.getNumber() + ".pdf");
     }
 
     private InstallmentEntity anInstallmentOf(EstablishmentEntity school, BigDecimal amount) {

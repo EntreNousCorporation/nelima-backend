@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<!--
+  Gabarit du reçu PDF. XHTML strict : le moteur de rendu exige des balises fermées et refuse
+  le HTML permissif d'un navigateur.
+
+  Aucune police externe n'est référencée : le rendu se fait hors ligne sur le serveur, et une
+  police distante manquante ferait échouer la génération plutôt que dégrader l'apparence.
+-->
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8" />
+    <title th:text="'Reçu ' + ${number}">Reçu</title>
+    <style>
+        @page { size: A4; margin: 22mm 18mm; }
+        body { font-family: Helvetica, Arial, sans-serif; font-size: 11pt; color: #14281f; }
+        .entete { border-bottom: 2px solid #25804f; padding-bottom: 10px; margin-bottom: 22px; }
+        .ecole { font-size: 15pt; font-weight: bold; }
+        .titre { font-size: 13pt; font-weight: bold; margin-bottom: 2px; }
+        .num { font-family: monospace; font-size: 12pt; }
+        table.infos { width: 100%; border-collapse: collapse; margin-bottom: 22px; }
+        table.infos td { padding: 5px 0; vertical-align: top; }
+        table.infos td.cle { width: 38%; color: #4a5b52; }
+        table.lignes { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
+        table.lignes th { text-align: left; border-bottom: 1px solid #cfd8d3; padding: 6px 0; font-size: 10pt; }
+        table.lignes td { padding: 8px 0; border-bottom: 1px solid #eef2f0; }
+        td.montant, th.montant { text-align: right; }
+        .total { font-size: 13pt; font-weight: bold; }
+        .pied { margin-top: 34px; font-size: 9pt; color: #6b7a72; border-top: 1px solid #eef2f0; padding-top: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="entete">
+    <table style="width:100%; border-collapse:collapse;">
+        <tr>
+            <td>
+                <div class="ecole" th:text="${establishmentName}">Établissement</div>
+            </td>
+            <td style="text-align:right;">
+                <div class="titre">REÇU DE PAIEMENT</div>
+                <div class="num" th:text="${number}">0000-000000</div>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<table class="infos">
+    <tr>
+        <td class="cle">Émis le</td>
+        <td th:text="${issuedAt}">—</td>
+    </tr>
+    <tr>
+        <td class="cle">Élève</td>
+        <td th:text="${studentLabel}">—</td>
+    </tr>
+    <tr>
+        <td class="cle">Matricule</td>
+        <td th:text="${studentRegistrationNumber}">—</td>
+    </tr>
+    <tr th:if="${payerLabel != null and !payerLabel.isEmpty()}">
+        <td class="cle">Réglé par</td>
+        <td th:text="${payerLabel}">—</td>
+    </tr>
+    <tr>
+        <td class="cle">Mode de règlement</td>
+        <td th:text="${channelLabel}">—</td>
+    </tr>
+</table>
+
+<table class="lignes">
+    <tr>
+        <th>Objet</th>
+        <th class="montant">Montant</th>
+    </tr>
+    <tr>
+        <td th:text="${installmentLabel}">Tranche</td>
+        <td class="montant" th:text="${amountSchool}">—</td>
+    </tr>
+    <!-- La commission n'apparaît que lorsqu'elle a été prélevée, c'est-à-dire en ligne. -->
+    <tr th:if="${hasCommission}">
+        <td>Frais de service</td>
+        <td class="montant" th:text="${amountCommission}">—</td>
+    </tr>
+    <tr>
+        <td class="total">Total réglé</td>
+        <td class="montant total" th:text="${amountTotal}">—</td>
+    </tr>
+</table>
+
+<div class="pied">
+    <p th:text="'Reçu généré par ' + ${platformName} + '. Ce document atteste du règlement mentionné ci-dessus.'">
+        Reçu généré par Nelima.
+    </p>
+    <p>Numérotation propre à l'établissement, continue et sans doublon.</p>
+</div>
+
+</body>
+</html>

@@ -31,6 +31,7 @@ public class ReceiptIssuer {
 
     private final ReceiptRepository receiptRepository;
     private final ReceiptNumberAllocator receiptNumberAllocator;
+    private final ReceiptMailer receiptMailer;
 
     @Transactional(propagation = Propagation.MANDATORY)
     public ReceiptEntity issueFor(PaymentIntentEntity paymentIntent) {
@@ -62,6 +63,11 @@ public class ReceiptIssuer {
 
         log.info("RECEIPT_ISSUED: receipt {} for installment {} of establishment {}",
                 number, installment.getId(), establishment.getId());
+
+        // L'envoi est déclenché ici et non par l'appelant : tout encaissement doit être
+        // quittancé au payeur, quel que soit le canal, et le déléguer laisserait le choix
+        // à chaque chemin d'appel. L'envoi lui-même est asynchrone et tolère l'échec.
+        this.receiptMailer.send(receipt);
         return receipt;
     }
 
