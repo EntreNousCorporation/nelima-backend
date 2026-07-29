@@ -93,6 +93,15 @@ public class PaymentIntentEntity extends BaseEntity {
     private InstallmentEntity installment;
 
     /**
+     * Payeur déclaré au comptoir, quand ce n'est pas l'agent qui saisit. Conservé pour que le
+     * reçu puisse être réédité et réexpédié plus tard sans redemander l'information.
+     */
+    private String payerName;
+
+    @Column(length = 320)
+    private String payerEmail;
+
+    /**
      * Auteur du règlement. Le paiement est découplé du tutorat : n'importe quel utilisateur
      * authentifié peut payer pour un élève, il n'a pas à en être le tuteur déclaré.
      */

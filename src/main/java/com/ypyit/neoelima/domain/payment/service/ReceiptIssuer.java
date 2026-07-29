@@ -8,6 +8,7 @@ import com.ypyit.neoelima.domain.payment.entity.ReceiptEntity;
 import com.ypyit.neoelima.domain.payment.repository.ReceiptRepository;
 import com.ypyit.neoelima.domain.user.entity.UserEntity;
 import lombok.RequiredArgsConstructor;
+import org.apache.commons.lang3.StringUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -58,7 +59,11 @@ public class ReceiptIssuer {
                 .issuedAt(issuedAt)
                 .studentLabel(fullNameOf(student))
                 .studentRegistrationNumber(student.getRegistrationNumber())
-                .payerLabel(fullNameOf(paymentIntent.getPayer()))
+                // Le payeur déclaré au comptoir primes sur l'utilisateur qui a saisi :
+                // c'est la famille qui doit apparaître sur sa pièce comptable.
+                .payerLabel(StringUtils.isNotBlank(paymentIntent.getPayerName())
+                        ? paymentIntent.getPayerName().trim()
+                        : fullNameOf(paymentIntent.getPayer()))
                 .build());
 
         log.info("RECEIPT_ISSUED: receipt {} for installment {} of establishment {}",

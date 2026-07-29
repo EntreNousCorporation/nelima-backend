@@ -14,6 +14,7 @@ import com.ypyit.neoelima.domain.payment.enums.PaymentIntentStatus;
 import com.ypyit.neoelima.domain.payment.form.OfflineCollectionForm;
 import com.ypyit.neoelima.domain.payment.repository.PaymentIntentRepository;
 import lombok.RequiredArgsConstructor;
+import org.apache.commons.lang3.StringUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -73,6 +74,8 @@ public class OfflineCollectionService {
                         .channel(form.getChannel())
                         .status(PaymentIntentStatus.SUCCEEDED)
                         .providerType(form.getReference())
+                        .payerName(StringUtils.trimToNull(form.getPayerName()))
+                        .payerEmail(StringUtils.trimToNull(form.getPayerEmail()))
                         .settledAt(settledAt)
                         .build());
 
