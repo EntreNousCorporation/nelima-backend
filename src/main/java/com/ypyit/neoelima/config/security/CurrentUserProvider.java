@@ -1,0 +1,103 @@
+package com.ypyit.neoelima.config.security;
+
+import com.ypyit.neoelima.common.exception.UnAuthenticatedUserException;
+import com.ypyit.neoelima.domain.establishment.entity.StudentEntity;
+import com.ypyit.neoelima.domain.user.entity.AdminUserEntity;
+import com.ypyit.neoelima.domain.user.entity.EstablishmentUserEntity;
+import com.ypyit.neoelima.domain.user.entity.UserEntity;
+import com.ypyit.neoelima.domain.user.service.impl.UserDetailsServiceImpl;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Component;
+
+import java.util.Objects;
+import java.util.Optional;
+import java.util.UUID;
+
+/**
+ * Source de vérité du périmètre de données de l'appelant.
+ *
+ * <p>Aucun service ne doit faire confiance à un {@code establishmentId} reçu dans un formulaire
+ * pour une lecture côté école : un utilisateur d'établissement authentifié pourrait alors lire
+ * les données d'un autre établissement en changeant simplement le paramètre. Le périmètre est
+ * dérivé ici de l'utilisateur authentifié.
+ *
+ * <p>Trois profils, trois portées :
+ * <ul>
+ *   <li>{@link AdminUserEntity} (YPYit) — peut cibler explicitement un établissement, ou tous ;</li>
+ *   <li>{@link EstablishmentUserEntity} — épinglé à son établissement, le paramètre est ignoré ;</li>
+ *   <li>parent — aucune portée établissement, l'accès se vérifie élève par élève.</li>
+ * </ul>
+ */
+@Component
+@RequiredArgsConstructor
+public class CurrentUserProvider {
+
+    private final UserDetailsServiceImpl userDetailsService;
+
+    public UserEntity currentUser() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (Objects.isNull(authentication)
+                || !authentication.isAuthenticated()
+                || Objects.isNull(authentication.getName())) {
+            throw new UnAuthenticatedUserException("No authenticated user in the security context");
+        }
+        return this.userDetailsService.loadUserByUsername(authentication.getName());
+    }
+
+    public boolean isPlatformAdmin() {
+        return this.currentUser() instanceof AdminUserEntity;
+    }
+
+    public Optional<UUID> currentEstablishmentId() {
+        return establishmentIdOf(this.currentUser());
+    }
+
+    /**
+     * Portée établissement à appliquer à une requête de lecture côté école.
+     *
+     * @param requestedEstablishmentId valeur reçue du client, honorée uniquement pour un admin YPYit
+     * @return l'établissement à filtrer ; {@code null} signifie « tous » et n'est possible que pour un admin
+     */
+    public UUID resolveEstablishmentScope(UUID requestedEstablishmentId) {
+        UserEntity user = this.currentUser();
+        if (user instanceof AdminUserEntity) {
+            return requestedEstablishmentId;
+        }
+        return establishmentIdOf(user).orElseThrow(() -> new AccessDeniedException(
+                "User is not attached to an establishment and cannot browse establishment data"));
+    }
+
+    /**
+     * Vérifie que l'appelant a le droit de consulter cet élève : admin YPYit, membre de
+     * l'établissement de l'élève, ou tuteur rattaché.
+     */
+    public void assertCanAccessStudent(StudentEntity student) {
+        UserEntity user = this.currentUser();
+        if (user instanceof AdminUserEntity) {
+            return;
+        }
+        Optional<UUID> callerEstablishment = establishmentIdOf(user);
+        if (callerEstablishment.isPresent()
+                && Objects.nonNull(student.getEstablishment())
+                && callerEstablishment.get().equals(student.getEstablishment().getId())) {
+            return;
+        }
+        boolean isGuardian = student.getParentUsers().stream()
+                .anyMatch(parent -> parent.getId().equals(user.getId()));
+        if (isGuardian) {
+            return;
+        }
+        throw new AccessDeniedException("User is not allowed to access student " + student.getId());
+    }
+
+    private static Optional<UUID> establishmentIdOf(UserEntity user) {
+        if (user instanceof EstablishmentUserEntity establishmentUser
+                && Objects.nonNull(establishmentUser.getEstablishment())) {
+            return Optional.of(establishmentUser.getEstablishment().getId());
+        }
+        return Optional.empty();
+    }
+}

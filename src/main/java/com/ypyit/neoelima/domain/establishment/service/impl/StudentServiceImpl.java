@@ -7,6 +7,7 @@ import com.ypyit.neoelima.common.exception.BusinessException;
 import com.ypyit.neoelima.common.exception.DuplicateResourceException;
 import com.ypyit.neoelima.common.exception.NonUniqueUserFoundException;
 import com.ypyit.neoelima.common.exception.NotFoundException;
+import com.ypyit.neoelima.config.security.CurrentUserProvider;
 import com.ypyit.neoelima.domain.establishment.dto.StudentDto;
 import com.ypyit.neoelima.domain.establishment.dto.StudentLiteDto;
 import com.ypyit.neoelima.domain.establishment.entity.EstablishmentEntity;
@@ -49,6 +50,7 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -86,6 +88,7 @@ public class StudentServiceImpl implements StudentService {
     private final UserRepository userRepository;
     private final FeeRepository feeRepository;
     private final StudentFeeRepository studentFeeRepository;
+    private final CurrentUserProvider currentUserProvider;
 
     @Override
     public StudentDto findByEstablishment(EstablishmentStudentSearchForm searchForm) throws BusinessException {
@@ -116,7 +119,7 @@ public class StudentServiceImpl implements StudentService {
             }
 
             return this.studentMapper.toDto(students.get(0));
-        } catch (NotFoundException | NonUniqueUserFoundException e) {
+        } catch (NotFoundException | NonUniqueUserFoundException | AccessDeniedException e) {
             throw e;
         } catch (Exception e) {
             throw new BusinessException(e);
@@ -131,8 +134,13 @@ public class StudentServiceImpl implements StudentService {
 
             QStudentEntity student = QStudentEntity.studentEntity;
 
-            if (Objects.nonNull(searchForm.getEstablishmentId())) {
-                builder.and(student.establishment.id.eq(searchForm.getEstablishmentId()));
+            // La portée vient de l'utilisateur authentifié, jamais du formulaire : sinon un
+            // utilisateur d'établissement listerait les élèves d'une autre école en changeant
+            // simplement le paramètre.
+            UUID establishmentScope = this.currentUserProvider
+                    .resolveEstablishmentScope(searchForm.getEstablishmentId());
+            if (Objects.nonNull(establishmentScope)) {
+                builder.and(student.establishment.id.eq(establishmentScope));
             }
             List<Predicate> levelOfStudies = new ArrayList<>();
             if (CollectionUtils.isNotEmpty(searchForm.getLevelOfStudies())) {
@@ -144,7 +152,7 @@ public class StudentServiceImpl implements StudentService {
             List<StudentDto> response = result.get()
                     .map(this.studentMapper::toDto).collect(Collectors.toList());
             return new PageImpl<>(response, pageable, result.getTotalElements());
-        } catch (NotFoundException | NonUniqueUserFoundException e) {
+        } catch (NotFoundException | NonUniqueUserFoundException | AccessDeniedException e) {
             throw e;
         } catch (Exception e) {
             throw new BusinessException(e);
@@ -154,18 +162,19 @@ public class StudentServiceImpl implements StudentService {
     @Override
     public StudentDto create(StudentCreationForm creationForm) throws BusinessException {
         try {
-            if (this.studentRepository.existsByEstablishment_IdAndRegistrationNumber(creationForm.getEstablishmentId(),
+            UUID establishmentId = this.requireWritableEstablishment(creationForm.getEstablishmentId());
+            if (this.studentRepository.existsByEstablishment_IdAndRegistrationNumber(establishmentId,
                     creationForm.getRegistrationNumber())) {
                 throw new DuplicateResourceException(String.format("Student with provided registration number %s already exists",
                         creationForm.getRegistrationNumber()));
             }
             StudentEntity student = this.studentMapper.toEntity(creationForm);
             StudentEntity savedStudent = this.studentRepository.save(student);
-            this.checkEstablishment(creationForm.getEstablishmentId(), savedStudent, creationForm.getLevelOfStudyCode());
+            this.checkEstablishment(establishmentId, savedStudent, creationForm.getLevelOfStudyCode());
             this.checkLevelOfStudy(creationForm.getLevelOfStudyCode(), savedStudent);
             this.manageParent(creationForm.getParentId(), creationForm.getParent(), savedStudent);
             return this.studentMapper.toDto(this.studentRepository.save(savedStudent));
-        } catch (NotFoundException | DuplicateResourceException | BadRequestException e) {
+        } catch (NotFoundException | DuplicateResourceException | BadRequestException | AccessDeniedException e) {
             throw e;
         } catch (Exception e) {
             throw new BusinessException(e);
@@ -178,6 +187,7 @@ public class StudentServiceImpl implements StudentService {
             StudentEntity student = this.studentRepository.findById(id)
                     .orElseThrow(() ->
                             new NotFoundException(String.format("Student with provided id %s not found", id)));
+            this.currentUserProvider.assertCanAccessStudent(student);
             if (StringUtils.isNotBlank(updateForm.getRegistrationNumber())) {
                 Optional<StudentEntity> existingNumber = this.studentRepository
                         .findByEstablishment_IdAndRegistrationNumber(student.getEstablishment().getId(),
@@ -190,7 +200,7 @@ public class StudentServiceImpl implements StudentService {
             this.studentMapper.toUpdate(updateForm, student);
             this.checkLevelOfStudy(updateForm.getLevelOfStudyCode(), student);
             return this.studentMapper.toDto(this.studentRepository.save(student));
-        } catch (NotFoundException | DuplicateResourceException e) {
+        } catch (NotFoundException | DuplicateResourceException | AccessDeniedException e) {
             throw e;
         } catch (Exception e) {
             throw new BusinessException(e);
@@ -200,13 +210,16 @@ public class StudentServiceImpl implements StudentService {
     @Override
     public List<StudentDto> importFromFile(StorageCreationForm creationForm) throws BusinessException {
         try {
-            EstablishmentEntity establishment = this.establishmentRepository.findById(creationForm.getEstablishmentId())
-                    .orElseThrow(() -> new NotFoundException(String.format("Establishment with id %s not found", creationForm.getEstablishmentId())));
+            UUID establishmentId = this.requireWritableEstablishment(creationForm.getEstablishmentId());
+            EstablishmentEntity establishment = this.establishmentRepository.findById(establishmentId)
+                    .orElseThrow(() -> new NotFoundException(String.format("Establishment with id %s not found", establishmentId)));
             List<StudentEntity> studentEntities = this.readEstablishmentStudentsFile(creationForm, establishment);
             if (CollectionUtils.isNotEmpty(studentEntities)) {
                 this.studentRepository.saveAllAndFlush(studentEntities);
             }
             return this.studentMapper.toDtos(studentEntities);
+        } catch (NotFoundException | AccessDeniedException e) {
+            throw e;
         } catch (Exception e) {
             throw new BusinessException(e);
         }
@@ -215,15 +228,28 @@ public class StudentServiceImpl implements StudentService {
     @Override
     public Page<StudentLiteDto> findByEstablishmentId(UUID establishmentId, Pageable pageable) throws BusinessException {
         try {
-            Page<StudentEntity> result = this.studentRepository.findAllByEstablishment_Id(establishmentId, pageable);
+            UUID scope = this.requireWritableEstablishment(establishmentId);
+            Page<StudentEntity> result = this.studentRepository.findAllByEstablishment_Id(scope, pageable);
             List<StudentLiteDto> response = result.get()
                     .map(this.studentMapper::toLiteDto).collect(Collectors.toList());
             return new PageImpl<>(response, pageable, result.getTotalElements());
-        } catch (NotFoundException | NonUniqueUserFoundException e) {
+        } catch (NotFoundException | NonUniqueUserFoundException | AccessDeniedException e) {
             throw e;
         } catch (Exception e) {
             throw new BusinessException(e);
         }
+    }
+
+    /**
+     * Portée établissement pour une opération d'écriture ou une lecture ciblée. Un utilisateur
+     * d'établissement est épinglé au sien ; un admin YPYit doit désigner explicitement sa cible.
+     */
+    private UUID requireWritableEstablishment(UUID requestedEstablishmentId) {
+        UUID scope = this.currentUserProvider.resolveEstablishmentScope(requestedEstablishmentId);
+        if (Objects.isNull(scope)) {
+            throw new AccessDeniedException("An explicit establishment is required for this operation");
+        }
+        return scope;
     }
 
     private void checkEstablishment(UUID establishmentId, StudentEntity student, String levelOfStudyCode) {
