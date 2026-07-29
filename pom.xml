@@ -340,6 +340,15 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
+                    <!--
+                        Jar en couches : les dépendances, le lanceur et le code applicatif sont
+                        rangés séparément. Seule la couche applicative change d'un déploiement à
+                        l'autre — quelques mégaoctets au lieu des 127 du jar complet, qu'il fallait
+                        réexpédier intégralement au VPS à chaque fois.
+                    -->
+                    <layers>
+                        <enabled>true</enabled>
+                    </layers>
                     <image>
                         <builder>paketobuildpacks/builder-jammy-base:latest</builder>
                     </image>
