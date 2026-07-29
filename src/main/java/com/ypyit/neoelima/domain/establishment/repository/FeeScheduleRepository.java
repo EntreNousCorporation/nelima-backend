@@ -13,4 +13,6 @@ public interface FeeScheduleRepository extends JpaRepository<FeeScheduleEntity, 
         QuerydslPredicateExecutor<FeeScheduleEntity> {
 
     List<FeeScheduleEntity> findByFee_IdOrderByPositionAsc(UUID feeId);
+
+    void deleteByFee_Id(UUID feeId);
 }
