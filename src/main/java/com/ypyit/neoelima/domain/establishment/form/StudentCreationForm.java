@@ -37,7 +37,11 @@ public class StudentCreationForm {
     private LocalDate birthDay;
     @NotNull
     private String levelOfStudyCode;
-    @NotNull
+    /**
+     * Facultatif pour un utilisateur d'établissement : le serveur impose le sien et ignore la
+     * valeur reçue. Seul un administrateur YPYit, qui n'est rattaché à aucun établissement, doit
+     * le renseigner pour désigner sa cible.
+     */
     private UUID establishmentId;
     private UUID parentId;
     @Valid
