@@ -30,6 +30,17 @@ public class PaymentQuoteDto {
     /** Part YPYit, ajoutée au montant de la tranche. */
     private BigDecimal amountCommission;
 
+    /**
+     * Taux de la commission, en fraction ({@code 0.02} pour 2 %).
+     *
+     * <p>Renvoyé pour que l'application puisse annoncer le taux et non seulement une somme : un
+     * montant de frais qui apparaît sans justification se lit comme un prélèvement arbitraire. Le
+     * taux est transmis plutôt que déduit du rapport des deux montants, car la commission est
+     * arrondie au franc et ce rapport ne redonne pas le taux exact sur les petits montants.
+     */
+    @Schema(example = "0.02")
+    private BigDecimal commissionRate;
+
     /** Somme réellement débitée au payeur. */
     private BigDecimal totalAmount;
 

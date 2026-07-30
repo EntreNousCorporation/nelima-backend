@@ -80,6 +80,7 @@ public class OnlinePaymentService {
                 .amountSchool(amountSchool)
                 .amountCommission(commission)
                 .totalAmount(amountSchool.add(commission))
+                .commissionRate(this.billingProperties.getCommissionRate())
                 .currency(this.billingProperties.getCurrency())
                 .build();
     }
