@@ -3,6 +3,7 @@ package com.ypyit.neoelima.domain.user.service.impl;
 import com.ypyit.neoelima.common.cache.CacheService;
 import com.ypyit.neoelima.common.exception.BadRequestException;
 import com.ypyit.neoelima.common.exception.BusinessException;
+import com.ypyit.neoelima.config.security.CurrentUserProvider;
 import com.ypyit.neoelima.common.exception.DuplicateResourceException;
 import com.ypyit.neoelima.common.exception.NotFoundException;
 import com.ypyit.neoelima.common.exception.UnAuthenticatedUserException;
@@ -96,6 +97,7 @@ public class UserServiceImpl implements UserService {
     private final RoleRepository roleRepository;
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
+    private final CurrentUserProvider currentUserProvider;
     private final IdentityService identityService;
     private final EstablishmentService establishmentService;
     private final EstablishmentRepository establishmentRepository;
@@ -219,10 +221,11 @@ public class UserServiceImpl implements UserService {
     @Override
     public UserDto changePassword(ChangePasswordForm changePasswordForm) throws BusinessException {
         try {
-            UserEntity user = this.userRepository.findByPrimaryContact(changePasswordForm.getUsername())
-                    .orElseThrow(() -> new
-                            NotFoundException(String
-                            .format("User with username %s not found", changePasswordForm.getUsername())));
+            // L'utilisateur visé est celui qui appelle, jamais celui que désigne le formulaire.
+            // Se fier au `username` du corps laissait un compte authentifié changer le mot de passe
+            // d'un autre s'il en connaissait l'actuel, et surtout distinguer « compte inconnu » de
+            // « mot de passe erroné » : de quoi énumérer les comptes de la plateforme.
+            UserEntity user = this.currentUserProvider.currentUser();
             if (!this.passwordEncoder.matches(changePasswordForm.getOldPassword(), user.getPassword())) {
                 throw new BadRequestException("User password is not valid");
             }
