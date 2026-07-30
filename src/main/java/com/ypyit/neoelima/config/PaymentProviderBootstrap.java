@@ -100,6 +100,7 @@ public class PaymentProviderBootstrap {
     private Map<String, String> settings() {
         Map<String, String> settings = new LinkedHashMap<>();
         settings.put("default_payment_method", this.jekoProperties.getDefaultPaymentMethod());
+        settings.put("amount_multiplier", this.jekoProperties.getAmountMultiplier());
         return settings;
     }
 }

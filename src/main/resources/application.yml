@@ -104,6 +104,9 @@ payswitch:
     api-key-id: ${JEKO_API_KEY_ID:}
     webhook-secret: ${JEKO_WEBHOOK_SECRET:}
     store-id: ${JEKO_STORE_ID:}
+    # 100 : Jeko impose un `amountCents` multiple de 100, ce qui établit que le champ est en
+    # centimes de franc. Un facteur de 1 fait rejeter la transaction (`not_multiple_of_100`).
+    amount-multiplier: ${JEKO_AMOUNT_MULTIPLIER:100}
 
 main-domain: ${MAIN_DOMAIN:ypyit.com}
 

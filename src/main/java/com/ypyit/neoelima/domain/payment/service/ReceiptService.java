@@ -3,16 +3,20 @@ package com.ypyit.neoelima.domain.payment.service;
 import com.querydsl.core.BooleanBuilder;
 import com.ypyit.neoelima.common.exception.NotFoundException;
 import com.ypyit.neoelima.config.security.CurrentUserProvider;
+import com.ypyit.neoelima.domain.establishment.entity.StudentEntity;
+import com.ypyit.neoelima.domain.establishment.repository.StudentRepository;
+import com.ypyit.neoelima.domain.payment.entity.PaymentIntentEntity;
 import com.ypyit.neoelima.domain.payment.entity.QReceiptEntity;
 import com.ypyit.neoelima.domain.payment.entity.ReceiptEntity;
 import com.ypyit.neoelima.domain.payment.repository.ReceiptRepository;
+import com.ypyit.neoelima.domain.user.entity.UserEntity;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -21,6 +25,10 @@ import java.util.UUID;
  *
  * <p>Lecture seule : un reçu est une pièce comptable, il ne se modifie ni ne se supprime. Une
  * correction passe par une écriture d'annulation, prévue après la V1.
+ *
+ * <p>Deux profils de lecture. Une école voit les reçus qu'elle a émis. Un parent voit ceux de ses
+ * enfants et ceux qu'il a lui-même réglés — les deux, car le tutorat et le paiement sont découplés :
+ * un oncle qui règle une tranche doit retrouver sa pièce sans être tuteur déclaré.
  */
 @Service
 @RequiredArgsConstructor
@@ -28,15 +36,20 @@ import java.util.UUID;
 public class ReceiptService {
 
     private final ReceiptRepository receiptRepository;
+    private final StudentRepository studentRepository;
     private final CurrentUserProvider currentUserProvider;
 
     public Page<ReceiptEntity> search(UUID requestedEstablishmentId, Pageable pageable) {
         BooleanBuilder builder = new BooleanBuilder();
         QReceiptEntity receipt = QReceiptEntity.receiptEntity;
 
-        UUID scope = this.currentUserProvider.resolveEstablishmentScope(requestedEstablishmentId);
-        if (Objects.nonNull(scope)) {
-            builder.and(receipt.establishment.id.eq(scope));
+        if (this.currentUserProvider.hasEstablishmentScope()) {
+            UUID scope = this.currentUserProvider.resolveEstablishmentScope(requestedEstablishmentId);
+            if (Objects.nonNull(scope)) {
+                builder.and(receipt.establishment.id.eq(scope));
+            }
+        } else {
+            builder.and(this.ownReceiptsOf(this.currentUserProvider.currentUser(), receipt));
         }
         return this.receiptRepository.findAll(builder, pageable);
     }
@@ -46,10 +59,40 @@ public class ReceiptService {
                 .orElseThrow(() -> new NotFoundException(
                         String.format("Receipt with provided id %s not found", id)));
 
-        UUID scope = this.currentUserProvider.resolveEstablishmentScope(null);
-        if (Objects.nonNull(scope) && !scope.equals(receipt.getEstablishment().getId())) {
-            throw new AccessDeniedException("Receipt " + id + " belongs to another establishment");
+        // Le payeur retrouve toujours sa pièce, même s'il n'est pas tuteur de l'élève.
+        UserEntity caller = this.currentUserProvider.currentUser();
+        UserEntity payer = receipt.getPaymentIntent().getPayer();
+        if (Objects.nonNull(payer) && payer.getId().equals(caller.getId())) {
+            return receipt;
         }
+
+        // Sinon la règle est celle de l'élève concerné : admin YPYit, école de l'élève, ou tuteur
+        // rattaché. Plus juste qu'une comparaison d'établissement, qui excluait tout parent.
+        this.currentUserProvider.assertCanAccessStudent(studentOf(receipt));
         return receipt;
+    }
+
+    /**
+     * Reçus des enfants rattachés à l'appelant, plus ceux qu'il a réglés lui-même.
+     *
+     * <p>Les identifiants des enfants sont résolus par une requête séparée plutôt que par une
+     * jointure sur {@code parentUsers} : la table de rattachement est une association plusieurs à
+     * plusieurs, et la joindre ici dupliquerait les lignes de reçus dans une requête paginée.
+     */
+    private BooleanBuilder ownReceiptsOf(UserEntity caller, QReceiptEntity receipt) {
+        List<UUID> childrenIds = this.studentRepository.findByParentUsers_Id(caller.getId())
+                .stream().map(StudentEntity::getId).toList();
+
+        BooleanBuilder scope = new BooleanBuilder(
+                receipt.paymentIntent.payer.id.eq(caller.getId()));
+        if (!childrenIds.isEmpty()) {
+            scope.or(receipt.paymentIntent.installment.studentFee.student.id.in(childrenIds));
+        }
+        return scope;
+    }
+
+    private static StudentEntity studentOf(ReceiptEntity receipt) {
+        PaymentIntentEntity intent = receipt.getPaymentIntent();
+        return intent.getInstallment().getStudentFee().getStudent();
     }
 }

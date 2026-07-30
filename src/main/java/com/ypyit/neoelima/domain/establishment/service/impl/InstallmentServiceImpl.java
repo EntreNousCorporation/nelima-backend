@@ -7,12 +7,14 @@ import com.ypyit.neoelima.config.security.CurrentUserProvider;
 import com.ypyit.neoelima.domain.establishment.dto.InstallmentDto;
 import com.ypyit.neoelima.domain.establishment.entity.InstallmentEntity;
 import com.ypyit.neoelima.domain.establishment.entity.QInstallmentEntity;
+import com.ypyit.neoelima.domain.establishment.entity.StudentEntity;
 import com.ypyit.neoelima.domain.establishment.entity.StudentFeeEntity;
 import com.ypyit.neoelima.domain.establishment.form.InstallmentCreationForm;
 import com.ypyit.neoelima.domain.establishment.form.InstallmentSearchForm;
 import com.ypyit.neoelima.domain.establishment.mapper.InstallmentMapper;
 import com.ypyit.neoelima.domain.establishment.repository.InstallmentRepository;
 import com.ypyit.neoelima.domain.establishment.repository.StudentFeeRepository;
+import com.ypyit.neoelima.domain.establishment.repository.StudentRepository;
 import com.ypyit.neoelima.domain.establishment.service.InstallmentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -37,6 +39,7 @@ public class InstallmentServiceImpl implements InstallmentService {
     private final InstallmentMapper installmentMapper;
 
     private final StudentFeeRepository studentFeeRepository;
+    private final StudentRepository studentRepository;
     private final CurrentUserProvider currentUserProvider;
 
     @Override
@@ -63,15 +66,27 @@ public class InstallmentServiceImpl implements InstallmentService {
             BooleanBuilder builder = new BooleanBuilder();
             QInstallmentEntity installment = QInstallmentEntity.installmentEntity;
 
+            // Deux modes de lecture, et non un seul : une école consulte les tranches de son
+            // périmètre, un parent celles de ses enfants. Dériver une portée établissement dans
+            // tous les cas refusait au parent l'accès à ses propres échéances — c'est-à-dire à
+            // tout l'écran de paiement de l'application mobile.
             if (Objects.nonNull(searchForm.getStudentId())) {
-                builder.and(installment.studentFee.student.id.eq(searchForm.getStudentId()));
-            }
-
-            // Portée dérivée de l'utilisateur authentifié, jamais du formulaire.
-            UUID establishmentScope = this.currentUserProvider
-                    .resolveEstablishmentScope(searchForm.getEstablishmentId());
-            if (Objects.nonNull(establishmentScope)) {
-                builder.and(installment.studentFee.student.establishment.id.eq(establishmentScope));
+                StudentEntity student = this.studentRepository.findById(searchForm.getStudentId())
+                        .orElseThrow(() -> new NotFoundException(String.format(
+                                "Student with provided id %s not found", searchForm.getStudentId())));
+                // Contrôle plus strict que le filtre établissement : couvre l'admin YPYit, l'école
+                // de l'élève et le tuteur rattaché, et rien d'autre.
+                this.currentUserProvider.assertCanAccessStudent(student);
+                builder.and(installment.studentFee.student.id.eq(student.getId()));
+            } else {
+                // Sans élève ciblé, la portée vient de l'utilisateur authentifié, jamais du
+                // formulaire : sinon une école lirait les tranches d'une autre en changeant le
+                // paramètre. Un parent, lui, doit désigner l'enfant qu'il consulte.
+                UUID establishmentScope = this.currentUserProvider
+                        .resolveEstablishmentScope(searchForm.getEstablishmentId());
+                if (Objects.nonNull(establishmentScope)) {
+                    builder.and(installment.studentFee.student.establishment.id.eq(establishmentScope));
+                }
             }
             if (Objects.nonNull(searchForm.getStatus())) {
                 builder.and(installment.status.eq(searchForm.getStatus()));
@@ -85,7 +100,7 @@ public class InstallmentServiceImpl implements InstallmentService {
                     .map(this.installmentMapper::toDto).collect(Collectors.toList());
 
             return new PageImpl<>(response, pageable, result.getTotalElements());
-        } catch (AccessDeniedException e) {
+        } catch (NotFoundException | AccessDeniedException e) {
             throw e;
         } catch (Exception e) {
             throw new BusinessException(e);

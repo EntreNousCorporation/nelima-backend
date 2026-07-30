@@ -1,6 +1,7 @@
 package com.ypyit.neoelima.domain.payment.controller;
 
 import com.ypyit.neoelima.domain.payment.dto.PaymentInitiationDto;
+import com.ypyit.neoelima.domain.payment.dto.PaymentQuoteDto;
 import com.ypyit.neoelima.domain.payment.dto.ReceiptDto;
 import com.ypyit.neoelima.domain.payment.form.OfflineCollectionForm;
 import com.ypyit.neoelima.domain.payment.mapper.ReceiptMapper;
@@ -44,6 +45,16 @@ public class PaymentController {
             @PathVariable UUID installmentId,
             @RequestParam(value = "channel", required = false) String channel) {
         return ResponseEntity.ok(this.onlinePaymentService.initiate(installmentId, channel));
+    }
+
+    @GetMapping(value = "/installments/{installmentId}/quote", produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Détail du coût du règlement d'une tranche",
+            description = "Montant de la tranche, commission YPYit et total débité, calculés par le "
+                    + "même code que l'initiation. À afficher au parent avant qu'il ne valide : "
+                    + "c'est ce qui garantit que la somme annoncée est celle qui sera prélevée. "
+                    + "N'engage rien et ne crée aucune tentative de paiement.")
+    public ResponseEntity<PaymentQuoteDto> quote(@PathVariable UUID installmentId) {
+        return ResponseEntity.ok(this.onlinePaymentService.quote(installmentId));
     }
 
     @GetMapping(value = "/channels", produces = MediaType.APPLICATION_JSON_VALUE)

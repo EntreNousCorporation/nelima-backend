@@ -56,6 +56,18 @@ public class CurrentUserProvider {
     }
 
     /**
+     * Vrai quand l'appelant lit au nom d'une école : personnel d'établissement ou admin YPYit.
+     *
+     * <p>Permet à un service de choisir son mode de lecture au lieu de dériver une portée
+     * établissement à l'aveugle. Un parent n'a pas de périmètre école : lui appliquer
+     * {@link #resolveEstablishmentScope(UUID)} lui refuserait l'accès à ses propres données.
+     */
+    public boolean hasEstablishmentScope() {
+        UserEntity user = this.currentUser();
+        return user instanceof AdminUserEntity || establishmentIdOf(user).isPresent();
+    }
+
+    /**
      * Portée établissement à appliquer à une requête de lecture côté école.
      *
      * @param requestedEstablishmentId valeur reçue du client, honorée uniquement pour un admin YPYit

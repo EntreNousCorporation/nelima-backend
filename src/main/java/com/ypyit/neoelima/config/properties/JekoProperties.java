@@ -32,6 +32,18 @@ public class JekoProperties {
 
     private String environment = "SANDBOX";
 
+    /**
+     * Facteur appliqué au montant avant envoi à Jeko.
+     *
+     * <p>100, et la valeur est confirmée : Jeko refuse tout {@code amountCents} qui ne soit pas
+     * multiple de 100 ({@code "rule": "not_multiple_of_100"}). Cette contrainte n'a de sens que si le
+     * champ compte des centimes de franc — le franc CFA étant sans subdivision, tout montant réel
+     * est nécessairement un multiple de 100. Un facteur de 1 fait rejeter la transaction.
+     *
+     * <p>Reste réglable par variable d'environnement au cas où Jeko changerait d'unité.
+     */
+    private String amountMultiplier = "100";
+
     /** Sans les quatre credentials, il n'y a rien à amorcer. */
     public boolean isComplete() {
         return StringUtils.isNotBlank(this.apiKey)

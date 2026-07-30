@@ -1,5 +1,6 @@
 package com.ypyit.neoelima.domain.payment.entity;
 
+import com.querydsl.core.annotations.QueryInit;
 import com.ypyit.neoelima.common.entity.BaseEntity;
 import com.ypyit.neoelima.domain.establishment.entity.EstablishmentEntity;
 import jakarta.persistence.Column;
@@ -82,9 +83,19 @@ public class ReceiptEntity extends BaseEntity {
      * entraînait la tentative de paiement, puis la tranche, la dette, l'élève, l'établissement et
      * ses collections : Hibernate produisait une seule requête au produit cartésien qui ne rendait
      * jamais la main. Le simple affichage de la liste des reçus bloquait le serveur.
+     *
+     * <p>{@code @QueryInit} est indispensable pour filtrer les reçus d'un élève : QueryDSL
+     * n'initialise les chemins imbriqués que sur deux niveaux, donc
+     * {@code paymentIntent.installment.studentFee} serait {@code null} et la construction de la
+     * requête échouerait sur un {@code NullPointerException}, sans que la compilation ne s'en plaigne.
+     *
+     * <p>{@code payer} doit être énuméré explicitement : la liste fournie ici <em>remplace</em>
+     * l'initialisation par défaut au lieu de s'y ajouter, et l'omettre casse le filtre sur le
+     * payeur — que le compilateur accepte pourtant sans broncher.
      */
     @OneToOne(optional = false, fetch = FetchType.LAZY)
     @ToString.Exclude
+    @QueryInit({"installment.studentFee.student", "payer"})
     @JoinColumn(name = "payment_intent_id", referencedColumnName = "id")
     private PaymentIntentEntity paymentIntent;
 

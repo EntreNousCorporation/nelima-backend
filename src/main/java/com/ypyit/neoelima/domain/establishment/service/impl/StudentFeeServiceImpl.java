@@ -79,14 +79,17 @@ public class StudentFeeServiceImpl implements StudentFeeService {
                 builder.and(studentFee.fee.academical.eq(searchForm.getAcademical()));
             }
             if (Objects.nonNull(searchForm.getStudentId())) {
+                // Le contrôle par élève suffit et s'applique aux trois profils. Y ajouter une
+                // portée établissement refuserait au parent les frais de son propre enfant.
                 this.assertCanAccessStudent(searchForm.getStudentId());
                 builder.and(studentFee.student.id.eq(searchForm.getStudentId()));
-            }
-            // Sans élève ciblé, la requête reste bornée à l'établissement de l'appelant :
-            // sinon elle retournerait les dettes de toutes les écoles de la plateforme.
-            UUID establishmentScope = this.currentUserProvider.resolveEstablishmentScope(null);
-            if (Objects.nonNull(establishmentScope)) {
-                builder.and(studentFee.student.establishment.id.eq(establishmentScope));
+            } else {
+                // Sans élève ciblé, la requête reste bornée à l'établissement de l'appelant :
+                // sinon elle retournerait les dettes de toutes les écoles de la plateforme.
+                UUID establishmentScope = this.currentUserProvider.resolveEstablishmentScope(null);
+                if (Objects.nonNull(establishmentScope)) {
+                    builder.and(studentFee.student.establishment.id.eq(establishmentScope));
+                }
             }
             Page<StudentFeeEntity> result = this.studentFeeRepository.findAll(builder, pageable);
 

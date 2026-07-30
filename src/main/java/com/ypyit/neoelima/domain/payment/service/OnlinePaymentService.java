@@ -14,6 +14,7 @@ import com.ypyit.neoelima.domain.establishment.entity.StudentEntity;
 import com.ypyit.neoelima.domain.establishment.enums.InstallmentStatus;
 import com.ypyit.neoelima.domain.establishment.repository.InstallmentRepository;
 import com.ypyit.neoelima.domain.payment.dto.PaymentInitiationDto;
+import com.ypyit.neoelima.domain.payment.dto.PaymentQuoteDto;
 import com.ypyit.neoelima.domain.payment.entity.PaymentIntentEntity;
 import com.ypyit.neoelima.domain.payment.enums.PaymentChannel;
 import com.ypyit.neoelima.domain.payment.enums.PaymentIntentStatus;
@@ -59,22 +60,39 @@ public class OnlinePaymentService {
     private final CurrentUserProvider currentUserProvider;
     private final BillingProperties billingProperties;
 
+    /**
+     * Détail de ce que coûtera le règlement d'une tranche, sans rien engager.
+     *
+     * <p>Existe pour que l'application affiche la commission avant validation. Elle ne peut pas la
+     * calculer elle-même : le taux est une donnée de configuration du serveur, et une duplication
+     * côté client afficherait un total différent de celui débité au premier changement de taux.
+     *
+     * <p>Ouvert aux mêmes appelants que {@link #initiate(UUID, String)} — payer pour un élève ne
+     * suppose pas d'en être le tuteur — et ne révèle qu'un montant, jamais l'identité de l'élève.
+     */
+    @Transactional(readOnly = true)
+    public PaymentQuoteDto quote(UUID installmentId) {
+        InstallmentEntity installment = this.payableInstallment(installmentId);
+        BigDecimal amountSchool = this.amountSchoolOf(installment);
+        BigDecimal commission = this.commissionOn(amountSchool);
+
+        return PaymentQuoteDto.builder()
+                .amountSchool(amountSchool)
+                .amountCommission(commission)
+                .totalAmount(amountSchool.add(commission))
+                .currency(this.billingProperties.getCurrency())
+                .build();
+    }
+
     @Transactional
     public PaymentInitiationDto initiate(UUID installmentId, String paymentMethod) {
-        InstallmentEntity installment = this.installmentRepository.findById(installmentId)
-                .orElseThrow(() -> new NotFoundException(
-                        String.format("Installment with provided id %s not found", installmentId)));
-
-        if (!InstallmentStatus.PENDING.equals(installment.getStatus())) {
-            throw new BadRequestException(String.format(
-                    "Installment %s is already %s", installmentId, installment.getStatus()));
-        }
+        InstallmentEntity installment = this.payableInstallment(installmentId);
 
         UserEntity payer = this.currentUserProvider.currentUser();
         StudentEntity student = installment.getStudentFee().getStudent();
         EstablishmentEntity establishment = student.getEstablishment();
 
-        BigDecimal amountSchool = installment.getAmount().setScale(XOF_SCALE, RoundingMode.HALF_UP);
+        BigDecimal amountSchool = this.amountSchoolOf(installment);
         BigDecimal commission = this.commissionOn(amountSchool);
 
         PaymentIntentEntity intent = this.paymentIntentRepository.saveAndFlush(
@@ -119,6 +137,23 @@ public class OnlinePaymentService {
                 .totalAmount(intent.totalAmount())
                 .currency(this.billingProperties.getCurrency())
                 .build();
+    }
+
+    /** Tranche existante et encore due. Refuse une tranche déjà soldée avant tout calcul. */
+    private InstallmentEntity payableInstallment(UUID installmentId) {
+        InstallmentEntity installment = this.installmentRepository.findById(installmentId)
+                .orElseThrow(() -> new NotFoundException(
+                        String.format("Installment with provided id %s not found", installmentId)));
+
+        if (!InstallmentStatus.PENDING.equals(installment.getStatus())) {
+            throw new BadRequestException(String.format(
+                    "Installment %s is already %s", installmentId, installment.getStatus()));
+        }
+        return installment;
+    }
+
+    private BigDecimal amountSchoolOf(InstallmentEntity installment) {
+        return installment.getAmount().setScale(XOF_SCALE, RoundingMode.HALF_UP);
     }
 
     /**
