@@ -136,6 +136,8 @@ public class OnlinePaymentService {
                 .amountCommission(commission)
                 .totalAmount(intent.totalAmount())
                 .currency(this.billingProperties.getCurrency())
+                .successUrl(this.billingProperties.getPaymentSuccessUrl())
+                .errorUrl(this.billingProperties.getPaymentErrorUrl())
                 .build();
     }
 

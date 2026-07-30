@@ -39,4 +39,16 @@ public class PaymentInitiationDto {
 
     @Schema(example = "XOF")
     private String currency;
+
+    /**
+     * URL vers laquelle l'agrégateur redirige en cas de succès.
+     *
+     * <p>Transmise à l'application pour qu'elle reconnaisse la fin du tunnel dans sa webview. Sans
+     * elle, le client devrait deviner cette adresse : la changer côté serveur casserait alors la
+     * détection du retour sans aucun signal.
+     */
+    private String successUrl;
+
+    /** Pendant de {@link #successUrl} en cas d'échec ou d'abandon côté opérateur. */
+    private String errorUrl;
 }
