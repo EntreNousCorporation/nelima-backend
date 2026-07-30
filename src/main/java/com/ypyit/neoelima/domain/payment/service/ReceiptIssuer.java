@@ -34,6 +34,7 @@ public class ReceiptIssuer {
     private final ReceiptRepository receiptRepository;
     private final ReceiptNumberAllocator receiptNumberAllocator;
     private final ReceiptMailer receiptMailer;
+    private final ReceiptPushNotifier receiptPushNotifier;
 
     @Transactional(propagation = Propagation.MANDATORY)
     public ReceiptEntity issueFor(PaymentIntentEntity paymentIntent) {
@@ -70,6 +71,9 @@ public class ReceiptIssuer {
         // quittancé au payeur, quel que soit le canal, et le déléguer laisserait le choix
         // à chaque chemin d'appel. L'envoi lui-même est asynchrone et tolère l'échec.
         this.receiptMailer.send(receipt);
+        // La notification suit le même chemin, et pour la même raison. Elle ne fait qu'annoncer :
+        // le reçu voyage par courriel, un push n'étant pas un support de pièce comptable.
+        this.receiptPushNotifier.announce(receipt);
         return receipt;
     }
 

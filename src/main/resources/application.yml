@@ -89,6 +89,10 @@ nelima:
     # Aucune commission sur les encaissements au guichet.
     commission-rate: ${COMMISSION_RATE:0.02}
     currency: XOF
+    # Rappels d'échéance aux familles : dates exactes avant l'échéance, et non un intervalle,
+    # pour ne pas rappeler la même tranche chaque jour jusqu'à son terme.
+    reminder-days-before: ${REMINDER_DAYS_BEFORE:7,1}
+    reminder-cron: ${REMINDER_CRON:0 0 8 * * *}
     # Destination du parent après le tunnel de paiement de l'agrégateur.
     # Sur mobile ce sont des liens profonds, pas des URLs web.
     payment-success-url: ${PAYMENT_SUCCESS_URL:https://app.nelima.ci/paiement/succes}
@@ -107,6 +111,14 @@ payswitch:
     # 100 : Jeko impose un `amountCents` multiple de 100, ce qui établit que le champ est en
     # centimes de franc. Un facteur de 1 fait rejeter la transaction (`not_multiple_of_100`).
     amount-multiplier: ${JEKO_AMOUNT_MULTIPLIER:100}
+
+notification:
+  onesignal:
+    # L'appId est public et embarqué dans l'application mobile ; la clé REST est un secret
+    # d'administration et ne vit que dans l'environnement du serveur. Sans les deux, aucune
+    # notification n'est tentée : c'est l'état normal en développement et en test.
+    app-id: ${ONESIGNAL_APP_ID:}
+    rest-api-key: ${ONESIGNAL_REST_API_KEY:}
 
 main-domain: ${MAIN_DOMAIN:ypyit.com}
 

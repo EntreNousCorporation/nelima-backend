@@ -3,11 +3,9 @@ package com.ypyit.neoelima.domain.payment.service;
 import com.ypyit.neoelima.common.service.email.enums.EmailTemplateType;
 import com.ypyit.neoelima.common.service.email.service.EmailConstants;
 import com.ypyit.neoelima.common.service.email.service.EmailService;
-import com.ypyit.neoelima.domain.establishment.entity.StudentEntity;
 import com.ypyit.neoelima.domain.payment.entity.PaymentIntentEntity;
 import com.ypyit.neoelima.domain.payment.entity.ReceiptEntity;
 import com.ypyit.neoelima.domain.user.entity.ContactEntity;
-import com.ypyit.neoelima.domain.user.entity.EstablishmentUserEntity;
 import com.ypyit.neoelima.domain.user.entity.UserEntity;
 import com.ypyit.neoelima.domain.user.enums.ContactType;
 import lombok.RequiredArgsConstructor;
@@ -106,22 +104,19 @@ public class ReceiptMailer {
         PaymentIntentEntity intent = receipt.getPaymentIntent();
         Set<String> recipients = new LinkedHashSet<>();
 
-        StudentEntity student = intent.getInstallment().getStudentFee().getStudent();
-        student.getParentUsers().stream()
+        // Comptes concernés : la règle vit dans ReceiptAudience, partagée avec la notification push.
+        ReceiptAudience.accountsOf(intent).stream()
                 .map(ReceiptMailer::emailOf)
                 .flatMap(Optional::stream)
                 .map(ReceiptMailer::normalize)
                 .forEach(recipients::add);
 
+        // L'email saisi au comptoir n'a pas de compte derrière lui : il est propre à ce canal, un
+        // destinataire sans compte n'ayant aucun appareil à notifier.
         Optional.ofNullable(intent.getPayerEmail())
                 .map(ReceiptMailer::normalize)
                 .filter(StringUtils::isNotBlank)
                 .ifPresent(recipients::add);
-
-        // Le compte de l'agent au comptoir n'est jamais destinataire.
-        if (!(intent.getPayer() instanceof EstablishmentUserEntity)) {
-            emailOf(intent.getPayer()).map(ReceiptMailer::normalize).ifPresent(recipients::add);
-        }
 
         recipients.remove("");
         return recipients;
