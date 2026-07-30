@@ -137,13 +137,40 @@ class ParentDataAccessTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("sans élève désigné, le parent n'obtient pas la base entière")
-    void parentCannotBrowseWithoutNamingAChild() {
-        // Un parent n'a pas de périmètre établissement : à défaut de refus, la requête non filtrée
-        // retournerait les échéances de toutes les écoles de la plateforme.
-        assertThatThrownBy(() -> installmentService.findAll(
-                InstallmentSearchForm.builder().build(), PageRequest.of(0, 20)))
-                .isInstanceOf(AccessDeniedException.class);
+    @DisplayName("sans élève désigné, le parent obtient les échéances de ses enfants et d'eux seuls")
+    void parentWithoutStudentIdSeesOnlyTheirOwnChildren() {
+        // L'écran « Échéances » interroge sans désigner d'enfant. Le périmètre est alors la liste
+        // des enfants rattachés : ni rien — ce qui obligerait à un appel par enfant — ni la
+        // plateforme entière.
+        var found = installmentService.findAll(
+                InstallmentSearchForm.builder().build(), PageRequest.of(0, 20));
+
+        assertThat(found.getContent()).hasSize(1);
+        assertThat(found.getContent().getFirst().getStudentFee().getStudent().getId())
+                .isEqualTo(myChild.getId());
+    }
+
+    @Test
+    @DisplayName("un parent sans enfant rattaché n'obtient rien, et surtout pas tout")
+    void parentWithoutAnyChildGetsNothing() {
+        // Le cas qui compte : sans enfant, un filtre omis retournerait toutes les tranches de la
+        // plateforme au lieu d'aucune.
+        authenticateAsAParentWithoutChildren();
+
+        var found = installmentService.findAll(
+                InstallmentSearchForm.builder().build(), PageRequest.of(0, 20));
+
+        assertThat(found.getContent()).isEmpty();
+        assertThat(found.getTotalElements()).isZero();
+    }
+
+    private void authenticateAsAParentWithoutChildren() {
+        String email = "parent-sans-enfant-" + UUID.randomUUID() + "@gmail.com";
+        userRepository.saveAndFlush(StudentParentUserEntity.builder()
+                .firstName("Awa").lastName("Bamba")
+                .contacts(primaryEmail(email)).build());
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(email, "n/a", List.of()));
     }
 
     private StudentEntity aStudentWithADueInstallment(EstablishmentEntity school, String firstName) {

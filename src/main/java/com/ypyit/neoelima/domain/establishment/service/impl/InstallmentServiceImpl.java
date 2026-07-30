@@ -78,15 +78,30 @@ public class InstallmentServiceImpl implements InstallmentService {
                 // de l'élève et le tuteur rattaché, et rien d'autre.
                 this.currentUserProvider.assertCanAccessStudent(student);
                 builder.and(installment.studentFee.student.id.eq(student.getId()));
-            } else {
+            } else if (this.currentUserProvider.hasEstablishmentScope()) {
                 // Sans élève ciblé, la portée vient de l'utilisateur authentifié, jamais du
                 // formulaire : sinon une école lirait les tranches d'une autre en changeant le
-                // paramètre. Un parent, lui, doit désigner l'enfant qu'il consulte.
+                // paramètre.
                 UUID establishmentScope = this.currentUserProvider
                         .resolveEstablishmentScope(searchForm.getEstablishmentId());
                 if (Objects.nonNull(establishmentScope)) {
                     builder.and(installment.studentFee.student.establishment.id.eq(establishmentScope));
                 }
+            } else {
+                // Un parent sans élève désigné consulte l'échéancier de tous ses enfants — c'est ce
+                // que demande son écran « Échéances ». Lui refuser la lecture l'obligerait à un
+                // appel par enfant ; lui ouvrir la requête sans filtre lui donnerait la plateforme
+                // entière. Le périmètre est donc la liste de ses enfants, et rien d'autre.
+                List<UUID> childrenIds = this.studentRepository
+                        .findByParentUsers_Id(this.currentUserProvider.currentUser().getId())
+                        .stream().map(StudentEntity::getId).toList();
+
+                if (childrenIds.isEmpty()) {
+                    // Aucun enfant rattaché : une contrainte impossible plutôt qu'aucune contrainte.
+                    // Omettre le filtre retournerait ici toutes les tranches de la plateforme.
+                    return new PageImpl<>(List.of(), pageable, 0);
+                }
+                builder.and(installment.studentFee.student.id.in(childrenIds));
             }
             if (Objects.nonNull(searchForm.getStatus())) {
                 builder.and(installment.status.eq(searchForm.getStatus()));

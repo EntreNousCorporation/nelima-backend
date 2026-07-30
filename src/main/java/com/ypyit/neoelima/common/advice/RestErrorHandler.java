@@ -23,6 +23,7 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.validation.BindException;
 import org.springframework.validation.BindingResult;
+import org.springframework.web.HttpMediaTypeNotAcceptableException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -195,6 +196,26 @@ public class RestErrorHandler {
                 .status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
                 .debugMessage(new StringJoiner(" - ")
                         .add(unsupported).add(supported).toString())
+                .path(httpServletRequest.getRequestURI())
+                .build();
+    }
+
+    /**
+     * Le client demande un type que la route ne produit pas.
+     *
+     * <p>Sans ce traitement, l'erreur tombait dans le fourre-tout et sortait en 500 : un client qui
+     * demandait du JSON sur le PDF d'un reçu recevait « Internal server error », ce qui envoie
+     * chercher une panne serveur là où seul l'en-tête {@code Accept} est en cause.
+     */
+    @ExceptionHandler(HttpMediaTypeNotAcceptableException.class)
+    @ResponseStatus(HttpStatus.NOT_ACCEPTABLE)
+    public ApiError processError(HttpMediaTypeNotAcceptableException exception,
+                                 HttpServletRequest httpServletRequest) {
+
+        return ApiError.builder()
+                .status(HttpStatus.NOT_ACCEPTABLE)
+                .debugMessage("This endpoint only produces : "
+                        + MediaType.toString(exception.getSupportedMediaTypes()))
                 .path(httpServletRequest.getRequestURI())
                 .build();
     }
