@@ -4,9 +4,11 @@ import com.ypyit.neoelima.domain.establishment.dto.AttendanceSummaryDto;
 import com.ypyit.neoelima.domain.establishment.dto.PayrollSummaryDto;
 import com.ypyit.neoelima.domain.establishment.dto.StaffAttendanceDto;
 import com.ypyit.neoelima.domain.establishment.dto.StaffDto;
+import com.ypyit.neoelima.domain.establishment.form.StaffAccessForm;
 import com.ypyit.neoelima.domain.establishment.form.StaffAttendanceForm;
 import com.ypyit.neoelima.domain.establishment.form.StaffClassesForm;
 import com.ypyit.neoelima.domain.establishment.form.StaffForm;
+import com.ypyit.neoelima.domain.establishment.service.StaffAccessService;
 import com.ypyit.neoelima.domain.establishment.service.StaffAttendanceService;
 import com.ypyit.neoelima.domain.establishment.service.StaffService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -40,6 +42,7 @@ public class StaffController {
 
     private final StaffService staffService;
     private final StaffAttendanceService staffAttendanceService;
+    private final StaffAccessService staffAccessService;
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     @PreAuthorize("hasAuthority('staff:read')")
@@ -92,6 +95,26 @@ public class StaffController {
     @PreAuthorize("hasAuthority('staff:write')")
     public ResponseEntity<StaffDto> unassignClass(@PathVariable UUID id, @PathVariable UUID classId) {
         return ResponseEntity.ok(this.staffService.unassignClass(id, classId));
+    }
+
+    @PostMapping(value = "/{id}/access", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAuthority('user_access:write')")
+    @Operation(summary = "Ouvre un accès au portail pour ce membre",
+            description = "Crée le compte et envoie le courriel de bienvenue portant le lien de "
+                    + "définition du mot de passe. Seuls les rôles d'établissement sont "
+                    + "attribuables.")
+    public ResponseEntity<StaffDto> grantAccess(@PathVariable UUID id,
+                                                @RequestBody @Valid StaffAccessForm form) {
+        return ResponseEntity.ok(this.staffAccessService.grant(id, form));
+    }
+
+    @DeleteMapping(value = "/{id}/access", produces = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAuthority('user_access:write')")
+    @Operation(summary = "Ferme l'accès au portail",
+            description = "Désactive le compte sans le supprimer : les encaissements saisis "
+                    + "portent son nom.")
+    public ResponseEntity<StaffDto> revokeAccess(@PathVariable UUID id) {
+        return ResponseEntity.ok(this.staffAccessService.revoke(id));
     }
 
     @GetMapping(value = "/payroll-summary", produces = MediaType.APPLICATION_JSON_VALUE)
