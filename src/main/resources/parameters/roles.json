@@ -18,7 +18,15 @@
       { "code": "staff:write" },
       { "code": "staff:read_salary" },
       { "code": "attendance:write" },
-      { "code": "user_access:write" }
+      { "code": "user_access:write" },
+      { "code": "student:read" },
+      { "code": "student:write" },
+      { "code": "class:read" },
+      { "code": "class:write" },
+      { "code": "fee:read" },
+      { "code": "fee:write" },
+      { "code": "collection:write" },
+      { "code": "accounting:read" }
     ]
   },
   {
@@ -32,7 +40,15 @@
       { "code": "staff:write" },
       { "code": "staff:read_salary" },
       { "code": "attendance:write" },
-      { "code": "user_access:write" }
+      { "code": "user_access:write" },
+      { "code": "student:read" },
+      { "code": "student:write" },
+      { "code": "class:read" },
+      { "code": "class:write" },
+      { "code": "fee:read" },
+      { "code": "fee:write" },
+      { "code": "collection:write" },
+      { "code": "accounting:read" }
     ]
   },
   {
@@ -43,7 +59,13 @@
     },
     "permissions": [
       { "code": "staff:read" },
-      { "code": "staff:read_salary" }
+      { "code": "staff:read_salary" },
+      { "code": "student:read" },
+      { "code": "class:read" },
+      { "code": "fee:read" },
+      { "code": "fee:write" },
+      { "code": "collection:write" },
+      { "code": "accounting:read" }
     ]
   },
   {
@@ -54,7 +76,13 @@
     },
     "permissions": [
       { "code": "staff:read" },
-      { "code": "attendance:write" }
+      { "code": "attendance:write" },
+      { "code": "student:read" },
+      { "code": "student:write" },
+      { "code": "class:read" },
+      { "code": "class:write" },
+      { "code": "fee:read" },
+      { "code": "collection:write" }
     ]
   },
   {

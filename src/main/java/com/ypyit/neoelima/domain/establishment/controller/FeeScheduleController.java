@@ -9,6 +9,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -30,6 +31,7 @@ public class FeeScheduleController {
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "Échéancier du frais, dans l'ordre des versements")
+    @PreAuthorize("hasAuthority('fee:read')")
     public ResponseEntity<List<FeeScheduleDto>> list(@PathVariable UUID feeId) {
         return ResponseEntity.ok(this.feeScheduleMapper.toDtos(this.feeScheduleService.findByFee(feeId)));
     }
@@ -39,6 +41,7 @@ public class FeeScheduleController {
             description = "La somme des tranches doit valoir le prix du frais. L'échéancier ne peut "
                     + "plus être modifié dès qu'une tranche a été encaissée. Les élèves déjà "
                     + "porteurs du frais reçoivent le nouvel échéancier.")
+    @PreAuthorize("hasAuthority('fee:write')")
     public ResponseEntity<List<FeeScheduleDto>> define(@PathVariable UUID feeId,
                                                        @RequestBody @Valid List<FeeScheduleForm> schedules) {
         return ResponseEntity.ok(this.feeScheduleMapper

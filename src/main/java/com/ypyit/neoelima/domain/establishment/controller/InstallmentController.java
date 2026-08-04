@@ -13,6 +13,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -30,6 +31,7 @@ public class InstallmentController {
     private final InstallmentService installmentService;
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAuthority('fee:write')")
     public ResponseEntity<InstallmentDto> createUsers(@RequestBody @Valid InstallmentCreationForm creationForm) {
         var response = this.installmentService.create(creationForm);
         URI uri = ControllerUtils.buildMvcPathComponent(response.getId(), EstablishmentController.class);

@@ -10,6 +10,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -32,27 +33,32 @@ public class SchoolClassController {
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "Classes de l'établissement, avec effectif et recouvrement")
+    @PreAuthorize("hasAuthority('class:read')")
     public ResponseEntity<List<SchoolClassDto>> findAll() {
         return ResponseEntity.ok(this.schoolClassService.findAll());
     }
 
     @GetMapping(value = "/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAuthority('class:read')")
     public ResponseEntity<SchoolClassDto> findById(@PathVariable UUID id) {
         return ResponseEntity.ok(this.schoolClassService.findById(id));
     }
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAuthority('class:write')")
     public ResponseEntity<SchoolClassDto> create(@RequestBody @Valid SchoolClassForm form) {
         return ResponseEntity.ok(this.schoolClassService.create(form));
     }
 
     @PutMapping(value = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAuthority('class:write')")
     public ResponseEntity<SchoolClassDto> update(@PathVariable UUID id,
                                                  @RequestBody @Valid SchoolClassForm form) {
         return ResponseEntity.ok(this.schoolClassService.update(id, form));
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAuthority('class:write')")
     public ResponseEntity<Void> delete(@PathVariable UUID id) {
         this.schoolClassService.delete(id);
         return ResponseEntity.noContent().build();
@@ -62,6 +68,7 @@ public class SchoolClassController {
     @Operation(summary = "Affecte des élèves à la classe",
             description = "Les élèves déjà affectés ailleurs changent de classe ; ceux qui y sont "
                     + "déjà sont ignorés sans erreur.")
+    @PreAuthorize("hasAuthority('class:write')")
     public ResponseEntity<Void> assign(@PathVariable UUID id,
                                        @RequestBody @Valid SchoolClassStudentsForm form) {
         this.schoolClassService.assign(id, form.getStudentIds());
@@ -69,6 +76,7 @@ public class SchoolClassController {
     }
 
     @DeleteMapping("/{id}/students/{studentId}")
+    @PreAuthorize("hasAuthority('class:write')")
     public ResponseEntity<Void> unassign(@PathVariable UUID id, @PathVariable UUID studentId) {
         this.schoolClassService.unassign(id, studentId);
         return ResponseEntity.noContent().build();

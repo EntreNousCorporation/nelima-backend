@@ -12,6 +12,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -70,6 +71,7 @@ public class PaymentController {
     @Operation(summary = "Enregistre un encaissement au guichet",
             description = "Espèces, chèque ou virement reçus par l'école. Solde la tranche et émet "
                     + "le reçu numéroté. Aucune commission n'est prélevée sur ce canal.")
+    @PreAuthorize("hasAuthority('collection:write')")
     public ResponseEntity<ReceiptDto> collectOffline(@RequestBody @Valid OfflineCollectionForm form) {
         return ResponseEntity.ok(this.receiptMapper.toDto(this.offlineCollectionService.collect(form)));
     }

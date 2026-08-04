@@ -33,5 +33,61 @@
       "fr": "Ouvrir un accès au portail",
       "en": "Grant portal access"
     }
+  },
+  {
+    "code": "student:read",
+    "name": {
+      "fr": "Consulter les élèves",
+      "en": "Read students"
+    }
+  },
+  {
+    "code": "student:write",
+    "name": {
+      "fr": "Inscrire et modifier les élèves",
+      "en": "Manage students"
+    }
+  },
+  {
+    "code": "class:read",
+    "name": {
+      "fr": "Consulter les classes",
+      "en": "Read classes"
+    }
+  },
+  {
+    "code": "class:write",
+    "name": {
+      "fr": "Gérer les classes et les affectations",
+      "en": "Manage classes"
+    }
+  },
+  {
+    "code": "fee:read",
+    "name": {
+      "fr": "Consulter les frais",
+      "en": "Read fees"
+    }
+  },
+  {
+    "code": "fee:write",
+    "name": {
+      "fr": "Définir les frais et les échéances",
+      "en": "Manage fees"
+    }
+  },
+  {
+    "code": "collection:write",
+    "name": {
+      "fr": "Encaisser au guichet",
+      "en": "Collect payments at the desk"
+    }
+  },
+  {
+    "code": "accounting:read",
+    "name": {
+      "fr": "Exporter le journal comptable",
+      "en": "Export the accounting journal"
+    }
   }
 ]

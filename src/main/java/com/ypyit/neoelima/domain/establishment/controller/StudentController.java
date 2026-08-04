@@ -23,6 +23,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -60,6 +61,7 @@ public class StudentController {
     }
 
     @GetMapping(value = "/search", produces = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAuthority('student:read')")
     public ResponseEntity<Page<StudentDto>> search(@ModelAttribute @ParameterObject StudentSearchForm searchForm,
                                                    @PageableDefault @ParameterObject Pageable page) {
         return ResponseEntity.ok(this.studentService.search(searchForm, page));
@@ -67,6 +69,7 @@ public class StudentController {
 
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAuthority('student:write')")
     public ResponseEntity<StudentDto> create(@RequestBody @Valid final StudentCreationForm creationForm) {
         var response = this.studentService.create(creationForm);
         URI uri = ControllerUtils.buildMvcPathComponent(response.getId(), StudentController.class);
@@ -96,11 +99,13 @@ public class StudentController {
                     + "matricule;nom;prenom;date_naissance;lieu_naissance;niveau. "
                     + "L'import est tout ou rien : à la moindre ligne invalide, rien n'est écrit "
                     + "et le message désigne les lignes fautives.")
+    @PreAuthorize("hasAuthority('student:write')")
     public ResponseEntity<StudentCsvImporter.ImportReport> importCsv(@RequestParam("file") MultipartFile file) {
         return ResponseEntity.ok(this.studentCsvImporter.importFrom(file));
     }
 
     @PostMapping(value = "/import", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAuthority('student:write')")
     public ResponseEntity<List<StudentDto>> importFromFile(@RequestBody @Valid final StorageCreationForm creationForm) {
         var response = this.studentService.importFromFile(creationForm);
         URI uri = ControllerUtils.buildMvcPathComponent(UUID.randomUUID(), StudentController.class);
