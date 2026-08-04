@@ -1,13 +1,18 @@
 package com.ypyit.neoelima.domain.establishment.controller;
 
+import com.ypyit.neoelima.domain.establishment.dto.AttendanceSummaryDto;
+import com.ypyit.neoelima.domain.establishment.dto.StaffAttendanceDto;
 import com.ypyit.neoelima.domain.establishment.dto.StaffDto;
+import com.ypyit.neoelima.domain.establishment.form.StaffAttendanceForm;
 import com.ypyit.neoelima.domain.establishment.form.StaffClassesForm;
 import com.ypyit.neoelima.domain.establishment.form.StaffForm;
+import com.ypyit.neoelima.domain.establishment.service.StaffAttendanceService;
 import com.ypyit.neoelima.domain.establishment.service.StaffService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -21,6 +26,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.List;
 import java.util.UUID;
 
@@ -31,6 +38,7 @@ import java.util.UUID;
 public class StaffController {
 
     private final StaffService staffService;
+    private final StaffAttendanceService staffAttendanceService;
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     @PreAuthorize("hasAuthority('staff:read')")
@@ -83,5 +91,35 @@ public class StaffController {
     @PreAuthorize("hasAuthority('staff:write')")
     public ResponseEntity<StaffDto> unassignClass(@PathVariable UUID id, @PathVariable UUID classId) {
         return ResponseEntity.ok(this.staffService.unassignClass(id, classId));
+    }
+
+    @GetMapping(value = "/attendance", produces = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAuthority('staff:read')")
+    @Operation(summary = "Feuille de pointage d'une journée",
+            description = "Tout le personnel actif y figure, y compris les personnes pas encore "
+                    + "pointées, dont le statut est nul. Sans jour, la journée courante.")
+    public ResponseEntity<List<StaffAttendanceDto>> sheet(
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate day) {
+        return ResponseEntity.ok(this.staffAttendanceService.sheet(day));
+    }
+
+    @PutMapping(value = "/{id}/attendance", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAuthority('attendance:write')")
+    @Operation(summary = "Pointe un membre sur une journée",
+            description = "Idempotent : repointer la même journée corrige la ligne existante au "
+                    + "lieu d'en créer une seconde.")
+    public ResponseEntity<StaffAttendanceDto> record(@PathVariable UUID id,
+                                                     @RequestBody @Valid StaffAttendanceForm form) {
+        return ResponseEntity.ok(this.staffAttendanceService.record(id, form));
+    }
+
+    @GetMapping(value = "/attendance/summary", produces = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAuthority('staff:read')")
+    @Operation(summary = "Bilan des pointages d'un mois", description = "Format attendu : 2026-08.")
+    public ResponseEntity<AttendanceSummaryDto> summary(
+            @RequestParam(required = false)
+            @DateTimeFormat(pattern = "yyyy-MM") YearMonth month) {
+        return ResponseEntity.ok(this.staffAttendanceService.summary(month));
     }
 }
