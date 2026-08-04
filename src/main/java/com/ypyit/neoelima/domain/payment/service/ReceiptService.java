@@ -42,7 +42,7 @@ public class ReceiptService {
     private final CurrentUserProvider currentUserProvider;
 
     public Page<ReceiptEntity> search(UUID requestedEstablishmentId, Pageable pageable) {
-        return this.search(requestedEstablishmentId, null, null, null, null, pageable);
+        return this.search(requestedEstablishmentId, null, null, null, null, null, pageable);
     }
 
     /**
@@ -54,7 +54,7 @@ public class ReceiptService {
      */
     public Page<ReceiptEntity> search(UUID requestedEstablishmentId, Instant issuedFrom,
                                       Instant issuedTo, PaymentChannel channel, String keyword,
-                                      Pageable pageable) {
+                                      UUID studentId, Pageable pageable) {
         BooleanBuilder builder = new BooleanBuilder();
         QReceiptEntity receipt = QReceiptEntity.receiptEntity;
 
@@ -66,6 +66,11 @@ public class ReceiptService {
         }
         if (Objects.nonNull(channel)) {
             builder.and(receipt.channel.eq(channel));
+        }
+        // Filtre sur l'élève de la tranche réglée, et non sur le libellé recopié : deux homonymes
+        // dans une même école rendraient la fiche de l'un truffée des reçus de l'autre.
+        if (Objects.nonNull(studentId)) {
+            builder.and(receipt.paymentIntent.installment.studentFee.student.id.eq(studentId));
         }
         // Le tri est fait par le serveur pour la même raison que les bornes : chercher dans la
         // page affichée aurait rendu « aucun résultat » sur un reçu qui existe deux pages plus loin.
