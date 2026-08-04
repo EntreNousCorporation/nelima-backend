@@ -169,6 +169,11 @@ public class EstablishmentServiceImpl implements EstablishmentService {
             FunctionalUtils.checkDuplicatedOnCreation(creationForm.getContacts());
             EstablishmentEntity establishment = this.establishmentMapper.toEntity(creationForm);
             establishment.setBucketName(StorageUtils.generateFileName());
+            // Un établissement créé par YPYit est opérationnel dès sa création : le drapeau
+            // servira à en suspendre un, pas à le laisser naître inerte. Faute de l'écrire, il
+            // valait faux partout, et la console du parc annonçait des écoles désactivées qui
+            // encaissaient normalement.
+            establishment.setActive(true);
             this.createCoverImage(creationForm.getCoverImage(), establishment);
             return this.establishmentRepository.save(establishment);
         } catch (BadRequestException | DuplicateResourceException e) {
@@ -188,6 +193,7 @@ public class EstablishmentServiceImpl implements EstablishmentService {
             this.validateEstablishment(creationForm.getName(), creationForm.getContacts());
             EstablishmentEntity establishment = this.establishmentMapper.toEntity(creationForm);
             establishment.setBucketName(StorageUtils.generateFileName());
+            establishment.setActive(true);
             this.createCoverImage(creationForm.getCoverImage(), establishment);
             establishment.setParent(parentEstablishment);
             EstablishmentEntity savedEstablishment = this.establishmentRepository.save(establishment);

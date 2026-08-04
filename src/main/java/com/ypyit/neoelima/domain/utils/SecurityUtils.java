@@ -43,6 +43,14 @@ public final class SecurityUtils {
             "/platform-settings/**"
     };
 
+    /**
+     * Console du parc. Elle expose le chiffre d'affaires de YPYit et les agrégats de chaque école
+     * cliente : une école y verrait ceux de ses concurrentes.
+     */
+    public static final String[] PLATFORM_CONSOLE_RESOURCES = new String[]{
+            "/dashboard/platform"
+    };
+
     public static final String[] USER_POST_RESOURCES = new String[]{
             "/users/init-reset-password",
             "/users/mobile/init-reset-password",

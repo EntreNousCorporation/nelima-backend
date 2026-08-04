@@ -1,7 +1,9 @@
 package com.ypyit.neoelima.domain.establishment.controller;
 
 import com.ypyit.neoelima.domain.establishment.dto.DashboardSummaryDto;
+import com.ypyit.neoelima.domain.establishment.dto.PlatformOverviewDto;
 import com.ypyit.neoelima.domain.establishment.service.DashboardService;
+import com.ypyit.neoelima.domain.establishment.service.PlatformOverviewService;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
@@ -19,6 +21,16 @@ import java.util.UUID;
 public class DashboardController {
 
     private final DashboardService dashboardService;
+    private final PlatformOverviewService platformOverviewService;
+
+    @GetMapping(value = "/platform", produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Agrégats du parc, réservés à l'équipe YPYit",
+            description = "Commission perçue et ventilation par établissement. Les totaux "
+                    + "d'élèves, d'encaissements et d'impayés du parc sont rendus par "
+                    + "/dashboard/summary, qui s'entend sans portée pour un administrateur.")
+    public ResponseEntity<PlatformOverviewDto> platform() {
+        return ResponseEntity.ok(this.platformOverviewService.overview());
+    }
 
     @GetMapping(value = "/summary", produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "Chiffres d'accueil de l'établissement",
