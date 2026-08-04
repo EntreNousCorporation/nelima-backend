@@ -43,8 +43,59 @@ public class DashboardSummaryDto {
 
     private long overdueCount;
 
+    /** Encaissements de la journée en cours, guichet compris. */
+    private BigDecimal collectedToday;
+
+    private long paymentsToday;
+
+    /**
+     * Somme attendue sur le mois : tranches dont l'échéance y tombe, réglées ou non.
+     *
+     * <p>C'est le dénominateur du taux de recouvrement. Le calculer sur les seules tranches encore
+     * dues donnerait un taux qui monte quand une école encaisse — l'inverse de ce qu'il mesure.
+     */
+    private BigDecimal expectedThisMonth;
+
+    /** Encaissé du mois précédent, pour situer le mois courant sans avoir à le chercher ailleurs. */
+    private BigDecimal collectedPreviousMonth;
+
+    @Schema(description = "Six derniers mois, du plus ancien au plus récent")
+    private List<MonthlyPointDto> monthly;
+
+    @Schema(description = "Élèves aux retards les plus élevés, du plus gros solde au plus petit")
+    private List<OverdueStudentDto> topOverdue;
+
     @Schema(description = "Derniers encaissements, du plus récent au plus ancien")
     private List<ReceiptSummaryDto> recentReceipts;
+
+    /** Un mois de la série attendu / encaissé. */
+    @Getter
+    @Setter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class MonthlyPointDto {
+        /** Mois au format `AAAA-MM`, pour que le client n'ait pas à déduire une année. */
+        private String month;
+        private BigDecimal expected;
+        private BigDecimal collected;
+    }
+
+    /** Un élève en retard de paiement, tel que l'école a besoin de le relancer. */
+    @Getter
+    @Setter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class OverdueStudentDto {
+        private String studentId;
+        private String label;
+        private String registrationNumber;
+        private String levelCode;
+        /** Retard de la plus ancienne échéance dépassée, en jours. */
+        private long daysLate;
+        private BigDecimal amount;
+    }
 
     /**
      * Vue réduite d'un reçu pour la liste d'accueil.

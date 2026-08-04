@@ -5,7 +5,9 @@ import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.ypyit.neoelima.config.security.CurrentUserProvider;
 import com.ypyit.neoelima.domain.establishment.dto.DashboardSummaryDto;
 import com.ypyit.neoelima.domain.establishment.entity.QInstallmentEntity;
+import com.ypyit.neoelima.domain.establishment.entity.QLevelOfStudyEntity;
 import com.ypyit.neoelima.domain.establishment.entity.QStudentEntity;
+import com.ypyit.neoelima.domain.establishment.entity.QStudentFeeEntity;
 import com.ypyit.neoelima.domain.establishment.enums.InstallmentStatus;
 import com.ypyit.neoelima.domain.payment.entity.QReceiptEntity;
 import com.ypyit.neoelima.domain.payment.entity.ReceiptEntity;
@@ -16,7 +18,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -52,16 +57,111 @@ public class DashboardService {
                 .atStartOfDay(ABIDJAN).toInstant();
         LocalDate today = LocalDate.now(ABIDJAN);
 
+        Instant startOfDay = today.atStartOfDay(ABIDJAN).toInstant();
+        LocalDate firstOfMonth = today.withDayOfMonth(1);
+
         return DashboardSummaryDto.builder()
                 .studentCount(this.countStudents(scope))
-                .collectedThisMonth(this.collectedSince(scope, startOfMonth))
+                .collectedThisMonth(this.collectedBetween(scope, startOfMonth, null))
                 .receiptsThisMonth(this.countReceiptsSince(scope, startOfMonth))
+                .collectedToday(this.collectedBetween(scope, startOfDay, null))
+                .paymentsToday(this.countReceiptsSince(scope, startOfDay))
+                .expectedThisMonth(this.expectedBetween(scope, firstOfMonth, firstOfMonth.plusMonths(1)))
+                .collectedPreviousMonth(this.collectedBetween(scope,
+                        firstOfMonth.minusMonths(1).atStartOfDay(ABIDJAN).toInstant(), startOfMonth))
+                .monthly(this.monthlySeries(scope, firstOfMonth))
                 .pendingAmount(this.pendingAmount(scope, null))
                 .pendingCount(this.pendingCount(scope, null))
                 .overdueAmount(this.pendingAmount(scope, today))
                 .overdueCount(this.pendingCount(scope, today))
+                .topOverdue(this.topOverdue(scope, today))
                 .recentReceipts(this.recentReceipts(scope))
                 .build();
+    }
+
+    /**
+     * Série des six derniers mois, mois courant inclus.
+     *
+     * <p>Les deux grandeurs ne se lisent pas dans la même table : l'attendu vient de l'échéance des
+     * tranches, l'encaissé de la date d'émission des reçus. Un mois sans mouvement doit tout de même
+     * figurer, sans quoi le graphique sauterait des colonnes.
+     */
+    private List<DashboardSummaryDto.MonthlyPointDto> monthlySeries(UUID scope, LocalDate firstOfMonth) {
+        List<DashboardSummaryDto.MonthlyPointDto> points = new ArrayList<>();
+        for (int back = 5; back >= 0; back--) {
+            LocalDate start = firstOfMonth.minusMonths(back);
+            LocalDate end = start.plusMonths(1);
+            points.add(DashboardSummaryDto.MonthlyPointDto.builder()
+                    .month(start.format(DateTimeFormatter.ofPattern("yyyy-MM")))
+                    .expected(this.expectedBetween(scope, start, end))
+                    .collected(this.collectedBetween(scope,
+                            start.atStartOfDay(ABIDJAN).toInstant(),
+                            end.atStartOfDay(ABIDJAN).toInstant()))
+                    .build());
+        }
+        return points;
+    }
+
+    /** Montant attendu sur une période : toutes les tranches qui y échoient, réglées ou non. */
+    private BigDecimal expectedBetween(UUID scope, LocalDate from, LocalDate to) {
+        QInstallmentEntity installment = QInstallmentEntity.installmentEntity;
+        BigDecimal total = this.queryFactory.select(installment.amount.sum()).from(installment)
+                .where(installment.dueDate.goe(from), installment.dueDate.before(to),
+                        scope == null ? null
+                                : installment.studentFee.student.establishment.id.eq(scope))
+                .fetchOne();
+        return Objects.requireNonNullElse(total, BigDecimal.ZERO);
+    }
+
+    /**
+     * Élèves aux plus gros retards, avec l'ancienneté de leur plus vieille échéance dépassée.
+     *
+     * <p>Agrégé par élève et non par tranche : une famille avec trois impayés doit apparaître une
+     * fois, avec son solde total, sinon la liste des relances la répète et fausse le classement.
+     */
+    private List<DashboardSummaryDto.OverdueStudentDto> topOverdue(UUID scope, LocalDate today) {
+        QInstallmentEntity installment = QInstallmentEntity.installmentEntity;
+        QStudentEntity student = QStudentEntity.studentEntity;
+
+        QStudentFeeEntity studentFee = QStudentFeeEntity.studentFeeEntity;
+
+        // Jointures explicites, palier par palier : joindre directement `studentFee.student`
+        // depuis `installment` ne traverse pas les deux niveaux et rend un résultat vide.
+        QLevelOfStudyEntity level = QLevelOfStudyEntity.levelOfStudyEntity;
+
+        // Jointure externe sur le niveau : le désigner par un chemin implicite en produirait une
+        // interne, et un élève sans niveau renseigné disparaîtrait de la liste des relances — soit
+        // exactement celui qu'une école risque d'oublier.
+        List<Tuple> rows = this.queryFactory
+                .select(student.id, student.firstName, student.lastName,
+                        student.registrationNumber, level.code,
+                        installment.amount.sum(), installment.dueDate.min())
+                .from(installment)
+                .join(installment.studentFee, studentFee)
+                .join(studentFee.student, student)
+                .leftJoin(student.levelOfStudy, level)
+                .where(installment.status.eq(InstallmentStatus.PENDING),
+                        installment.dueDate.before(today),
+                        scope == null ? null : student.establishment.id.eq(scope))
+                .groupBy(student.id, student.firstName, student.lastName,
+                        student.registrationNumber, level.code)
+                .orderBy(installment.amount.sum().desc())
+                .limit(6)
+                .fetch();
+
+        return rows.stream()
+                .map(row -> DashboardSummaryDto.OverdueStudentDto.builder()
+                        .studentId(Objects.toString(row.get(student.id), null))
+                        .label(String.join(" ",
+                                Objects.toString(row.get(student.firstName), ""),
+                                Objects.toString(row.get(student.lastName), "")).trim())
+                        .registrationNumber(row.get(student.registrationNumber))
+                        .levelCode(row.get(level.code))
+                        .daysLate(ChronoUnit.DAYS.between(
+                                Objects.requireNonNullElse(row.get(installment.dueDate.min()), today), today))
+                        .amount(Objects.requireNonNullElse(row.get(installment.amount.sum()), BigDecimal.ZERO))
+                        .build())
+                .toList();
     }
 
     private long countStudents(UUID scope) {
@@ -72,10 +172,12 @@ public class DashboardService {
         return Objects.requireNonNullElse(count, 0L);
     }
 
-    private BigDecimal collectedSince(UUID scope, Instant since) {
+    /** @param until borne haute facultative ; absente, la période court jusqu'à maintenant */
+    private BigDecimal collectedBetween(UUID scope, Instant since, Instant until) {
         QReceiptEntity receipt = QReceiptEntity.receiptEntity;
         BigDecimal total = this.queryFactory.select(receipt.amount.sum()).from(receipt)
                 .where(receipt.issuedAt.goe(since),
+                        until == null ? null : receipt.issuedAt.before(until),
                         scope == null ? null : receipt.establishment.id.eq(scope))
                 .fetchOne();
         // `sum()` rend null sur un ensemble vide : une école sans encaissement affiche 0, pas rien.

@@ -132,6 +132,60 @@ class DashboardServiceTest extends AbstractIntegrationTest {
         assertThat(summary.getRecentReceipts()).isEmpty();
     }
 
+    @Test
+    @DisplayName("le taux de recouvrement se mesure sur l'attendu du mois, réglé ou non")
+    void expectedCountsSettledInstallmentsToo() {
+        // Deux tranches échéant ce mois, une encaissée : l'attendu doit rester le total.
+        // Le calculer sur le reste dû ferait monter le taux à mesure que l'école encaisse — soit
+        // l'inverse de ce qu'il mesure.
+        InstallmentEntity paid = aDueInstallment(myStudent, new BigDecimal("40000"), LocalDate.now());
+        aDueInstallment(myStudent, new BigDecimal("60000"), LocalDate.now());
+        collect(paid);
+
+        DashboardSummaryDto summary = dashboardService.summaryOf(null);
+
+        assertThat(summary.getExpectedThisMonth()).isEqualByComparingTo(new BigDecimal("100000"));
+        assertThat(summary.getCollectedThisMonth()).isEqualByComparingTo(new BigDecimal("40000"));
+        assertThat(summary.getCollectedToday()).isEqualByComparingTo(new BigDecimal("40000"));
+        assertThat(summary.getPaymentsToday()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("la série mensuelle couvre six mois, même ceux sans mouvement")
+    void monthlySeriesHasNoGaps() {
+        aDueInstallment(myStudent, new BigDecimal("25000"), LocalDate.now());
+
+        DashboardSummaryDto summary = dashboardService.summaryOf(null);
+
+        // Un mois vide doit figurer à zéro : l'omettre ferait sauter une colonne du graphique.
+        assertThat(summary.getMonthly()).hasSize(6);
+        assertThat(summary.getMonthly()).allSatisfy(point -> {
+            assertThat(point.getMonth()).matches("\\d{4}-\\d{2}");
+            assertThat(point.getExpected()).isNotNull();
+            assertThat(point.getCollected()).isNotNull();
+        });
+        assertThat(summary.getMonthly().getLast().getExpected())
+                .isEqualByComparingTo(new BigDecimal("25000"));
+    }
+
+    @Test
+    @DisplayName("un élève à plusieurs impayés apparaît une fois, avec son solde total")
+    void groupsOverdueByStudent() {
+        aDueInstallment(myStudent, new BigDecimal("15000"), LocalDate.now().minusDays(40));
+        aDueInstallment(myStudent, new BigDecimal("25000"), LocalDate.now().minusDays(10));
+        // Une tranche à venir n'est pas un retard.
+        aDueInstallment(myStudent, new BigDecimal("90000"), LocalDate.now().plusDays(20));
+
+        DashboardSummaryDto summary = dashboardService.summaryOf(null);
+
+        assertThat(summary.getTopOverdue()).hasSize(1);
+        var late = summary.getTopOverdue().getFirst();
+        assertThat(late.getAmount()).isEqualByComparingTo(new BigDecimal("40000"));
+        // L'ancienneté est celle de la plus vieille échéance dépassée, pas de la dernière.
+        assertThat(late.getDaysLate()).isEqualTo(40);
+        assertThat(late.getLabel()).isEqualTo("Aaron Koffi");
+    }
+
     private void collect(InstallmentEntity installment) {
         offlineCollectionService.collect(OfflineCollectionForm.builder()
                 .installmentId(installment.getId())
