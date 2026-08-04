@@ -60,6 +60,8 @@ public class FeeScheduleServiceImpl implements FeeScheduleService {
                     "Installments have already been collected for this fee, its schedule can no longer be changed");
         }
 
+        // Les tranches existantes partent avant que les nouvelles ne soient produites. Sans cette
+        // ligne, redéfinir un échéancier doublerait la dette de chaque famille déjà concernée.
         this.installmentRepository.deleteAll(this.installmentRepository.findByStudentFee_Fee_Id(feeId));
         this.feeScheduleRepository.deleteByFee_Id(feeId);
         this.feeScheduleRepository.flush();
@@ -105,7 +107,15 @@ public class FeeScheduleServiceImpl implements FeeScheduleService {
         }
     }
 
-    /** Les élèves déjà porteurs de ce frais reçoivent le nouvel échéancier. */
+    /**
+     * Les élèves déjà porteurs de ce frais reçoivent le nouvel échéancier.
+     *
+     * <p>Ne s'appelle qu'après la suppression des tranches précédentes, faite plus haut dans
+     * {@link #defineSchedules}. Lue seule, cette méthode paraît empiler les dettes — elle ne fait
+     * qu'ajouter — et c'est bien la suppression qui l'en empêche : les déplacer l'une sans l'autre
+     * doublerait ce que les familles doivent. {@code FeeScheduleRedefinitionTest} fixe ce
+     * comportement.
+     */
     private void regenerateStudentInstallments(UUID feeId) {
         List<StudentFeeEntity> studentFees = this.studentFeeRepository.findByFee_Id(feeId);
         for (StudentFeeEntity studentFee : studentFees) {
