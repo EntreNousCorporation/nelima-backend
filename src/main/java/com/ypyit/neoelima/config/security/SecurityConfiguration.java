@@ -34,6 +34,7 @@ import java.util.List;
 
 import static com.ypyit.neoelima.domain.utils.SecurityUtils.AUTH_RESOURCES;
 import static com.ypyit.neoelima.domain.utils.SecurityUtils.PAYMENT_ADMIN_RESOURCES;
+import static com.ypyit.neoelima.domain.utils.SecurityUtils.PLATFORM_SETTINGS_WRITE_RESOURCES;
 import static com.ypyit.neoelima.domain.utils.SecurityUtils.PAYMENT_WEBHOOK_RESOURCES;
 import static com.ypyit.neoelima.domain.utils.SecurityUtils.GLOBAL_RESOURCES;
 import static com.ypyit.neoelima.domain.utils.SecurityUtils.SWAGGER_RESOURCES;
@@ -110,6 +111,9 @@ public class SecurityConfiguration {
                             // Ces routes exposent les credentials de l'agrégateur et permettent de
                             // basculer le provider actif. Le starter ne les protège pas.
                             .requestMatchers(PAYMENT_ADMIN_RESOURCES).access(platformAdminOnly())
+                            .requestMatchers(HttpMethod.PUT, PLATFORM_SETTINGS_WRITE_RESOURCES).access(platformAdminOnly())
+                            .requestMatchers(HttpMethod.POST, PLATFORM_SETTINGS_WRITE_RESOURCES).access(platformAdminOnly())
+                            .requestMatchers(HttpMethod.DELETE, PLATFORM_SETTINGS_WRITE_RESOURCES).access(platformAdminOnly())
                             .requestMatchers(HttpMethod.GET, GLOBAL_RESOURCES).permitAll();
                     authorize
                             .anyRequest()

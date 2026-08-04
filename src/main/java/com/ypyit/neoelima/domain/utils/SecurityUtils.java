@@ -30,6 +30,19 @@ public final class SecurityUtils {
             "/payswitch/configs/**"
     };
 
+    /**
+     * Réglages de la plateforme, en écriture.
+     *
+     * <p>Ces routes ne tombaient sous aucune règle explicite : elles héritaient donc du simple
+     * « être authentifié », ce qui laissait un compte école — ou un parent — modifier des
+     * paramètres globaux, dont le taux de commission. La lecture reste ouverte aux comptes
+     * authentifiés : le taux est de toute façon affiché à chaque parent avant paiement.
+     */
+    public static final String[] PLATFORM_SETTINGS_WRITE_RESOURCES = new String[]{
+            "/global-parameters/**",
+            "/platform-settings/**"
+    };
+
     public static final String[] USER_POST_RESOURCES = new String[]{
             "/users/init-reset-password",
             "/users/mobile/init-reset-password",

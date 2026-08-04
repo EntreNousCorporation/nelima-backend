@@ -59,6 +59,8 @@ public class OnlinePaymentService {
     private final PaymentIntentRepository paymentIntentRepository;
     private final CurrentUserProvider currentUserProvider;
     private final BillingProperties billingProperties;
+    /** Le taux est lu ici, et non dans la configuration : il est modifiable depuis le BO. */
+    private final BillingSettingsService billingSettingsService;
 
     /**
      * Détail de ce que coûtera le règlement d'une tranche, sans rien engager.
@@ -80,7 +82,7 @@ public class OnlinePaymentService {
                 .amountSchool(amountSchool)
                 .amountCommission(commission)
                 .totalAmount(amountSchool.add(commission))
-                .commissionRate(this.billingProperties.getCommissionRate())
+                .commissionRate(this.billingSettingsService.currentRate())
                 .currency(this.billingProperties.getCurrency())
                 .build();
     }
@@ -165,7 +167,7 @@ public class OnlinePaymentService {
      */
     private BigDecimal commissionOn(BigDecimal amountSchool) {
         return amountSchool
-                .multiply(this.billingProperties.getCommissionRate())
+                .multiply(this.billingSettingsService.currentRate())
                 .setScale(XOF_SCALE, RoundingMode.HALF_UP);
     }
 
