@@ -1,6 +1,7 @@
 package com.ypyit.neoelima.domain.establishment.controller;
 
 import com.ypyit.neoelima.domain.establishment.dto.AttendanceSummaryDto;
+import com.ypyit.neoelima.domain.establishment.dto.PayrollSummaryDto;
 import com.ypyit.neoelima.domain.establishment.dto.StaffAttendanceDto;
 import com.ypyit.neoelima.domain.establishment.dto.StaffDto;
 import com.ypyit.neoelima.domain.establishment.form.StaffAttendanceForm;
@@ -91,6 +92,14 @@ public class StaffController {
     @PreAuthorize("hasAuthority('staff:write')")
     public ResponseEntity<StaffDto> unassignClass(@PathVariable UUID id, @PathVariable UUID classId) {
         return ResponseEntity.ok(this.staffService.unassignClass(id, classId));
+    }
+
+    @GetMapping(value = "/payroll-summary", produces = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAuthority('staff:read_salary')")
+    @Operation(summary = "Masse salariale et répartition des contrats",
+            description = "Seul point d'entrée où le total des rémunérations circule.")
+    public ResponseEntity<PayrollSummaryDto> payrollSummary() {
+        return ResponseEntity.ok(this.staffService.payrollSummary());
     }
 
     @GetMapping(value = "/attendance", produces = MediaType.APPLICATION_JSON_VALUE)

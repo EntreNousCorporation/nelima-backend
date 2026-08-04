@@ -2,6 +2,7 @@ package com.ypyit.neoelima.domain.establishment;
 
 import com.ypyit.neoelima.AbstractIntegrationTest;
 import com.ypyit.neoelima.common.exception.NotFoundException;
+import com.ypyit.neoelima.domain.establishment.dto.PayrollSummaryDto;
 import com.ypyit.neoelima.domain.establishment.dto.SchoolClassDto;
 import com.ypyit.neoelima.domain.establishment.dto.StaffDto;
 import com.ypyit.neoelima.domain.establishment.entity.EstablishmentEntity;
@@ -28,6 +29,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.annotation.Transactional;
@@ -185,6 +187,36 @@ class StaffServiceTest extends AbstractIntegrationTest {
         assertThatThrownBy(() -> this.staffService.assignClasses(
                 UUID.fromString(member.getId()), List.of(UUID.fromString(stranger.getId()))))
                 .isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("la masse salariale est refusée à qui n'a pas le droit de lire les salaires")
+    void refusesPayrollWithoutPermission() {
+        this.staffService.create(this.form("KIPRÉ", "Auguste"));
+        this.authenticateOnSameSchool("staff:read", "attendance:write");
+
+        // Ce calcul n'a pas de version dégradée : une masse salariale amputée serait un chiffre
+        // faux, pas un chiffre partiel.
+        assertThatThrownBy(() -> this.staffService.payrollSummary())
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("le salaire moyen ne porte que sur les fiches renseignées")
+    void averagesOnlyOverKnownSalaries() {
+        this.staffService.create(this.form("BEDIA", "Franck"));
+        StaffForm withoutSalary = this.form("OUÉDRAOGO", "Rachel");
+        withoutSalary.setMonthlySalary(null);
+        this.staffService.create(withoutSalary);
+
+        PayrollSummaryDto summary = this.staffService.payrollSummary();
+
+        // Diviser par l'effectif entier afficherait une rémunération moyenne d'autant plus basse
+        // que les fiches sont incomplètes, ce qui se lirait comme une information sur les salaires.
+        assertThat(summary.getHeadcount()).isEqualTo(2);
+        assertThat(summary.getPaidHeadcount()).isEqualTo(1);
+        assertThat(summary.getAverageSalary()).isEqualByComparingTo(new BigDecimal("265000"));
+        assertThat(summary.getMonthlyPayroll()).isEqualByComparingTo(new BigDecimal("265000"));
     }
 
     @Test

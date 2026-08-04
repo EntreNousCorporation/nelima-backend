@@ -3,12 +3,15 @@ package com.ypyit.neoelima.domain.establishment.service;
 import com.ypyit.neoelima.common.exception.BadRequestException;
 import com.ypyit.neoelima.common.exception.NotFoundException;
 import com.ypyit.neoelima.config.security.CurrentUserProvider;
+import com.ypyit.neoelima.domain.establishment.dto.PayrollSummaryDto;
 import com.ypyit.neoelima.domain.establishment.dto.SchoolClassLiteDto;
 import com.ypyit.neoelima.domain.establishment.dto.StaffDto;
 import com.ypyit.neoelima.domain.establishment.entity.EstablishmentEntity;
 import com.ypyit.neoelima.domain.establishment.entity.SchoolClassEntity;
 import com.ypyit.neoelima.domain.establishment.entity.StaffAttendanceEntity;
 import com.ypyit.neoelima.domain.establishment.entity.StaffEntity;
+import com.ypyit.neoelima.domain.establishment.enums.ContractType;
+import com.ypyit.neoelima.domain.establishment.enums.StaffRole;
 import com.ypyit.neoelima.domain.establishment.form.StaffForm;
 import com.ypyit.neoelima.domain.establishment.repository.EstablishmentRepository;
 import com.ypyit.neoelima.domain.establishment.repository.SchoolClassRepository;
@@ -18,10 +21,14 @@ import com.ypyit.neoelima.domain.user.entity.UserEntity;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.time.Period;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -170,6 +177,59 @@ public class StaffService {
         entity.getClasses().removeIf(schoolClass -> schoolClass.getId().equals(classId));
         this.staffRepository.saveAndFlush(entity);
         return this.findById(id);
+    }
+
+    /**
+     * Ce que coûte le personnel actif, et comment il est contractualisé.
+     *
+     * <p>Le contrôle de permission est porté par le point d'entrée. On le redouble ici parce que
+     * ce calcul n'a aucune version dégradée : contrairement à une fiche dont on retire deux
+     * champs, une masse salariale amputée serait un chiffre faux, pas un chiffre partiel.
+     */
+    public PayrollSummaryDto payrollSummary() {
+        if (!this.canReadSalary()) {
+            throw new AccessDeniedException("Reading payroll requires " + READ_SALARY);
+        }
+        UUID scope = this.scope();
+        List<StaffEntity> members = this.staffRepository
+                .findByEstablishment_IdAndActiveTrueOrderByLastNameAscFirstNameAsc(scope);
+
+        List<BigDecimal> salaries = members.stream()
+                .map(StaffEntity::getMonthlySalary)
+                .filter(Objects::nonNull)
+                .toList();
+        BigDecimal payroll = salaries.stream().reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        Map<ContractType, Long> byContract = members.stream()
+                .map(StaffEntity::getContractType)
+                .filter(Objects::nonNull)
+                .collect(Collectors.groupingBy(Function.identity(), Collectors.counting()));
+
+        List<Integer> seniorities = members.stream()
+                .map(StaffEntity::getHiredAt)
+                .filter(Objects::nonNull)
+                .map(hired -> Period.between(hired, LocalDate.now()).getYears())
+                .toList();
+
+        return PayrollSummaryDto.builder()
+                .monthlyPayroll(payroll)
+                .paidHeadcount(salaries.size())
+                .headcount(members.size())
+                // Moyenne sur les seuls salaires renseignés : diviser par l'effectif entier
+                // afficherait une rémunération moyenne d'autant plus basse que les fiches sont
+                // incomplètes, ce qui se lirait comme une information sur les salaires.
+                .averageSalary(salaries.isEmpty() ? null
+                        : payroll.divide(BigDecimal.valueOf(salaries.size()), 0, RoundingMode.HALF_UP))
+                .byContract(byContract)
+                .withoutContract(members.stream().filter(m -> Objects.isNull(m.getContractType())).count())
+                .averageSeniorityYears(seniorities.isEmpty() ? null
+                        : BigDecimal.valueOf(seniorities.stream().mapToInt(Integer::intValue).sum())
+                                .divide(BigDecimal.valueOf(seniorities.size()), 1, RoundingMode.HALF_UP))
+                .weeklyTeachingHours(members.stream()
+                        .filter(member -> StaffRole.TEACHER.equals(member.getRole()))
+                        .mapToLong(member -> Objects.requireNonNullElse(member.getWeeklyHours(), 0))
+                        .sum())
+                .build();
     }
 
     /**
