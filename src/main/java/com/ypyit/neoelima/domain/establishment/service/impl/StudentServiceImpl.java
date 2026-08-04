@@ -148,6 +148,14 @@ public class StudentServiceImpl implements StudentService {
                         .or(student.firstName.containsIgnoreCase(keyword))
                         .or(student.lastName.containsIgnoreCase(keyword)));
             }
+            if (Objects.nonNull(searchForm.getSchoolClassId())) {
+                builder.and(student.schoolClass.id.eq(searchForm.getSchoolClassId()));
+            }
+            // Les élèves sans classe sont ceux que la rentrée oublie : il faut pouvoir les isoler
+            // pour les répartir, et un filtre « toutes classes » ne les distingue pas.
+            if (Boolean.TRUE.equals(searchForm.getUnassignedOnly())) {
+                builder.and(student.schoolClass.isNull());
+            }
             List<Predicate> levelOfStudies = new ArrayList<>();
             if (CollectionUtils.isNotEmpty(searchForm.getLevelOfStudies())) {
                 searchForm.getLevelOfStudies().forEach(levelOfStudy -> levelOfStudies

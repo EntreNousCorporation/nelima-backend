@@ -62,11 +62,28 @@ public class DashboardSummaryDto {
     @Schema(description = "Six derniers mois, du plus ancien au plus récent")
     private List<MonthlyPointDto> monthly;
 
+    /** Remplissage des classes, tel que l'école le lit d'un coup d'œil à la rentrée. */
+    private List<ClassFillingDto> classFilling;
+
     @Schema(description = "Élèves aux retards les plus élevés, du plus gros solde au plus petit")
     private List<OverdueStudentDto> topOverdue;
 
     @Schema(description = "Derniers encaissements, du plus récent au plus ancien")
     private List<ReceiptSummaryDto> recentReceipts;
+
+    /** Effectif d'une classe rapporté à sa capacité. */
+    @Getter
+    @Setter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class ClassFillingDto {
+        private String id;
+        private String name;
+        private String levelLabel;
+        private long studentCount;
+        private Integer capacity;
+    }
 
     /** Un mois de la série attendu / encaissé. */
     @Getter

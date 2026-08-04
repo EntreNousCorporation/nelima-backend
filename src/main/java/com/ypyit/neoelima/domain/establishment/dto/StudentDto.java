@@ -26,4 +26,5 @@ public class StudentDto extends BaseDto {
     private String placeOfBirth;
     private Set<UserDto> parentUsers;
     private EstablishmentLiteDto establishment;
+    private SchoolClassLiteDto schoolClass;
 }

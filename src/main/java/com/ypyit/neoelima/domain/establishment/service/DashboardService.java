@@ -7,6 +7,7 @@ import com.ypyit.neoelima.domain.establishment.dto.DashboardSummaryDto;
 import com.ypyit.neoelima.domain.establishment.entity.QInstallmentEntity;
 import com.ypyit.neoelima.domain.establishment.entity.QLevelOfStudyEntity;
 import com.ypyit.neoelima.domain.establishment.entity.QStudentEntity;
+import com.ypyit.neoelima.domain.establishment.entity.QSchoolClassEntity;
 import com.ypyit.neoelima.domain.establishment.entity.QStudentFeeEntity;
 import com.ypyit.neoelima.domain.establishment.enums.InstallmentStatus;
 import com.ypyit.neoelima.domain.payment.entity.QReceiptEntity;
@@ -70,6 +71,7 @@ public class DashboardService {
                 .collectedPreviousMonth(this.collectedBetween(scope,
                         firstOfMonth.minusMonths(1).atStartOfDay(ABIDJAN).toInstant(), startOfMonth))
                 .monthly(this.monthlySeries(scope, firstOfMonth))
+                .classFilling(this.classFilling(scope))
                 .pendingAmount(this.pendingAmount(scope, null))
                 .pendingCount(this.pendingCount(scope, null))
                 .overdueAmount(this.pendingAmount(scope, today))
@@ -160,6 +162,42 @@ public class DashboardService {
                         .daysLate(ChronoUnit.DAYS.between(
                                 Objects.requireNonNullElse(row.get(installment.dueDate.min()), today), today))
                         .amount(Objects.requireNonNullElse(row.get(installment.amount.sum()), BigDecimal.ZERO))
+                        .build())
+                .toList();
+    }
+
+    /**
+     * Effectif de chaque classe rapporté à sa capacité.
+     *
+     * <p>Jointure externe depuis la classe : une classe créée mais encore vide doit figurer, c'est
+     * même celle dont l'école doit se souvenir avant la rentrée.
+     */
+    private List<DashboardSummaryDto.ClassFillingDto> classFilling(UUID scope) {
+        if (Objects.isNull(scope)) {
+            // Un administrateur YPYit lit les chiffres du parc : le remplissage des classes de
+            // toutes les écoles confondues n'aurait aucun sens.
+            return List.of();
+        }
+        QSchoolClassEntity schoolClass = QSchoolClassEntity.schoolClassEntity;
+        QStudentEntity student = QStudentEntity.studentEntity;
+        QLevelOfStudyEntity level = QLevelOfStudyEntity.levelOfStudyEntity;
+
+        return this.queryFactory
+                .select(schoolClass.id, schoolClass.name, level.code,
+                        schoolClass.capacity, student.count())
+                .from(schoolClass)
+                .leftJoin(schoolClass.levelOfStudy, level)
+                .leftJoin(student).on(student.schoolClass.id.eq(schoolClass.id))
+                .where(schoolClass.establishment.id.eq(scope))
+                .groupBy(schoolClass.id, schoolClass.name, level.code, schoolClass.capacity)
+                .orderBy(schoolClass.name.asc())
+                .fetch().stream()
+                .map(row -> DashboardSummaryDto.ClassFillingDto.builder()
+                        .id(Objects.toString(row.get(schoolClass.id), null))
+                        .name(row.get(schoolClass.name))
+                        .levelLabel(row.get(level.code))
+                        .capacity(row.get(schoolClass.capacity))
+                        .studentCount(Objects.requireNonNullElse(row.get(student.count()), 0L))
                         .build())
                 .toList();
     }

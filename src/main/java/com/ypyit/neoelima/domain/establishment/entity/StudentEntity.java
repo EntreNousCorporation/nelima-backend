@@ -62,6 +62,15 @@ public class StudentEntity extends BaseEntity {
     @JoinColumn(name = "establishment_id", referencedColumnName = "id")
     private EstablishmentEntity establishment;
 
+    /**
+     * Classe d'affectation, facultative : un élève inscrit en cours d'année attend souvent d'être
+     * réparti, et le laisser sans classe vaut mieux que de le placer au hasard.
+     */
+    @ManyToOne
+    @ToString.Exclude
+    @JoinColumn(name = "school_class_id", referencedColumnName = "id")
+    private SchoolClassEntity schoolClass;
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;

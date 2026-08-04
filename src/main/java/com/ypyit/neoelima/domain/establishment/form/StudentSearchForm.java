@@ -27,5 +27,10 @@ public class StudentSearchForm {
      * qu'il a sous les yeux, souvent le matricule d'un carnet.
      */
     private String keyword;
+
+    /** Classe d'affectation. `unassigned` isole les élèves qui n'en ont pas encore. */
+    private UUID schoolClassId;
+
+    private Boolean unassignedOnly;
     private UUID establishmentId;
 }
