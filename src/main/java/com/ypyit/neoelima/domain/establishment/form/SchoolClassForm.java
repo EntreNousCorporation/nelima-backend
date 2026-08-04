@@ -8,6 +8,8 @@ import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.util.UUID;
+
 @Getter
 @Setter
 public class SchoolClassForm {
@@ -28,6 +30,19 @@ public class SchoolClassForm {
     @Max(300)
     private Integer capacity;
 
+    /**
+     * Titulaire, désigné parmi le personnel de l'établissement.
+     *
+     * <p>Nul retire le titulaire : une classe entre deux enseignants n'en a pas.
+     */
+    private UUID mainTeacherId;
+
+    /**
+     * Nom du titulaire, pour les classes créées avant le répertoire du personnel.
+     *
+     * <p>N'est pris en compte que si aucun titulaire n'est désigné. Conservé le temps que les
+     * écoles renseignent leur personnel ; la référence est la forme vers laquelle on va.
+     */
     @Size(max = 128)
     private String mainTeacherName;
 

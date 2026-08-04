@@ -3,6 +3,7 @@ package com.ypyit.neoelima.domain.establishment.entity;
 import com.ypyit.neoelima.common.entity.BaseEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
@@ -61,6 +62,23 @@ public class SchoolClassEntity extends BaseEntity {
     @Column(nullable = false)
     private Integer capacity;
 
+    /**
+     * Titulaire désigné dans le répertoire du personnel.
+     *
+     * <p>Facultatif : une classe peut attendre son titulaire, et la reprise n'a pu rattacher que
+     * les noms qui désignaient un membre sans ambiguïté.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @ToString.Exclude
+    @JoinColumn(name = "main_teacher_id", referencedColumnName = "id")
+    private StaffEntity mainTeacher;
+
+    /**
+     * Nom du titulaire tel qu'il avait été saisi, avant que le répertoire n'existe.
+     *
+     * <p>Conservé comme repli : le supprimer perdrait les titulaires qu'aucun membre du répertoire
+     * ne recouvre. Il n'est lu que lorsque {@link #mainTeacher} est absent.
+     */
     @Column(name = "main_teacher_name", length = 128)
     private String mainTeacherName;
 

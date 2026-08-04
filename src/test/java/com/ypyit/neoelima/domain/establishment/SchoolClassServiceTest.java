@@ -4,15 +4,19 @@ import com.ypyit.neoelima.AbstractIntegrationTest;
 import com.ypyit.neoelima.common.exception.BadRequestException;
 import com.ypyit.neoelima.common.exception.NotFoundException;
 import com.ypyit.neoelima.domain.establishment.dto.SchoolClassDto;
+import com.ypyit.neoelima.domain.establishment.dto.StaffDto;
 import com.ypyit.neoelima.domain.establishment.entity.EstablishmentEntity;
 import com.ypyit.neoelima.domain.user.entity.TranslateEntity;
 import com.ypyit.neoelima.domain.establishment.entity.LevelOfStudyEntity;
 import com.ypyit.neoelima.domain.establishment.entity.StudentEntity;
+import com.ypyit.neoelima.domain.establishment.enums.StaffRole;
 import com.ypyit.neoelima.domain.establishment.form.SchoolClassForm;
+import com.ypyit.neoelima.domain.establishment.form.StaffForm;
 import com.ypyit.neoelima.domain.establishment.repository.EstablishmentRepository;
 import com.ypyit.neoelima.domain.establishment.repository.LevelOfStudyRepository;
 import com.ypyit.neoelima.domain.establishment.repository.StudentRepository;
 import com.ypyit.neoelima.domain.establishment.service.SchoolClassService;
+import com.ypyit.neoelima.domain.establishment.service.StaffService;
 import com.ypyit.neoelima.domain.user.entity.ContactEntity;
 import com.ypyit.neoelima.domain.user.entity.EstablishmentUserEntity;
 import com.ypyit.neoelima.domain.user.enums.ContactType;
@@ -46,6 +50,8 @@ class SchoolClassServiceTest extends AbstractIntegrationTest {
 
     @Autowired
     private SchoolClassService schoolClassService;
+    @Autowired
+    private StaffService staffService;
     @Autowired
     private EstablishmentRepository establishmentRepository;
     @Autowired
@@ -156,6 +162,55 @@ class SchoolClassServiceTest extends AbstractIntegrationTest {
 
         assertThatThrownBy(() -> this.schoolClassService.findById(UUID.fromString(created.getId())))
                 .isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("le titulaire désigné prime sur le nom saisi à la main")
+    void namesTheDesignatedTeacherOverTheTypedOne() {
+        StaffDto teacher = this.staff(this.school, "AHOU", "Bernadette");
+        SchoolClassForm form = this.form("CM1 B", 35);
+        form.setMainTeacherId(UUID.fromString(teacher.getId()));
+
+        SchoolClassDto created = this.schoolClassService.create(form);
+
+        // Le formulaire portait aussi « KOUAMÉ Adjoua » en nom libre : quand les deux existent,
+        // c'est que l'école a désigné son titulaire après l'avoir tapé.
+        assertThat(created.getMainTeacherId()).isEqualTo(teacher.getId());
+        assertThat(created.getMainTeacherName()).isEqualTo("AHOU Bernadette");
+    }
+
+    @Test
+    @DisplayName("sans titulaire désigné, le nom hérité continue de répondre")
+    void fallsBackOnTheInheritedName() {
+        SchoolClassDto created = this.schoolClassService.create(this.form("CM1 C", 35));
+
+        assertThat(created.getMainTeacherId()).isNull();
+        assertThat(created.getMainTeacherName()).isEqualTo("KOUAMÉ Adjoua");
+    }
+
+    @Test
+    @DisplayName("l'enseignant d'une autre école ne peut pas être désigné titulaire")
+    void refusesATeacherFromAnotherSchool() {
+        EstablishmentEntity other = this.schoolWithLevel();
+        this.authenticateOn(other);
+        StaffDto stranger = this.staff(other, "TRAORÉ", "Fatou");
+        this.authenticateOn(this.school);
+
+        SchoolClassForm form = this.form("6e B", 45);
+        form.setMainTeacherId(UUID.fromString(stranger.getId()));
+
+        // Sans ce contrôle, une école lirait le nom de l'enseignant d'une autre sur sa propre
+        // grille de classes.
+        assertThatThrownBy(() -> this.schoolClassService.create(form))
+                .isInstanceOf(BadRequestException.class);
+    }
+
+    private StaffDto staff(EstablishmentEntity establishment, String lastName, String firstName) {
+        StaffForm form = new StaffForm();
+        form.setFirstName(firstName);
+        form.setLastName(lastName);
+        form.setRole(StaffRole.TEACHER);
+        return this.staffService.create(form);
     }
 
     private SchoolClassForm form(String name, int capacity) {

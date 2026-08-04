@@ -23,6 +23,15 @@ public class SchoolClassDto {
     private String name;
     private String room;
     private Integer capacity;
+    /** Membre du personnel désigné titulaire ; nul tant qu'aucun ne l'est. */
+    private String mainTeacherId;
+
+    /**
+     * Nom du titulaire, quelle qu'en soit la source.
+     *
+     * <p>Servi depuis la référence quand elle existe, depuis le nom hérité sinon. L'appelant n'a
+     * pas à savoir laquelle des deux a répondu : il affiche un titulaire.
+     */
     private String mainTeacherName;
     private String levelCode;
     private String levelLabel;

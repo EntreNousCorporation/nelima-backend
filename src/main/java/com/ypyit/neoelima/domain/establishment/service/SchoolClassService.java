@@ -12,12 +12,14 @@ import com.ypyit.neoelima.domain.establishment.entity.QInstallmentEntity;
 import com.ypyit.neoelima.domain.establishment.entity.QStudentEntity;
 import com.ypyit.neoelima.domain.establishment.entity.QStudentFeeEntity;
 import com.ypyit.neoelima.domain.establishment.entity.SchoolClassEntity;
+import com.ypyit.neoelima.domain.establishment.entity.StaffEntity;
 import com.ypyit.neoelima.domain.establishment.entity.StudentEntity;
 import com.ypyit.neoelima.domain.establishment.enums.InstallmentStatus;
 import com.ypyit.neoelima.domain.establishment.form.SchoolClassForm;
 import com.ypyit.neoelima.domain.establishment.repository.EstablishmentRepository;
 import com.ypyit.neoelima.domain.establishment.repository.LevelOfStudyRepository;
 import com.ypyit.neoelima.domain.establishment.repository.SchoolClassRepository;
+import com.ypyit.neoelima.domain.establishment.repository.StaffRepository;
 import com.ypyit.neoelima.domain.establishment.repository.StudentRepository;
 import com.ypyit.neoelima.domain.payment.entity.QReceiptEntity;
 import lombok.RequiredArgsConstructor;
@@ -49,6 +51,7 @@ public class SchoolClassService {
     private final SchoolClassRepository schoolClassRepository;
     private final StudentRepository studentRepository;
     private final LevelOfStudyRepository levelOfStudyRepository;
+    private final StaffRepository staffRepository;
     private final EstablishmentRepository establishmentRepository;
     private final CurrentUserProvider currentUserProvider;
     private final JPAQueryFactory queryFactory;
@@ -88,6 +91,7 @@ public class SchoolClassService {
                 .name(form.getName().trim())
                 .room(trimToNull(form.getRoom()))
                 .capacity(form.getCapacity())
+                .mainTeacher(this.resolveMainTeacher(form.getMainTeacherId(), establishment))
                 .mainTeacherName(trimToNull(form.getMainTeacherName()))
                 .levelOfStudy(this.resolveLevel(form.getLevelOfStudyCode(), establishment))
                 .establishment(establishment)
@@ -104,6 +108,7 @@ public class SchoolClassService {
         entity.setName(form.getName().trim());
         entity.setRoom(trimToNull(form.getRoom()));
         entity.setCapacity(form.getCapacity());
+        entity.setMainTeacher(this.resolveMainTeacher(form.getMainTeacherId(), entity.getEstablishment()));
         entity.setMainTeacherName(trimToNull(form.getMainTeacherName()));
         entity.setLevelOfStudy(this.resolveLevel(form.getLevelOfStudyCode(), entity.getEstablishment()));
         this.schoolClassRepository.saveAndFlush(entity);
@@ -173,6 +178,28 @@ public class SchoolClassService {
             throw new BadRequestException("Cette opération suppose un compte d'établissement.");
         }
         return scope;
+    }
+
+    /**
+     * Titulaire désigné, s'il appartient bien à l'établissement.
+     *
+     * <p>L'identifiant arrive du client : sans ce contrôle, une école pourrait désigner titulaire
+     * l'enseignant d'une autre, et lire son nom sur sa propre grille de classes.
+     */
+    private StaffEntity resolveMainTeacher(UUID staffId, EstablishmentEntity establishment) {
+        if (Objects.isNull(staffId)) {
+            return null;
+        }
+        StaffEntity member = this.staffRepository.findById(staffId)
+                .orElseThrow(() -> new BadRequestException("Ce membre du personnel n'existe pas."));
+        if (!member.getEstablishment().getId().equals(establishment.getId())) {
+            throw new BadRequestException("Ce membre du personnel n'existe pas.");
+        }
+        if (!member.isActive()) {
+            throw new BadRequestException(String.format(
+                    "%s ne fait plus partie du personnel actif.", member.getLastName()));
+        }
+        return member;
     }
 
     private LevelOfStudyEntity resolveLevel(String code, EstablishmentEntity establishment) {
@@ -251,12 +278,18 @@ public class SchoolClassService {
     private static SchoolClassDto toDto(SchoolClassEntity entity, long studentCount,
                                         BigDecimal outstanding, BigDecimal collected) {
         LevelOfStudyEntity level = entity.getLevelOfStudy();
+        StaffEntity mainTeacher = entity.getMainTeacher();
         return SchoolClassDto.builder()
                 .id(entity.getId().toString())
                 .name(entity.getName())
                 .room(entity.getRoom())
                 .capacity(entity.getCapacity())
-                .mainTeacherName(entity.getMainTeacherName())
+                .mainTeacherId(Objects.isNull(mainTeacher) ? null : mainTeacher.getId().toString())
+                // La référence prime sur le nom hérité : quand les deux existent, c'est qu'une
+                // école a désigné son titulaire dans le répertoire après l'avoir tapé à la main.
+                .mainTeacherName(Objects.isNull(mainTeacher)
+                        ? entity.getMainTeacherName()
+                        : String.format("%s %s", mainTeacher.getLastName(), mainTeacher.getFirstName()))
                 .levelCode(Objects.isNull(level) ? null : level.getCode())
                 .levelLabel(Objects.isNull(level) ? null : labelOf(level))
                 .cycle(Objects.isNull(level) ? null : level.getCycle())
