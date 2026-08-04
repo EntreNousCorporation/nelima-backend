@@ -5,7 +5,10 @@ import com.ypyit.neoelima.domain.payment.dto.PaymentQuoteDto;
 import com.ypyit.neoelima.domain.payment.dto.ReceiptDto;
 import com.ypyit.neoelima.domain.payment.form.OfflineCollectionForm;
 import com.ypyit.neoelima.domain.payment.mapper.ReceiptMapper;
+import com.ypyit.neoelima.domain.payment.dto.TransactionDto;
+import com.ypyit.neoelima.domain.payment.dto.TransactionSummaryDto;
 import com.ypyit.neoelima.domain.payment.service.OfflineCollectionService;
+import com.ypyit.neoelima.domain.payment.service.TransactionService;
 import com.ypyit.neoelima.domain.payment.service.OnlinePaymentService;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
@@ -22,7 +25,9 @@ import org.springframework.web.bind.annotation.RestController;
 import com.ypyit.neoelima.domain.payment.dto.PaymentChannelDto;
 import com.ypyit.neoelima.domain.payment.service.PaymentChannelCatalogue;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.RequestParam;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -35,6 +40,7 @@ public class PaymentController {
     private final OfflineCollectionService offlineCollectionService;
     private final ReceiptMapper receiptMapper;
     private final PaymentChannelCatalogue paymentChannelCatalogue;
+    private final TransactionService transactionService;
 
     @PostMapping(value = "/installments/{installmentId}/online", produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "Démarre le règlement en ligne d'une tranche",
@@ -64,6 +70,26 @@ public class PaymentController {
                     + "transmis tel quel à l'agrégateur lors de l'initiation.")
     public ResponseEntity<List<PaymentChannelDto>> channels() {
         return ResponseEntity.ok(this.paymentChannelCatalogue.available());
+    }
+
+    @GetMapping(value = "/transactions", produces = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAuthority('accounting:read')")
+    @Operation(summary = "Tentatives de paiement de l'établissement, pour le rapprochement",
+            description = "Une opération réussie sans reçu émis est à réconcilier : l'argent est "
+                    + "arrivé mais la comptabilité de l'école est incomplète.")
+    public ResponseEntity<List<TransactionDto>> transactions(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return ResponseEntity.ok(this.transactionService.findAll(from, to));
+    }
+
+    @GetMapping(value = "/transactions/summary", produces = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAuthority('accounting:read')")
+    @Operation(summary = "Encaissé net, à réconcilier, en attente opérateur et frais collectés")
+    public ResponseEntity<TransactionSummaryDto> transactionsSummary(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return ResponseEntity.ok(this.transactionService.summarize(from, to));
     }
 
     @PostMapping(value = "/offline", consumes = MediaType.APPLICATION_JSON_VALUE,

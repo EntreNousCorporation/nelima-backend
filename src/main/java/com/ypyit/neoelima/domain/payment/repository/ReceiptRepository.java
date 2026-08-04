@@ -14,5 +14,8 @@ public interface ReceiptRepository extends JpaRepository<ReceiptEntity, UUID>,
 
     Optional<ReceiptEntity> findByPaymentIntent_Id(UUID paymentIntentId);
 
+    /** Reçus de plusieurs tentatives, pour éviter une requête par ligne sur l'écran de rapprochement. */
+    java.util.List<ReceiptEntity> findByPaymentIntent_IdIn(java.util.Collection<UUID> paymentIntentIds);
+
     boolean existsByEstablishment_IdAndSequenceNumber(UUID establishmentId, Long sequenceNumber);
 }
