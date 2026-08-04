@@ -83,6 +83,26 @@ public class CurrentUserProvider {
     }
 
     /**
+     * Vrai quand le rôle de l'appelant porte cette permission.
+     *
+     * <p>Les permissions arrivent comme autorités Spring depuis {@code UserEntity.getAuthorities()},
+     * qui projette les codes portés par le rôle. Un admin YPYit passe toujours : ses accès se
+     * jouent au niveau du filtre de sécurité, pas au niveau du rôle d'établissement.
+     *
+     * <p>Sert aux décisions qui ne se prennent pas à l'entrée du contrôleur — masquer un champ dans
+     * une réponse plutôt que refuser l'appel entier. Pour refuser l'appel, préférer
+     * {@code @PreAuthorize("hasAuthority('…')")}, qui le dit à la lecture de la signature.
+     */
+    public boolean hasPermission(String code) {
+        UserEntity user = this.currentUser();
+        if (user instanceof AdminUserEntity) {
+            return true;
+        }
+        return user.getAuthorities().stream()
+                .anyMatch(authority -> code.equals(authority.getAuthority()));
+    }
+
+    /**
      * Vérifie que l'appelant a le droit de consulter cet élève : admin YPYit, membre de
      * l'établissement de l'élève, ou tuteur rattaché.
      */

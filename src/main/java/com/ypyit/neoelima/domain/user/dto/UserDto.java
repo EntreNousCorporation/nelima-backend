@@ -37,4 +37,15 @@ public class UserDto extends BaseDto {
     private UUID establishmentId;
 
     private String establishmentName;
+
+    /** Code du rôle porté par le compte. */
+    private String roleCode;
+
+    /**
+     * Permissions du rôle, pour que le portail sache quoi proposer.
+     *
+     * <p>Confort d'affichage seulement : cacher un bouton n'interdit rien. Le refus réel se joue
+     * côté serveur, sur les {@code @PreAuthorize} et sur les champs omis des réponses.
+     */
+    private Set<String> permissions;
 }

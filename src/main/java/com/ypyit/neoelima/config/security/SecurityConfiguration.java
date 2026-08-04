@@ -15,6 +15,7 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -45,6 +46,7 @@ import static com.ypyit.neoelima.domain.utils.SecurityUtils.USER_PUT_RESOURCES;
 
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
 @RequiredArgsConstructor
 public class SecurityConfiguration {
 
@@ -59,9 +61,9 @@ public class SecurityConfiguration {
     /**
      * Réserve l'accès à l'équipe YPYit.
      *
-     * <p>On s'appuie sur le type d'utilisateur et non sur une autorité portée par le jeton : les
-     * rôles seedés n'ont aujourd'hui aucune permission associée, un {@code hasAuthority} ne
-     * protégerait donc rien du tout.
+     * <p>On s'appuie sur le type d'utilisateur et non sur une autorité : l'appartenance à YPYit
+     * n'est pas une permission qu'un rôle d'établissement pourrait porter, c'est une autre nature
+     * de compte. Les permissions, elles, découpent les droits <em>au sein</em> d'une école.
      */
     private AuthorizationManager<RequestAuthorizationContext> platformAdminOnly() {
         return (authentication, context) -> {

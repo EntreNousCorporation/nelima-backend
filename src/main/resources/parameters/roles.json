@@ -13,7 +13,49 @@
       "fr": "Administrateur d'établissement",
       "en": "Establishment administrator"
     },
-    "permissions": []
+    "permissions": [
+      { "code": "staff:read" },
+      { "code": "staff:write" },
+      { "code": "staff:read_salary" },
+      { "code": "attendance:write" },
+      { "code": "user_access:write" }
+    ]
+  },
+  {
+    "code": "DIRECTEUR",
+    "name": {
+      "fr": "Directeur",
+      "en": "Head of school"
+    },
+    "permissions": [
+      { "code": "staff:read" },
+      { "code": "staff:write" },
+      { "code": "staff:read_salary" },
+      { "code": "attendance:write" },
+      { "code": "user_access:write" }
+    ]
+  },
+  {
+    "code": "COMPTABLE",
+    "name": {
+      "fr": "Comptable",
+      "en": "Accountant"
+    },
+    "permissions": [
+      { "code": "staff:read" },
+      { "code": "staff:read_salary" }
+    ]
+  },
+  {
+    "code": "SECRETARIAT",
+    "name": {
+      "fr": "Secrétariat",
+      "en": "Registrar"
+    },
+    "permissions": [
+      { "code": "staff:read" },
+      { "code": "attendance:write" }
+    ]
   },
   {
     "code": "STUDENT_PARENT",

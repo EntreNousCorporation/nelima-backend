@@ -1,16 +1,37 @@
 [
   {
-    "code": "farm_owner",
+    "code": "staff:read",
     "name": {
-      "fr": "Propriétaire de ferme",
-      "en": "Farm owner"
+      "fr": "Consulter le personnel",
+      "en": "Read staff"
     }
   },
   {
+    "code": "staff:write",
     "name": {
-      "fr": "Propriétaire de boutiue",
-      "en": "Store owner"
-    },
-    "code": "store_owner"
+      "fr": "Gérer le personnel",
+      "en": "Manage staff"
+    }
+  },
+  {
+    "code": "staff:read_salary",
+    "name": {
+      "fr": "Consulter les salaires",
+      "en": "Read salaries"
+    }
+  },
+  {
+    "code": "attendance:write",
+    "name": {
+      "fr": "Pointer le personnel",
+      "en": "Record staff attendance"
+    }
+  },
+  {
+    "code": "user_access:write",
+    "name": {
+      "fr": "Ouvrir un accès au portail",
+      "en": "Grant portal access"
+    }
   }
 ]
