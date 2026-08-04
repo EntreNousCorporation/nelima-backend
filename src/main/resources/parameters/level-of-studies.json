@@ -1,6 +1,7 @@
 [
   {
     "code": "PETITE_SECTION",
+    "cycle": "KINDERGARTEN",
     "name": {
       "fr": "Petite Section",
       "en": "Petite Section"
@@ -11,6 +12,7 @@
   },
   {
     "code": "MOYENNE_SECTION",
+    "cycle": "KINDERGARTEN",
     "name": {
       "fr": "Moyenne Section",
       "en": "Moyenne Section"
@@ -21,6 +23,7 @@
   },
   {
     "code": "GRANDE_SECTION",
+    "cycle": "KINDERGARTEN",
     "name": {
       "fr": "Grande Section",
       "en": "Grande Section"
@@ -31,6 +34,7 @@
   },
   {
     "code": "CP1",
+    "cycle": "PRIMARY",
     "name": {
       "fr": "CP1",
       "en": "CP1"
@@ -41,6 +45,7 @@
   },
   {
     "code": "CP2",
+    "cycle": "PRIMARY",
     "name": {
       "fr": "CP2",
       "en": "CP2"
@@ -51,6 +56,7 @@
   },
   {
     "code": "CE1",
+    "cycle": "PRIMARY",
     "name": {
       "fr": "CE1",
       "en": "CE1"
@@ -61,6 +67,7 @@
   },
   {
     "code": "CE2",
+    "cycle": "PRIMARY",
     "name": {
       "fr": "CE2",
       "en": "CE2"
@@ -71,6 +78,7 @@
   },
   {
     "code": "CM1",
+    "cycle": "PRIMARY",
     "name": {
       "fr": "CM1",
       "en": "CM1"
@@ -81,6 +89,7 @@
   },
   {
     "code": "CM2",
+    "cycle": "PRIMARY",
     "name": {
       "fr": "CM2",
       "en": "CM2"
@@ -91,6 +100,7 @@
   },
   {
     "code": "SIXIEME",
+    "cycle": "MIDDLE_SCHOOL",
     "name": {
       "fr": "6 em",
       "en": "6 em"
@@ -101,6 +111,7 @@
   },
   {
     "code": "CINQUIEME",
+    "cycle": "MIDDLE_SCHOOL",
     "name": {
       "fr": "5 em",
       "en": "5 em"
@@ -111,6 +122,7 @@
   },
   {
     "code": "QUATRIEME",
+    "cycle": "MIDDLE_SCHOOL",
     "name": {
       "fr": "4 em",
       "en": "4 em"
@@ -121,6 +133,7 @@
   },
   {
     "code": "TROISIEME",
+    "cycle": "MIDDLE_SCHOOL",
     "name": {
       "fr": "3 em",
       "en": "3 em"
@@ -131,6 +144,7 @@
   },
   {
     "code": "SECONDE",
+    "cycle": "HIGH_SCHOOL",
     "name": {
       "fr": "Seconde",
       "en": "Seconde"
@@ -141,6 +155,7 @@
   },
   {
     "code": "PREMIERE",
+    "cycle": "HIGH_SCHOOL",
     "name": {
       "fr": "Première",
       "en": "Première"
@@ -151,6 +166,7 @@
   },
   {
     "code": "TERMINALE",
+    "cycle": "HIGH_SCHOOL",
     "name": {
       "fr": "Terminale",
       "en": "Terminale"

@@ -2,6 +2,7 @@ package com.ypyit.neoelima.config;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.ypyit.neoelima.domain.establishment.entity.LevelOfStudyEntity;
+import com.ypyit.neoelima.domain.establishment.enums.EducationCycle;
 import com.ypyit.neoelima.domain.establishment.repository.LevelOfStudyRepository;
 import com.ypyit.neoelima.domain.transverse.entity.GlobalParameterEntity;
 import com.ypyit.neoelima.domain.transverse.repository.GlobalParameterRepository;
@@ -245,6 +246,9 @@ public class InitParameter implements CommandLineRunner {
             String previous = node.get("previous").asText().trim();
             String next = node.get("next").asText().trim();
             int position = node.get("position").asInt();
+            // Le cycle vient du catalogue et non de la seule migration : sur une base neuve, les
+            // niveaux sont créés ici, après le backfill, et repartiraient sans cycle.
+            EducationCycle cycle = EducationCycle.valueOf(node.get("cycle").asText().trim());
             Optional<LevelOfStudyEntity> levelOfStudy = Optional.empty();
             try {
                 levelOfStudy = this.levelOfStudyRepository.findByCode(code);
@@ -255,6 +259,7 @@ public class InitParameter implements CommandLineRunner {
             TranslateEntity translate = this.translateMapper.toEntity(translateDTO);
             if (levelOfStudy.isPresent()) {
                 levelOfStudy.get().setName(translate);
+                levelOfStudy.get().setCycle(cycle);
             } else {
                 levelOfStudy = Optional.of(LevelOfStudyEntity.builder()
                         .code(code)
@@ -262,6 +267,7 @@ public class InitParameter implements CommandLineRunner {
                         .previous(previous)
                         .position(position)
                         .next(next)
+                        .cycle(cycle)
                         .build());
             }
             levelOfStudies.add(levelOfStudy.get());

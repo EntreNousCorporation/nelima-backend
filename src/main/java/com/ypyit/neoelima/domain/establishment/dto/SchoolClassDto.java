@@ -1,5 +1,6 @@
 package com.ypyit.neoelima.domain.establishment.dto;
 
+import com.ypyit.neoelima.domain.establishment.enums.EducationCycle;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
@@ -25,6 +26,7 @@ public class SchoolClassDto {
     private String mainTeacherName;
     private String levelCode;
     private String levelLabel;
+    private EducationCycle cycle;
 
     private long studentCount;
 

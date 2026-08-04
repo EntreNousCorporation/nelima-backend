@@ -259,6 +259,7 @@ public class SchoolClassService {
                 .mainTeacherName(entity.getMainTeacherName())
                 .levelCode(Objects.isNull(level) ? null : level.getCode())
                 .levelLabel(Objects.isNull(level) ? null : labelOf(level))
+                .cycle(Objects.isNull(level) ? null : level.getCycle())
                 .studentCount(studentCount)
                 .outstandingAmount(outstanding)
                 .collectedAmount(collected)

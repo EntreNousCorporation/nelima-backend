@@ -1,5 +1,6 @@
 package com.ypyit.neoelima.domain.establishment.dto;
 
+import com.ypyit.neoelima.domain.establishment.enums.EducationCycle;
 import com.ypyit.neoelima.domain.user.dto.TranslateDto;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -22,4 +23,5 @@ public class LevelOfStudyDto {
     private String previous;
     private String next;
     private TranslateDto name;
+    private EducationCycle cycle;
 }
