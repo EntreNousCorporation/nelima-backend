@@ -8,6 +8,7 @@ import com.ypyit.neoelima.domain.establishment.repository.StudentRepository;
 import com.ypyit.neoelima.domain.payment.entity.PaymentIntentEntity;
 import com.ypyit.neoelima.domain.payment.entity.QReceiptEntity;
 import com.ypyit.neoelima.domain.payment.entity.ReceiptEntity;
+import com.ypyit.neoelima.domain.payment.enums.PaymentChannel;
 import com.ypyit.neoelima.domain.payment.repository.ReceiptRepository;
 import com.ypyit.neoelima.domain.user.entity.UserEntity;
 import lombok.RequiredArgsConstructor;
@@ -16,6 +17,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -40,8 +42,40 @@ public class ReceiptService {
     private final CurrentUserProvider currentUserProvider;
 
     public Page<ReceiptEntity> search(UUID requestedEstablishmentId, Pageable pageable) {
+        return this.search(requestedEstablishmentId, null, null, null, null, pageable);
+    }
+
+    /**
+     * Reçus visibles par l'appelant, éventuellement bornés dans le temps.
+     *
+     * <p>Les bornes servent le journal de caisse : l'école clôture sa journée sur les reçus émis
+     * entre deux instants. Filtrer côté client aurait supposé que la journée tienne dans la page
+     * demandée, ce qui cesse d'être vrai dès qu'un établissement encaisse normalement.
+     */
+    public Page<ReceiptEntity> search(UUID requestedEstablishmentId, Instant issuedFrom,
+                                      Instant issuedTo, PaymentChannel channel, String keyword,
+                                      Pageable pageable) {
         BooleanBuilder builder = new BooleanBuilder();
         QReceiptEntity receipt = QReceiptEntity.receiptEntity;
+
+        if (Objects.nonNull(issuedFrom)) {
+            builder.and(receipt.issuedAt.goe(issuedFrom));
+        }
+        if (Objects.nonNull(issuedTo)) {
+            builder.and(receipt.issuedAt.lt(issuedTo));
+        }
+        if (Objects.nonNull(channel)) {
+            builder.and(receipt.channel.eq(channel));
+        }
+        // Le tri est fait par le serveur pour la même raison que les bornes : chercher dans la
+        // page affichée aurait rendu « aucun résultat » sur un reçu qui existe deux pages plus loin.
+        if (Objects.nonNull(keyword) && !keyword.isBlank()) {
+            String term = keyword.trim();
+            builder.and(receipt.number.containsIgnoreCase(term)
+                    .or(receipt.studentLabel.containsIgnoreCase(term))
+                    .or(receipt.studentRegistrationNumber.containsIgnoreCase(term))
+                    .or(receipt.payerLabel.containsIgnoreCase(term)));
+        }
 
         if (this.currentUserProvider.hasEstablishmentScope()) {
             UUID scope = this.currentUserProvider.resolveEstablishmentScope(requestedEstablishmentId);

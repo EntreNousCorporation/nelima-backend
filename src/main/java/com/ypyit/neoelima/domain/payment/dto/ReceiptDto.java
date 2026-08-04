@@ -1,6 +1,7 @@
 package com.ypyit.neoelima.domain.payment.dto;
 
 import com.ypyit.neoelima.common.dto.BaseDto;
+import com.ypyit.neoelima.domain.payment.enums.PaymentChannel;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -23,4 +24,5 @@ public class ReceiptDto extends BaseDto {
     private String studentLabel;
     private String studentRegistrationNumber;
     private String payerLabel;
+    private PaymentChannel channel;
 }

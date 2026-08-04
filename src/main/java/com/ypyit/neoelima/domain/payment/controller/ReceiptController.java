@@ -1,6 +1,7 @@
 package com.ypyit.neoelima.domain.payment.controller;
 
 import com.ypyit.neoelima.domain.payment.dto.ReceiptDto;
+import com.ypyit.neoelima.domain.payment.enums.PaymentChannel;
 import com.ypyit.neoelima.domain.payment.mapper.ReceiptMapper;
 import com.ypyit.neoelima.domain.payment.service.ReceiptPdfRenderer;
 import com.ypyit.neoelima.domain.payment.service.ReceiptService;
@@ -19,8 +20,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.Instant;
 import java.util.UUID;
 
 @RestController
@@ -35,9 +38,13 @@ public class ReceiptController {
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "Reçus émis par l'établissement, du plus récent au plus ancien")
     public ResponseEntity<Page<ReceiptDto>> search(
+            @RequestParam(required = false) Instant issuedFrom,
+            @RequestParam(required = false) Instant issuedTo,
+            @RequestParam(required = false) PaymentChannel channel,
+            @RequestParam(required = false) String keyword,
             @PageableDefault(size = 50, sort = "sequenceNumber", direction = Sort.Direction.DESC)
             @ParameterObject Pageable pageable) {
-        var result = this.receiptService.search(null, pageable);
+        var result = this.receiptService.search(null, issuedFrom, issuedTo, channel, keyword, pageable);
         return ResponseEntity.ok(new PageImpl<>(
                 this.receiptMapper.toDtos(result.getContent()), pageable, result.getTotalElements()));
     }

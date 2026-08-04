@@ -62,6 +62,7 @@ public class ReceiptIssuer {
                 .studentLabel(fullNameOf(student))
                 .studentRegistrationNumber(student.getRegistrationNumber())
                 .payerLabel(payerLabelOf(paymentIntent))
+                .channel(paymentIntent.getChannel())
                 .build());
 
         log.info("RECEIPT_ISSUED: receipt {} for installment {} of establishment {}",

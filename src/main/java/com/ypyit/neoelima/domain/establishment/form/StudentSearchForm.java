@@ -19,5 +19,13 @@ import java.util.UUID;
 public class StudentSearchForm {
 
     private Set<String> levelOfStudies;
+
+    /**
+     * Texte libre : matricule, nom ou prénom, indifféremment.
+     *
+     * <p>Un champ par colonne obligerait le secrétariat à savoir dans lequel taper ; il tape ce
+     * qu'il a sous les yeux, souvent le matricule d'un carnet.
+     */
+    private String keyword;
     private UUID establishmentId;
 }

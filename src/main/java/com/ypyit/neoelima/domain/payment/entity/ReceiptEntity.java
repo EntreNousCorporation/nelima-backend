@@ -3,8 +3,11 @@ package com.ypyit.neoelima.domain.payment.entity;
 import com.querydsl.core.annotations.QueryInit;
 import com.ypyit.neoelima.common.entity.BaseEntity;
 import com.ypyit.neoelima.domain.establishment.entity.EstablishmentEntity;
+import com.ypyit.neoelima.domain.payment.enums.PaymentChannel;
 import jakarta.persistence.Column;
+import jakarta.persistence.EnumType;
 import jakarta.persistence.Entity;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
@@ -68,6 +71,16 @@ public class ReceiptEntity extends BaseEntity {
     private String studentRegistrationNumber;
 
     private String payerLabel;
+
+    /**
+     * Mode de règlement, recopié depuis la tentative de paiement à l'émission.
+     *
+     * <p>Le lire à travers {@code paymentIntent} coûterait une requête par ligne du journal de
+     * caisse, la relation étant paresseuse à dessein. Un reçu fige déjà ce qu'il affiche.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 32)
+    private PaymentChannel channel;
 
     /**
      * Chargement paresseux volontaire. Un reçu porte déjà les libellés dont il a besoin, recopiés

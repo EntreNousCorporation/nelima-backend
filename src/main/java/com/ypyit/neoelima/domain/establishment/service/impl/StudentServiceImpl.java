@@ -142,6 +142,12 @@ public class StudentServiceImpl implements StudentService {
             if (Objects.nonNull(establishmentScope)) {
                 builder.and(student.establishment.id.eq(establishmentScope));
             }
+            if (StringUtils.isNotBlank(searchForm.getKeyword())) {
+                String keyword = searchForm.getKeyword().trim();
+                builder.and(student.registrationNumber.containsIgnoreCase(keyword)
+                        .or(student.firstName.containsIgnoreCase(keyword))
+                        .or(student.lastName.containsIgnoreCase(keyword)));
+            }
             List<Predicate> levelOfStudies = new ArrayList<>();
             if (CollectionUtils.isNotEmpty(searchForm.getLevelOfStudies())) {
                 searchForm.getLevelOfStudies().forEach(levelOfStudy -> levelOfStudies
