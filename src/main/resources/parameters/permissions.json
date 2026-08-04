@@ -103,5 +103,19 @@
       "fr": "Gérer les activités et les inscriptions",
       "en": "Manage activities and enrolments"
     }
+  },
+  {
+    "code": "calendar:read",
+    "name": {
+      "fr": "Consulter le calendrier",
+      "en": "Read the calendar"
+    }
+  },
+  {
+    "code": "calendar:write",
+    "name": {
+      "fr": "Gérer les événements du calendrier",
+      "en": "Manage calendar events"
+    }
   }
 ]

@@ -56,7 +56,8 @@ class ParentRouteOpennessTest extends AbstractIntegrationTest {
             "GET /level-of-studies",
             "GET /activities/open",
             "POST /activities/{id}/enrollments/mine",
-            "DELETE /activities/{id}/enrollments/mine/{studentId}");
+            "DELETE /activities/{id}/enrollments/mine/{studentId}",
+            "GET /calendar/mine");
 
     /**
      * Le mapping des contrôleurs applicatifs.

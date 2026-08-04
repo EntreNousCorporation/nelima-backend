@@ -24,4 +24,8 @@ public interface StudentRepository extends JpaRepository<StudentEntity, UUID>, Q
     Page<StudentEntity> findAllByEstablishment_Id(UUID establishmentId, Pageable pageable);
 
     List<StudentEntity> findByParentUsers_Id(UUID parentId);
+
+    List<StudentEntity> findByEstablishment_Id(UUID establishmentId);
+
+    List<StudentEntity> findBySchoolClass_Id(UUID schoolClassId);
 }
