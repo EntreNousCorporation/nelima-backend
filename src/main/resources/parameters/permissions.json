@@ -89,5 +89,19 @@
       "fr": "Exporter le journal comptable",
       "en": "Export the accounting journal"
     }
+  },
+  {
+    "code": "activity:read",
+    "name": {
+      "fr": "Consulter les activités",
+      "en": "Read activities"
+    }
+  },
+  {
+    "code": "activity:write",
+    "name": {
+      "fr": "Gérer les activités et les inscriptions",
+      "en": "Manage activities and enrolments"
+    }
   }
 ]

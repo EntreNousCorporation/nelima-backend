@@ -20,4 +20,14 @@ public interface InstallmentRepository extends JpaRepository<InstallmentEntity, 
 
     /** Tranches encore dues à une échéance donnée. Base du rappel aux familles. */
     List<InstallmentEntity> findByStatusAndDueDate(InstallmentStatus status, LocalDate dueDate);
+
+    List<InstallmentEntity> findByStudentFee_Id(UUID studentFeeId);
+
+    /**
+     * Vrai dès qu'une tranche de cette dette a été réglée.
+     *
+     * <p>Commande le refus d'annuler une inscription à une activité : les remboursements sont hors
+     * V1, annuler laisserait un encaissement sans contrepartie.
+     */
+    boolean existsByStudentFee_IdAndStatus(UUID studentFeeId, InstallmentStatus status);
 }
