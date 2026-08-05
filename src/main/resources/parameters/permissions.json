@@ -117,5 +117,12 @@
       "fr": "Gérer les événements du calendrier",
       "en": "Manage calendar events"
     }
+  },
+  {
+    "code": "reminder:write",
+    "name": {
+      "fr": "Lancer une campagne de relance",
+      "en": "Send reminder campaigns"
+    }
   }
 ]

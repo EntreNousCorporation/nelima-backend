@@ -37,6 +37,15 @@ public interface InstallmentRepository extends JpaRepository<InstallmentEntity, 
             UUID studentId, LocalDate from, LocalDate to);
 
     /**
+     * Tranches encore dues d'un établissement, échéance renseignée.
+     *
+     * <p>Base du ciblage des relances : c'est sur cette liste qu'on filtre par ancienneté du
+     * retard. Une tranche sans échéance ne peut être ni en retard ni proche, elle est écartée.
+     */
+    List<InstallmentEntity> findByStudentFee_Student_Establishment_IdAndStatusAndDueDateNotNull(
+            UUID establishmentId, InstallmentStatus status);
+
+    /**
      * Vrai dès qu'une tranche de cette dette a été réglée.
      *
      * <p>Commande le refus d'annuler une inscription à une activité : les remboursements sont hors

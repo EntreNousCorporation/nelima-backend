@@ -1,5 +1,6 @@
 package com.ypyit.neoelima.domain.establishment.service;
 
+import com.ypyit.neoelima.common.utils.XofFormat;
 import com.ypyit.neoelima.domain.establishment.entity.InstallmentEntity;
 import com.ypyit.neoelima.domain.establishment.entity.StudentEntity;
 import com.ypyit.neoelima.domain.establishment.enums.InstallmentStatus;
@@ -12,8 +13,6 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -88,16 +87,9 @@ public class InstallmentReminderJob {
                 ReminderOrigin.AUTOMATIC, null,
                 daysBefore <= 1 ? "Échéance demain" : "Échéance dans " + daysBefore + " jours",
                 String.format("%s à régler pour l'élève %s avant le %s.",
-                        formatXof(installment.getAmount()),
+                        XofFormat.format(installment.getAmount()),
                         Objects.toString(student.getRegistrationNumber(), "—"),
                         installment.getDueDate().format(DAY)));
     }
 
-    private static String formatXof(BigDecimal amount) {
-        if (Objects.isNull(amount)) {
-            return "0 FCFA";
-        }
-        return String.format("%,d FCFA", amount.setScale(0, RoundingMode.HALF_UP).longValue())
-                .replace(',', ' ');
-    }
 }
