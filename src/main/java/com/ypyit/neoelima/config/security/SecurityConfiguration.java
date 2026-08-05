@@ -36,6 +36,7 @@ import java.util.List;
 import static com.ypyit.neoelima.domain.utils.SecurityUtils.AUTH_RESOURCES;
 import static com.ypyit.neoelima.domain.utils.SecurityUtils.PAYMENT_ADMIN_RESOURCES;
 import static com.ypyit.neoelima.domain.utils.SecurityUtils.PLATFORM_CONSOLE_RESOURCES;
+import static com.ypyit.neoelima.domain.utils.SecurityUtils.PLATFORM_ONBOARDING_RESOURCES;
 import static com.ypyit.neoelima.domain.utils.SecurityUtils.PLATFORM_SETTINGS_WRITE_RESOURCES;
 import static com.ypyit.neoelima.domain.utils.SecurityUtils.PAYMENT_WEBHOOK_RESOURCES;
 import static com.ypyit.neoelima.domain.utils.SecurityUtils.GLOBAL_RESOURCES;
@@ -115,6 +116,9 @@ public class SecurityConfiguration {
                             // basculer le provider actif. Le starter ne les protège pas.
                             .requestMatchers(PAYMENT_ADMIN_RESOURCES).access(platformAdminOnly())
                             .requestMatchers(HttpMethod.GET, PLATFORM_CONSOLE_RESOURCES).access(platformAdminOnly())
+                            // Création d'écoles : l'onboarding est le métier de YPYit. La lecture
+                            // de la liste reste ouverte, l'application parent en dépend.
+                            .requestMatchers(HttpMethod.POST, PLATFORM_ONBOARDING_RESOURCES).access(platformAdminOnly())
                             .requestMatchers(HttpMethod.PUT, PLATFORM_SETTINGS_WRITE_RESOURCES).access(platformAdminOnly())
                             .requestMatchers(HttpMethod.POST, PLATFORM_SETTINGS_WRITE_RESOURCES).access(platformAdminOnly())
                             .requestMatchers(HttpMethod.DELETE, PLATFORM_SETTINGS_WRITE_RESOURCES).access(platformAdminOnly())

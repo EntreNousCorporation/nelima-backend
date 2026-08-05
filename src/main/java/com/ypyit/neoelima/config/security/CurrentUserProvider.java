@@ -103,6 +103,29 @@ public class CurrentUserProvider {
     }
 
     /**
+     * Vérifie que l'appelant a le droit d'agir sur cet établissement.
+     *
+     * <p>Un admin YPYit passe partout. Un utilisateur d'établissement ne passe que sur le sien. Un
+     * parent ne passe nulle part : il n'administre aucune école.
+     *
+     * <p>Sans ce contrôle, l'identifiant reçu dans l'URL suffisait à écrire chez une autre école —
+     * modifier son identité, y créer un compte, lire la liste de ses élèves. Le fait d'être
+     * authentifié ne dit rien de l'école à laquelle on appartient.
+     */
+    public void assertCanAdministerEstablishment(UUID establishmentId) {
+        UserEntity user = this.currentUser();
+        if (user instanceof AdminUserEntity) {
+            return;
+        }
+        UUID own = establishmentIdOf(user).orElseThrow(() -> new AccessDeniedException(
+                "User is not attached to an establishment"));
+        if (!own.equals(establishmentId)) {
+            throw new AccessDeniedException(String.format(
+                    "User is not allowed to administer establishment %s", establishmentId));
+        }
+    }
+
+    /**
      * Vérifie que l'appelant a le droit de consulter cet élève : admin YPYit, membre de
      * l'établissement de l'élève, ou tuteur rattaché.
      */

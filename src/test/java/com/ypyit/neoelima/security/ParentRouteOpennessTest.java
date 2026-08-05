@@ -57,7 +57,11 @@ class ParentRouteOpennessTest extends AbstractIntegrationTest {
             "GET /activities/open",
             "POST /activities/{id}/enrollments/mine",
             "DELETE /activities/{id}/enrollments/mine/{studentId}",
-            "GET /calendar/mine");
+            "GET /calendar/mine",
+            // L'application parent s'en sert pour rattacher un enfant à son école. La liste
+            // n'expose qu'un annuaire — nom, site, logo — mais la fermer casserait le
+            // rattachement, seul moyen pour une famille d'entrer dans le produit.
+            "GET /establishments");
 
     /**
      * Le mapping des contrôleurs applicatifs.

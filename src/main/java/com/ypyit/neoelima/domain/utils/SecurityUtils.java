@@ -51,6 +51,19 @@ public final class SecurityUtils {
             "/dashboard/platform"
     };
 
+    /**
+     * Création d'écoles et de leur compte d'amorçage. C'est l'onboarding, fait par YPYit depuis le
+     * back-office : ouvert à tout compte authentifié, il permettait à n'importe qui de créer un
+     * établissement, et à un parent de s'en fabriquer un.
+     *
+     * <p>La <em>liste</em> des établissements reste ouverte, elle : l'application parent s'en sert
+     * pour rattacher un enfant à son école, et elle n'expose qu'un annuaire — nom, site, logo.
+     */
+    public static final String[] PLATFORM_ONBOARDING_RESOURCES = new String[]{
+            "/establishments",
+            "/establishments/subsidiaries"
+    };
+
     public static final String[] USER_POST_RESOURCES = new String[]{
             "/users/init-reset-password",
             "/users/mobile/init-reset-password",
