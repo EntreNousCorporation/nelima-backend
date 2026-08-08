@@ -27,6 +27,7 @@ import com.ypyit.neoelima.domain.establishment.repository.LevelOfStudyRepository
 import com.ypyit.neoelima.domain.establishment.repository.StudentFeeRepository;
 import com.ypyit.neoelima.domain.establishment.repository.StudentRepository;
 import com.ypyit.neoelima.domain.establishment.service.StudentService;
+import com.ypyit.neoelima.domain.establishment.service.TutorContactPrivacy;
 import com.ypyit.neoelima.domain.storage.dto.StorageDto;
 import com.ypyit.neoelima.domain.storage.form.StorageCreationForm;
 import com.ypyit.neoelima.domain.storage.mapper.StorageMapper;
@@ -72,6 +73,14 @@ import static com.ypyit.neoelima.domain.utils.StorageUtils.STUDENT_FIRST_NAME;
 import static com.ypyit.neoelima.domain.utils.StorageUtils.STUDENT_LAST_NAME;
 import static com.ypyit.neoelima.domain.utils.StorageUtils.STUDENT_LEVEL_OF_STUDY;
 import static com.ypyit.neoelima.domain.utils.StorageUtils.STUDENT_REGISTRATION_NUMBER;
+import java.util.Map;
+import java.util.HashMap;
+import java.math.BigDecimal;
+import com.ypyit.neoelima.domain.establishment.enums.InstallmentStatus;
+import com.ypyit.neoelima.domain.establishment.entity.QStudentFeeEntity;
+import com.ypyit.neoelima.domain.establishment.entity.QInstallmentEntity;
+import com.querydsl.jpa.impl.JPAQueryFactory;
+import com.querydsl.core.types.dsl.CaseBuilder;
 
 @Slf4j
 @Service
@@ -89,6 +98,7 @@ public class StudentServiceImpl implements StudentService {
     private final FeeRepository feeRepository;
     private final StudentFeeRepository studentFeeRepository;
     private final CurrentUserProvider currentUserProvider;
+    private final JPAQueryFactory queryFactory;
 
     @Override
     public StudentDto findByEstablishment(EstablishmentStudentSearchForm searchForm) throws BusinessException {
@@ -118,7 +128,11 @@ public class StudentServiceImpl implements StudentService {
                 throw new NonUniqueUserFoundException("Multiple users found");
             }
 
-            return this.studentMapper.toDto(students.get(0));
+            // Recherche de rattachement, atteinte par un parent avant de rattacher : elle rend la
+            // fiche complète, tuteurs compris. On masque les coordonnées des co-tuteurs — un parent
+            // n'a pas à lire le téléphone de l'autre. Le personnel de l'école passe par d'autres
+            // routes, qui gardent la fiche entière.
+            return TutorContactPrivacy.hide(this.studentMapper.toDto(students.get(0)));
         } catch (NotFoundException | NonUniqueUserFoundException | AccessDeniedException e) {
             throw e;
         } catch (Exception e) {
@@ -165,11 +179,53 @@ public class StudentServiceImpl implements StudentService {
             Page<StudentEntity> result = this.studentRepository.findAll(builder, pageable);
             List<StudentDto> response = result.get()
                     .map(this.studentMapper::toDto).collect(Collectors.toList());
+            this.attachBalances(response);
             return new PageImpl<>(response, pageable, result.getTotalElements());
         } catch (NotFoundException | NonUniqueUserFoundException | AccessDeniedException e) {
             throw e;
         } catch (Exception e) {
             throw new BusinessException(e);
+        }
+    }
+
+    /**
+     * Attache à chaque élève de la page ce qu'il doit, et la part déjà échue.
+     *
+     * <p>Une requête groupée pour toute la page, jamais une par ligne : sur une page de cent
+     * élèves, la seconde forme se remarque en production et pas avant.
+     */
+    private void attachBalances(List<StudentDto> students) {
+        List<UUID> ids = students.stream().map(StudentDto::getId)
+                .filter(Objects::nonNull).toList();
+        if (ids.isEmpty()) {
+            return;
+        }
+
+        QInstallmentEntity installment = QInstallmentEntity.installmentEntity;
+        QStudentFeeEntity studentFee = QStudentFeeEntity.studentFeeEntity;
+        QStudentEntity student = QStudentEntity.studentEntity;
+        LocalDate today = LocalDate.now();
+
+        Map<UUID, BigDecimal[]> balances = new HashMap<>();
+        this.queryFactory
+                .select(student.id, installment.amount.sum(),
+                        new CaseBuilder().when(installment.dueDate.before(today))
+                                .then(installment.amount).otherwise(BigDecimal.ZERO).sum())
+                .from(installment)
+                .join(installment.studentFee, studentFee)
+                .join(studentFee.student, student)
+                .where(student.id.in(ids), installment.status.eq(InstallmentStatus.PENDING))
+                .groupBy(student.id)
+                .fetch()
+                .forEach(row -> balances.put(row.get(student.id), new BigDecimal[]{
+                        Objects.requireNonNullElse(row.get(installment.amount.sum()), BigDecimal.ZERO),
+                        Objects.requireNonNullElse(row.get(2, BigDecimal.class), BigDecimal.ZERO)}));
+
+        for (StudentDto dto : students) {
+            BigDecimal[] found = balances.get(dto.getId());
+            // Zéro et non nul : la requête a bien porté sur cet élève, il ne doit simplement rien.
+            dto.setOutstandingAmount(found == null ? BigDecimal.ZERO : found[0]);
+            dto.setOverdueAmount(found == null ? BigDecimal.ZERO : found[1]);
         }
     }
 

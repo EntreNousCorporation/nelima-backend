@@ -3,8 +3,10 @@ package com.ypyit.neoelima.domain.establishment.service;
 import com.ypyit.neoelima.common.exception.BadRequestException;
 import com.ypyit.neoelima.common.exception.NotFoundException;
 import com.ypyit.neoelima.config.security.CurrentUserProvider;
+import com.ypyit.neoelima.domain.establishment.dto.StudentDto;
 import com.ypyit.neoelima.domain.establishment.entity.StudentEntity;
 import com.ypyit.neoelima.domain.establishment.form.StudentClaimForm;
+import com.ypyit.neoelima.domain.establishment.mapper.StudentMapper;
 import com.ypyit.neoelima.domain.establishment.repository.StudentRepository;
 import com.ypyit.neoelima.domain.user.entity.EstablishmentUserEntity;
 import com.ypyit.neoelima.domain.user.entity.UserEntity;
@@ -14,6 +16,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -34,6 +37,7 @@ public class StudentClaimService {
 
     private final StudentRepository studentRepository;
     private final CurrentUserProvider currentUserProvider;
+    private final StudentMapper studentMapper;
 
     @Transactional
     public StudentEntity claim(StudentClaimForm form) {
@@ -80,5 +84,22 @@ public class StudentClaimService {
     public java.util.List<StudentEntity> myChildren() {
         UserEntity claimant = this.currentUserProvider.currentUser();
         return this.studentRepository.findByParentUsers_Id(claimant.getId());
+    }
+
+    /**
+     * Les enfants du parent appelant, prêts pour l'application, coordonnées des co-tuteurs masquées.
+     *
+     * <p>Le mapping se fait ici, dans la transaction, et non dans le contrôleur : les collections
+     * {@code parentUsers} et leurs contacts sont chargées à la demande, session ouverte.
+     */
+    @Transactional(readOnly = true)
+    public List<StudentDto> myChildrenView() {
+        return TutorContactPrivacy.hideAll(this.studentMapper.toDtos(this.myChildren()));
+    }
+
+    /** Rattache puis rend l'élève prêt pour l'application, coordonnées des co-tuteurs masquées. */
+    @Transactional
+    public StudentDto claimView(StudentClaimForm form) {
+        return TutorContactPrivacy.hide(this.studentMapper.toDto(this.claim(form)));
     }
 }
