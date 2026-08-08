@@ -9,6 +9,7 @@ import com.ypyit.neoelima.domain.user.form.EstablishmentUserSignupForm;
 import com.ypyit.neoelima.domain.user.form.MobileUserSignupForm;
 import com.ypyit.neoelima.domain.user.form.UserSignupForm;
 import com.ypyit.neoelima.domain.user.form.UserUpdateForm;
+import com.ypyit.neoelima.domain.user.mapper.ContactMapper;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
@@ -16,7 +17,7 @@ import org.mapstruct.NullValueCheckStrategy;
 import org.mapstruct.NullValuePropertyMappingStrategy;
 import org.mapstruct.ReportingPolicy;
 
-@Mapper(componentModel = "spring", nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE, nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS, unmappedTargetPolicy = ReportingPolicy.IGNORE)
+@Mapper(componentModel = "spring", uses = ContactMapper.class, nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE, nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS, unmappedTargetPolicy = ReportingPolicy.IGNORE)
 public interface UserMapper {
 
 

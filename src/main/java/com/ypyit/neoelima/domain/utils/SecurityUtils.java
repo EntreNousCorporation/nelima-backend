@@ -52,6 +52,41 @@ public final class SecurityUtils {
     };
 
     /**
+     * Abonnements : formules, tarifs et factures que YPYit adresse à ses écoles clientes.
+     *
+     * <p>Liste distincte de {@link #PLATFORM_CONSOLE_RESOURCES}, et c'est délibéré : celle-ci n'est
+     * gardée qu'en lecture. Les routes d'abonnement écrivent aussi — fixer un tarif, émettre une
+     * facture, constater un règlement —, et les y ranger aurait laissé ces écritures retomber sur
+     * le simple « être authentifié ». C'est exactement le défaut qu'a connu {@code /establishments}.
+     */
+    /**
+     * Dépôt d'une demande de démonstration depuis le site vitrine.
+     *
+     * <p>Les seules routes ouvertes à tout venant en dehors des rappels de l'agrégateur : le dépôt
+     * d'une demande de démonstration, et la grille tarifaire publiée. Le
+     * préfixe {@code /public/} est là pour que cela se voie : une route ouverte qui ressemble aux
+     * autres finit par être déplacée sans qu'on y pense. Les garde-fous — pot de miel, plafonds par
+     * adresse et par heure — sont dans le service, pas ici.
+     */
+    public static final String[] PUBLIC_SITE_RESOURCES = new String[]{
+            "/public/**"
+    };
+
+    /**
+     * Demandes de démonstration, côté YPYit.
+     *
+     * <p>Sans verbe, donc toutes méthodes : une demande porte le nom d'un directeur, son téléphone
+     * et l'effectif qu'il annonce. Une école concurrente y lirait les prospects du marché.
+     */
+    public static final String[] PROSPECT_RESOURCES = new String[]{
+            "/prospects/**"
+    };
+
+    public static final String[] SUBSCRIPTION_RESOURCES = new String[]{
+            "/subscriptions/**"
+    };
+
+    /**
      * Création d'écoles et de leur compte d'amorçage. C'est l'onboarding, fait par YPYit depuis le
      * back-office : ouvert à tout compte authentifié, il permettait à n'importe qui de créer un
      * établissement, et à un parent de s'en fabriquer un.

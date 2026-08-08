@@ -46,6 +46,16 @@ public class CalendarEntryDto {
     /** Ce que l'entrée concerne : « Tout l'établissement », ou la liste des classes. */
     private String scope;
 
+    /**
+     * École dont vient l'entrée.
+     *
+     * <p>Inutile au portail, qui ne regarde jamais qu'un établissement à la fois. Indispensable à
+     * l'application parent : un parent dont les enfants sont dans deux écoles reçoit un fil mêlé,
+     * et sans ce champ il ne peut ni le trier ni savoir qui annonce quoi.
+     */
+    private String establishmentId;
+    private String establishmentName;
+
     @Builder.Default
     private List<SchoolClassLiteDto> classes = new ArrayList<>();
 

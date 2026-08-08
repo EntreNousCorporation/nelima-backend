@@ -1,8 +1,10 @@
 package com.ypyit.neoelima.domain.establishment.controller;
 
 import com.ypyit.neoelima.domain.establishment.dto.DashboardSummaryDto;
+import com.ypyit.neoelima.domain.establishment.dto.ParentSummaryDto;
 import com.ypyit.neoelima.domain.establishment.dto.PlatformOverviewDto;
 import com.ypyit.neoelima.domain.establishment.service.DashboardService;
+import com.ypyit.neoelima.domain.establishment.service.ParentDashboardService;
 import com.ypyit.neoelima.domain.establishment.service.PlatformOverviewService;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +24,7 @@ public class DashboardController {
 
     private final DashboardService dashboardService;
     private final PlatformOverviewService platformOverviewService;
+    private final ParentDashboardService parentDashboardService;
 
     @GetMapping(value = "/platform", produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "Agrégats du parc, réservés à l'équipe YPYit",
@@ -40,5 +43,22 @@ public class DashboardController {
     public ResponseEntity<DashboardSummaryDto> summary(
             @RequestParam(value = "establishmentId", required = false) UUID establishmentId) {
         return ResponseEntity.ok(this.dashboardService.summaryOf(establishmentId));
+    }
+
+    /**
+     * Chiffres d'accueil de l'application parent.
+     *
+     * <p><strong>Aucune permission ne doit être posée ici.</strong> Le rôle parent n'en porte
+     * aucune — son accès se vérifie enfant par enfant — et une annotation lui répondrait 403 sur le
+     * premier écran de l'application. {@code ParentRouteOpennessTest} le verrouille.
+     */
+    @GetMapping(value = "/parent", produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Chiffres d'accueil de la famille",
+            description = "Ce qu'il reste à régler ce mois-ci, la prochaine échéance et la ligne de "
+                    + "chaque enfant. La portée vient des enfants rattachés au compte, jamais d'un "
+                    + "paramètre. Les totaux sont agrégés en base : l'application n'en reçoit qu'un "
+                    + "extrait et les additionner elle-même donnerait des montants faux.")
+    public ResponseEntity<ParentSummaryDto> parent() {
+        return ResponseEntity.ok(this.parentDashboardService.summary());
     }
 }

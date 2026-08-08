@@ -43,6 +43,13 @@ class ParentRouteOpennessTest extends AbstractIntegrationTest {
     private static final List<String> PARENT_ROUTES = List.of(
             "GET /students",           // recherche d'un enfant par matricule et date de naissance
             "GET /students/mine",
+            // Le premier écran de l'application. Une permission ici et la famille ouvre le produit
+            // sur un 403, avant même d'avoir pu rattacher un enfant.
+            "GET /dashboard/parent",
+            // Le fil de notifications sert les deux publics sur la même route : le contenu est
+            // filtré dans le service, pas à l'entrée.
+            "GET /notifications",
+            "POST /notifications/seen",
             "POST /students/claim",
             "GET /students/{id}/fees",
             "GET /installments",
@@ -53,6 +60,9 @@ class ParentRouteOpennessTest extends AbstractIntegrationTest {
             "GET /payments/channels",
             "GET /payments/installments/{installmentId}/quote",
             "POST /payments/installments/{installmentId}/online",
+            // Sondée pendant que le tunnel de l'agrégateur est ouvert : une permission ici et
+            // l'application ne saurait jamais si le règlement a abouti.
+            "GET /payments/intents/{paymentIntentId}",
             "GET /level-of-studies",
             "GET /activities/open",
             "POST /activities/{id}/enrollments/mine",
@@ -61,7 +71,15 @@ class ParentRouteOpennessTest extends AbstractIntegrationTest {
             // L'application parent s'en sert pour rattacher un enfant à son école. La liste
             // n'expose qu'un annuaire — nom, site, logo — mais la fermer casserait le
             // rattachement, seul moyen pour une famille d'entrer dans le produit.
-            "GET /establishments");
+            "GET /establishments",
+            // Coordonnées de l'école d'un de ses enfants. La portée est dérivée des enfants
+            // rattachés dans le service ; une permission ici la fermerait à tous les parents.
+            "GET /establishments/{id}/contact",
+            // Réglages du compte appelant : il n'y a rien à autoriser au-delà d'être authentifié.
+            "GET /users/me/notification-preferences",
+            "PUT /users/me/notification-preferences",
+            "PUT /users/me/quiet-hours",
+            "POST /feedback");
 
     /**
      * Le mapping des contrôleurs applicatifs.

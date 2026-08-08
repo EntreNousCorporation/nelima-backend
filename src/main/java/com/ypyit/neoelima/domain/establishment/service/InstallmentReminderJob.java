@@ -4,6 +4,7 @@ import com.ypyit.neoelima.common.utils.XofFormat;
 import com.ypyit.neoelima.domain.establishment.entity.InstallmentEntity;
 import com.ypyit.neoelima.domain.establishment.entity.StudentEntity;
 import com.ypyit.neoelima.domain.establishment.enums.InstallmentStatus;
+import com.ypyit.neoelima.domain.establishment.enums.NotificationEvent;
 import com.ypyit.neoelima.domain.establishment.enums.ReminderChannel;
 import com.ypyit.neoelima.domain.establishment.enums.ReminderOrigin;
 import com.ypyit.neoelima.domain.establishment.repository.InstallmentRepository;
@@ -81,10 +82,11 @@ public class InstallmentReminderJob {
     private ReminderDispatcher.Result remind(InstallmentEntity installment, int daysBefore) {
         StudentEntity student = installment.getStudentFee().getStudent();
         return this.reminderDispatcher.remind(installment,
-                // Le rappel automatique reste sur la notification : elle ne coûte rien, et
-                // basculer un envoi quotidien sur un canal facturé se décide, pas se déduit.
-                List.of(ReminderChannel.PUSH),
-                ReminderOrigin.AUTOMATIC, null,
+                // Les deux canaux sont proposés, et c'est le réglage de l'école qui tranche : le
+                // SMS est fermé par défaut, parce que basculer un envoi quotidien sur un canal
+                // facturé se décide. Ici, l'école l'a décidé aux paramètres.
+                List.of(ReminderChannel.PUSH, ReminderChannel.SMS),
+                ReminderOrigin.AUTOMATIC, null, NotificationEvent.INSTALLMENT_DUE_SOON,
                 daysBefore <= 1 ? "Échéance demain" : "Échéance dans " + daysBefore + " jours",
                 String.format("%s à régler pour l'élève %s avant le %s.",
                         XofFormat.format(installment.getAmount()),

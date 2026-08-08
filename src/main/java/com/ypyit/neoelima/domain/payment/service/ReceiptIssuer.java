@@ -63,6 +63,16 @@ public class ReceiptIssuer {
                 .studentRegistrationNumber(student.getRegistrationNumber())
                 .payerLabel(payerLabelOf(paymentIntent))
                 .channel(paymentIntent.getChannel())
+                // Tout ce qui suit est figé ici, à l'émission, et non relu ensuite : l'intitulé
+                // d'une tranche se corrige, un élève change de classe, le taux de commission
+                // évolue. Un reçu atteste d'un jour donné.
+                .feeLabel(installment.getLabel())
+                .studentClassName(Objects.isNull(student.getSchoolClass())
+                        ? null : student.getSchoolClass().getName())
+                .establishmentName(establishment.getName())
+                .amountSchool(paymentIntent.getAmountSchool())
+                .amountCommission(paymentIntent.getAmountCommission())
+                .paymentMethod(paymentIntent.getPaymentMethod())
                 .build());
 
         log.info("RECEIPT_ISSUED: receipt {} for installment {} of establishment {}",

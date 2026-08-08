@@ -2,11 +2,14 @@ package com.ypyit.neoelima.domain.payment.service;
 
 import com.ypyit.neoelima.common.exception.BadRequestException;
 import com.ypyit.neoelima.common.exception.NotFoundException;
+import com.ypyit.neoelima.common.utils.XofFormat;
 import com.ypyit.neoelima.config.security.CurrentUserProvider;
 import com.ypyit.neoelima.domain.establishment.entity.InstallmentEntity;
 import com.ypyit.neoelima.domain.establishment.entity.StudentEntity;
+import com.ypyit.neoelima.domain.establishment.enums.AuditAction;
 import com.ypyit.neoelima.domain.establishment.enums.InstallmentStatus;
 import com.ypyit.neoelima.domain.establishment.repository.InstallmentRepository;
+import com.ypyit.neoelima.domain.establishment.service.AuditService;
 import com.ypyit.neoelima.domain.payment.entity.PaymentIntentEntity;
 import com.ypyit.neoelima.domain.payment.entity.ReceiptEntity;
 import com.ypyit.neoelima.domain.payment.enums.PaymentChannel;
@@ -43,6 +46,7 @@ public class OfflineCollectionService {
     private final InstallmentRepository installmentRepository;
     private final PaymentIntentRepository paymentIntentRepository;
     private final ReceiptIssuer receiptIssuer;
+    private final AuditService auditService;
     private final CurrentUserProvider currentUserProvider;
 
     @Transactional
@@ -85,6 +89,17 @@ public class OfflineCollectionService {
         this.installmentRepository.saveAndFlush(installment);
 
         ReceiptEntity receipt = this.receiptIssuer.issueFor(paymentIntent);
+        StudentEntity student = installment.getStudentFee().getStudent();
+        // De l'argent liquide est entré sur la foi d'un agent : c'est l'acte que le journal doit
+        // consigner avant tout autre.
+        this.auditService.record(
+                Objects.isNull(student.getEstablishment()) ? null : student.getEstablishment().getId(),
+                AuditAction.PAYMENT_COLLECTED,
+                String.format("Reçu n° %s — élève %s", receipt.getNumber(),
+                        Objects.toString(student.getRegistrationNumber(), "—")),
+                String.format("%s encaissés en %s", XofFormat.format(installment.getAmount()),
+                        form.getChannel()));
+
         log.info("OFFLINE_COLLECTION: installment {} settled via {}, receipt {}",
                 installment.getId(), form.getChannel(), receipt.getNumber());
         return receipt;

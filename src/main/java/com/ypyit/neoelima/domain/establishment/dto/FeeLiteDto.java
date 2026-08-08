@@ -22,4 +22,13 @@ public class FeeLiteDto extends BaseDto {
     private UUID id;
     private String name;
     private BigDecimal price;
+
+    /**
+     * Frais de scolarité, par opposition à une activité extrascolaire.
+     *
+     * <p>Sert à l'application parent, qui sépare les deux dans « Mon espace ». Un frais d'activité
+     * est créé {@code academical = false} à l'inscription : sans ce champ, le téléphone ne peut pas
+     * distinguer une cantine d'une tranche de scolarité, et les affiche pêle-mêle.
+     */
+    private boolean academical;
 }

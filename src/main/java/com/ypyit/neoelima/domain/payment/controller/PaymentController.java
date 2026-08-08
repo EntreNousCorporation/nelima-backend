@@ -1,6 +1,7 @@
 package com.ypyit.neoelima.domain.payment.controller;
 
 import com.ypyit.neoelima.domain.payment.dto.PaymentInitiationDto;
+import com.ypyit.neoelima.domain.payment.dto.PaymentIntentStatusDto;
 import com.ypyit.neoelima.domain.payment.dto.PaymentQuoteDto;
 import com.ypyit.neoelima.domain.payment.dto.ReceiptDto;
 import com.ypyit.neoelima.domain.payment.form.OfflineCollectionForm;
@@ -52,6 +53,16 @@ public class PaymentController {
             @PathVariable UUID installmentId,
             @RequestParam(value = "channel", required = false) String channel) {
         return ResponseEntity.ok(this.onlinePaymentService.initiate(installmentId, channel));
+    }
+
+    @GetMapping(value = "/intents/{paymentIntentId}", produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Où en est une tentative de paiement",
+            description = "Interrogée par l'application pendant que le tunnel de l'agrégateur est "
+                    + "ouvert. `SUCCEEDED` n'est posé qu'une fois la tranche soldée et le reçu "
+                    + "émis : c'est le seul état qui autorise à annoncer un paiement réussi à une "
+                    + "famille. Réservée au payeur.")
+    public ResponseEntity<PaymentIntentStatusDto> intentStatus(@PathVariable UUID paymentIntentId) {
+        return ResponseEntity.ok(this.onlinePaymentService.statusOf(paymentIntentId));
     }
 
     @GetMapping(value = "/installments/{installmentId}/quote", produces = MediaType.APPLICATION_JSON_VALUE)

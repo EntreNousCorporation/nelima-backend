@@ -1,5 +1,6 @@
 package com.ypyit.neoelima.domain.establishment.controller;
 
+import com.ypyit.neoelima.domain.establishment.dto.EstablishmentContactCardDto;
 import com.ypyit.neoelima.domain.establishment.dto.EstablishmentDto;
 import com.ypyit.neoelima.domain.establishment.dto.EstablishmentLiteDto;
 import com.ypyit.neoelima.domain.establishment.dto.StudentLiteDto;
@@ -8,6 +9,7 @@ import com.ypyit.neoelima.domain.establishment.form.EstablishmentLevelOfStudyCre
 import com.ypyit.neoelima.domain.establishment.form.EstablishmentSearchForm;
 import com.ypyit.neoelima.domain.establishment.form.EstablishmentUpdateForm;
 import com.ypyit.neoelima.domain.establishment.service.EstablishmentService;
+import com.ypyit.neoelima.domain.establishment.service.ParentSchoolContactService;
 import com.ypyit.neoelima.domain.establishment.service.StudentService;
 import com.ypyit.neoelima.domain.user.dto.UserDto;
 import com.ypyit.neoelima.domain.user.form.EstablishmentUserSignupForm;
@@ -50,6 +52,8 @@ public class EstablishmentController {
 
     private final StudentService studentService;
 
+    private final ParentSchoolContactService parentSchoolContactService;
+
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<UserDto> createRootUser(@RequestBody @Valid UserSignupForm creationForm) {
         var response = this.userService.createPartnerRootUser(creationForm);
@@ -75,6 +79,22 @@ public class EstablishmentController {
         return ResponseEntity.ok(this.establishmentService.findAll(searchForm, page));
     }
 
+    /**
+     * De quoi joindre l'école de son enfant.
+     *
+     * <p><strong>Aucune permission ici.</strong> Le rôle parent n'en porte aucune, et la portée est
+     * dérivée de ses enfants rattachés par le service — pas du paramètre reçu.
+     * {@code ParentRouteOpennessTest} le verrouille.
+     */
+    @GetMapping(value = "/{id}/contact", produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Coordonnées de l'école d'un de ses enfants",
+            description = "Téléphones, courriels — chacun avec son drapeau WhatsApp —, site et "
+                    + "adresse. Servi à une famille pour l'école de ses enfants seulement : la "
+                    + "fiche complète reste réservée à qui administre l'établissement.")
+    public ResponseEntity<EstablishmentContactCardDto> contactCard(@PathVariable UUID id) {
+        return ResponseEntity.ok(this.parentSchoolContactService.contactCardOf(id));
+    }
+
     @GetMapping(value = "/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "Détail d'un établissement",
             description = "Son propre établissement, ou n'importe lequel pour l'équipe YPYit. La "
@@ -89,8 +109,13 @@ public class EstablishmentController {
     }
 
     @PutMapping(value = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Modifie l'identité de l'établissement",
+            description = "Son propre établissement seulement. La permission est vérifiée ici et "
+                    + "non par annotation : l'équipe YPYit doit pouvoir corriger une fiche, et son "
+                    + "rôle ne porte aucune permission d'établissement.")
     public ResponseEntity<EstablishmentDto> update(@RequestBody @Valid EstablishmentUpdateForm updateForm, @PathVariable("id") final UUID id) {
         this.currentUserProvider.assertCanAdministerEstablishment(id);
+        this.currentUserProvider.assertPermission("settings:write");
         return ResponseEntity.ok(this.establishmentService.update(id, updateForm));
     }
 

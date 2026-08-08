@@ -2,6 +2,9 @@ package com.ypyit.neoelima.domain.payment.controller;
 
 import com.ypyit.neoelima.domain.payment.dto.ReceiptDto;
 import com.ypyit.neoelima.domain.payment.enums.PaymentChannel;
+import com.ypyit.neoelima.config.security.CurrentUserProvider;
+import com.ypyit.neoelima.domain.establishment.enums.AuditAction;
+import com.ypyit.neoelima.domain.establishment.service.AuditService;
 import com.ypyit.neoelima.domain.payment.service.ReceiptCsvExporter;
 import com.ypyit.neoelima.domain.payment.mapper.ReceiptMapper;
 import com.ypyit.neoelima.domain.payment.service.ReceiptPdfRenderer;
@@ -38,6 +41,8 @@ public class ReceiptController {
     private final ReceiptMapper receiptMapper;
     private final ReceiptPdfRenderer receiptPdfRenderer;
     private final ReceiptCsvExporter receiptCsvExporter;
+    private final AuditService auditService;
+    private final CurrentUserProvider currentUserProvider;
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "Reçus émis par l'établissement, du plus récent au plus ancien")
@@ -70,6 +75,12 @@ public class ReceiptController {
         var result = this.receiptService.search(null, issuedFrom, issuedTo, channel, keyword, null,
                 PageRequest.of(0, 10_000, Sort.by(Sort.Direction.DESC, "sequenceNumber")));
         byte[] csv = this.receiptCsvExporter.export(result.getContent());
+
+        // Des données nominatives quittent la plateforme sur un fichier qui circulera ensuite hors
+        // de tout contrôle : l'acte se consigne, avec son volume.
+        this.auditService.record(this.currentUserProvider.resolveEstablishmentScope(null),
+                AuditAction.ACCOUNTING_EXPORTED, "Journal des encaissements",
+                String.format("%d ligne(s) exportée(s)", result.getNumberOfElements()));
 
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType("text/csv; charset=UTF-8"))

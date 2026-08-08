@@ -6,6 +6,7 @@ import com.ypyit.neoelima.config.security.CurrentUserProvider;
 import com.ypyit.neoelima.domain.establishment.dto.DashboardSummaryDto;
 import com.ypyit.neoelima.domain.establishment.entity.QInstallmentEntity;
 import com.ypyit.neoelima.domain.establishment.entity.QLevelOfStudyEntity;
+import com.ypyit.neoelima.domain.establishment.entity.QReminderDeliveryEntity;
 import com.ypyit.neoelima.domain.establishment.entity.QStudentEntity;
 import com.ypyit.neoelima.domain.establishment.entity.QSchoolClassEntity;
 import com.ypyit.neoelima.domain.establishment.entity.QStudentFeeEntity;
@@ -24,6 +25,7 @@ import java.time.temporal.ChronoUnit;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -68,6 +70,8 @@ public class DashboardService {
                 .collectedToday(this.collectedBetween(scope, startOfDay, null))
                 .paymentsToday(this.countReceiptsSince(scope, startOfDay))
                 .expectedThisMonth(this.expectedBetween(scope, firstOfMonth, firstOfMonth.plusMonths(1)))
+                .expectedPreviousMonth(this.expectedBetween(scope,
+                        firstOfMonth.minusMonths(1), firstOfMonth))
                 .collectedPreviousMonth(this.collectedBetween(scope,
                         firstOfMonth.minusMonths(1).atStartOfDay(ABIDJAN).toInstant(), startOfMonth))
                 .monthly(this.monthlySeries(scope, firstOfMonth))
@@ -151,8 +155,12 @@ public class DashboardService {
                 .limit(6)
                 .fetch();
 
+        Map<UUID, Long> reminders = this.remindersByStudent(rows.stream()
+                .map(row -> row.get(student.id)).filter(Objects::nonNull).toList());
+
         return rows.stream()
                 .map(row -> DashboardSummaryDto.OverdueStudentDto.builder()
+                        .reminderCount(reminders.getOrDefault(row.get(student.id), 0L))
                         .studentId(Objects.toString(row.get(student.id), null))
                         .label(String.join(" ",
                                 Objects.toString(row.get(student.firstName), ""),
@@ -164,6 +172,35 @@ public class DashboardService {
                         .amount(Objects.requireNonNullElse(row.get(installment.amount.sum()), BigDecimal.ZERO))
                         .build())
                 .toList();
+    }
+
+    /**
+     * Rappels déjà envoyés, par élève.
+     *
+     * <p>Une seule requête groupée pour toute la liste : une par ligne suffirait sur six lignes,
+     * mais le jour où la liste s'allonge on ne s'en apercevrait qu'en production.
+     */
+    private Map<UUID, Long> remindersByStudent(List<UUID> studentIds) {
+        if (studentIds.isEmpty()) {
+            return Map.of();
+        }
+        QReminderDeliveryEntity delivery = QReminderDeliveryEntity.reminderDeliveryEntity;
+        QInstallmentEntity installment = QInstallmentEntity.installmentEntity;
+        QStudentFeeEntity studentFee = QStudentFeeEntity.studentFeeEntity;
+        QStudentEntity student = QStudentEntity.studentEntity;
+
+        return this.queryFactory
+                .select(student.id, delivery.count())
+                .from(delivery)
+                .join(delivery.installment, installment)
+                .join(installment.studentFee, studentFee)
+                .join(studentFee.student, student)
+                .where(student.id.in(studentIds))
+                .groupBy(student.id)
+                .fetch().stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        row -> row.get(student.id),
+                        row -> Objects.requireNonNullElse(row.get(delivery.count()), 0L)));
     }
 
     /**

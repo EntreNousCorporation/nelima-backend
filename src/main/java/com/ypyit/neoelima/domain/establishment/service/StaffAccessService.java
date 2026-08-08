@@ -4,6 +4,7 @@ import com.ypyit.neoelima.common.exception.BadRequestException;
 import com.ypyit.neoelima.common.exception.NotFoundException;
 import com.ypyit.neoelima.domain.establishment.dto.StaffDto;
 import com.ypyit.neoelima.domain.establishment.entity.StaffEntity;
+import com.ypyit.neoelima.domain.establishment.enums.AuditAction;
 import com.ypyit.neoelima.domain.establishment.form.StaffAccessForm;
 import com.ypyit.neoelima.domain.establishment.repository.StaffRepository;
 import com.ypyit.neoelima.domain.user.dto.UserDto;
@@ -53,6 +54,7 @@ public class StaffAccessService {
     private final UserService userService;
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
+    private final AuditService auditService;
 
     @Transactional
     public StaffDto grant(UUID staffId, StaffAccessForm form) {
@@ -97,6 +99,10 @@ public class StaffAccessService {
         member.setUser(user);
         this.staffRepository.saveAndFlush(member);
 
+        this.auditService.record(member.getEstablishment().getId(),
+                AuditAction.PORTAL_ACCESS_GRANTED,
+                String.format("%s %s", member.getFirstName(), member.getLastName()),
+                String.format("Rôle %s, identifiant %s", form.getRole(), form.getUsername().trim()));
         log.info("STAFF_ACCESS_GRANTED: staff {} role {}", staffId, form.getRole());
         return this.staffService.findById(staffId);
     }
@@ -116,6 +122,10 @@ public class StaffAccessService {
         }
         user.setEnabled(false);
         this.userRepository.saveAndFlush(user);
+        this.auditService.record(member.getEstablishment().getId(),
+                AuditAction.PORTAL_ACCESS_REVOKED,
+                String.format("%s %s", member.getFirstName(), member.getLastName()),
+                "Compte désactivé ; les reçus déjà émis gardent son nom.");
         log.info("STAFF_ACCESS_REVOKED: staff {}", staffId);
         return this.staffService.findById(staffId);
     }

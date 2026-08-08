@@ -59,6 +59,14 @@ public class DashboardSummaryDto {
     /** Encaissé du mois précédent, pour situer le mois courant sans avoir à le chercher ailleurs. */
     private BigDecimal collectedPreviousMonth;
 
+    /**
+     * Attendu du mois précédent.
+     *
+     * <p>Sans lui, le recouvrement ne se compare pas : rapprocher deux encaissements bruts d'un
+     * mois sur l'autre confond « on a mieux recouvré » et « il y avait plus à recouvrer ».
+     */
+    private BigDecimal expectedPreviousMonth;
+
     @Schema(description = "Six derniers mois, du plus ancien au plus récent")
     private List<MonthlyPointDto> monthly;
 
@@ -108,6 +116,15 @@ public class DashboardSummaryDto {
         private String studentId;
         private String label;
         private String registrationNumber;
+
+        /**
+         * Rappels déjà envoyés à la famille, tous canaux et toutes tranches confondus.
+         *
+         * <p>C'est ce qui distingue une famille qu'on a oubliée d'une famille qui ne répond pas :
+         * la première se relance, la seconde s'appelle.
+         */
+        @Builder.Default
+        private long reminderCount = 0;
         private String levelCode;
         /** Retard de la plus ancienne échéance dépassée, en jours. */
         private long daysLate;

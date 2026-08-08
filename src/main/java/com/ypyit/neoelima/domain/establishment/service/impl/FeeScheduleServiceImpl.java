@@ -3,16 +3,19 @@ package com.ypyit.neoelima.domain.establishment.service.impl;
 import com.ypyit.neoelima.common.exception.NotFoundException;
 import com.ypyit.neoelima.common.exception.ValidationException;
 import com.ypyit.neoelima.config.security.CurrentUserProvider;
+import com.ypyit.neoelima.common.utils.XofFormat;
 import com.ypyit.neoelima.domain.establishment.entity.FeeEntity;
 import com.ypyit.neoelima.domain.establishment.entity.FeeScheduleEntity;
 import com.ypyit.neoelima.domain.establishment.entity.InstallmentEntity;
 import com.ypyit.neoelima.domain.establishment.entity.StudentFeeEntity;
+import com.ypyit.neoelima.domain.establishment.enums.AuditAction;
 import com.ypyit.neoelima.domain.establishment.enums.InstallmentStatus;
 import com.ypyit.neoelima.domain.establishment.form.FeeScheduleForm;
 import com.ypyit.neoelima.domain.establishment.repository.FeeRepository;
 import com.ypyit.neoelima.domain.establishment.repository.FeeScheduleRepository;
 import com.ypyit.neoelima.domain.establishment.repository.InstallmentRepository;
 import com.ypyit.neoelima.domain.establishment.repository.StudentFeeRepository;
+import com.ypyit.neoelima.domain.establishment.service.AuditService;
 import com.ypyit.neoelima.domain.establishment.service.FeeScheduleService;
 import com.ypyit.neoelima.domain.establishment.service.InstallmentGenerator;
 import lombok.RequiredArgsConstructor;
@@ -39,6 +42,7 @@ public class FeeScheduleServiceImpl implements FeeScheduleService {
     private final InstallmentRepository installmentRepository;
     private final StudentFeeRepository studentFeeRepository;
     private final InstallmentGenerator installmentGenerator;
+    private final AuditService auditService;
     private final CurrentUserProvider currentUserProvider;
 
     @Override
@@ -79,6 +83,14 @@ public class FeeScheduleServiceImpl implements FeeScheduleService {
         }
 
         this.regenerateStudentInstallments(feeId);
+
+        // Redéfinir un échéancier change ce que chaque famille doit et à quelle date : l'acte se
+        // relit, notamment quand un parent conteste une échéance.
+        this.auditService.record(
+                Objects.isNull(fee.getEstablishment()) ? null : fee.getEstablishment().getId(),
+                AuditAction.FEE_SCHEDULE_DEFINED, fee.getName(),
+                String.format("%d tranche(s) pour un total de %s", saved.size(),
+                        XofFormat.format(fee.getPrice())));
         return saved;
     }
 

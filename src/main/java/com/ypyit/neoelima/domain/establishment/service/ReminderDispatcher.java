@@ -1,11 +1,14 @@
 package com.ypyit.neoelima.domain.establishment.service;
 
 import com.ypyit.neoelima.common.service.push.PushNotificationService;
+import com.ypyit.neoelima.domain.user.service.ParentNotificationPreferenceService;
 import com.ypyit.neoelima.common.service.sms.service.SmsSender;
 import com.ypyit.neoelima.domain.establishment.entity.InstallmentEntity;
 import com.ypyit.neoelima.domain.establishment.entity.ReminderCampaignEntity;
 import com.ypyit.neoelima.domain.establishment.entity.ReminderDeliveryEntity;
 import com.ypyit.neoelima.domain.establishment.entity.StudentEntity;
+import com.ypyit.neoelima.domain.establishment.enums.NotificationChannel;
+import com.ypyit.neoelima.domain.establishment.enums.NotificationEvent;
 import com.ypyit.neoelima.domain.establishment.enums.ReminderChannel;
 import com.ypyit.neoelima.domain.establishment.enums.ReminderOrigin;
 import com.ypyit.neoelima.domain.establishment.repository.ReminderDeliveryRepository;
@@ -24,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Point de passage unique de tout rappel envoyé à une famille.
@@ -43,7 +47,9 @@ public class ReminderDispatcher {
 
     private final ReminderDeliveryRepository deliveryRepository;
     private final PushNotificationService pushNotificationService;
+    private final ParentNotificationPreferenceService parentNotificationPreferenceService;
     private final SmsSender smsSender;
+    private final NotificationPreferenceService notificationPreferenceService;
 
     /** Ce qu'un envoi a produit : ce qui est parti, et ce qu'on a volontairement écarté. */
     public record Result(int sent, int skipped) {
@@ -59,16 +65,26 @@ public class ReminderDispatcher {
     /**
      * Relance les tuteurs d'un élève pour une tranche.
      *
+     * <p>Les canaux demandés sont confrontés au réglage de l'école : c'est ici que la matrice des
+     * notifications agit, et nulle part ailleurs pour les rappels. La vérification est faite au
+     * point d'envoi plutôt qu'à l'appel, sans quoi chaque nouvel émetteur pourrait l'oublier.
+     *
      * @param campaign campagne à l'origine de l'envoi, nulle pour le rappel automatique
      */
     @Transactional
     public Result remind(InstallmentEntity installment, Collection<ReminderChannel> channels,
                          ReminderOrigin origin, ReminderCampaignEntity campaign,
-                         String title, String message) {
+                         NotificationEvent event, String title, String message) {
         StudentEntity student = installment.getStudentFee().getStudent();
         List<UserEntity> guardians = student.getParentUsers().stream()
                 .filter(guardian -> Objects.nonNull(guardian.getId()))
                 .toList();
+
+        List<ReminderChannel> allowed = this.allowedChannels(student, event, channels);
+        if (allowed.isEmpty()) {
+            log.debug("REMINDER_SKIPPED: tous les canaux demandés sont coupés pour {}", event);
+            return Result.none();
+        }
 
         if (guardians.isEmpty()) {
             // Sans tuteur rattaché, personne à prévenir. L'école le voit dans ses impayés.
@@ -79,12 +95,35 @@ public class ReminderDispatcher {
 
         Result total = Result.none();
         for (UserEntity guardian : guardians) {
-            for (ReminderChannel channel : channels) {
+            for (ReminderChannel channel : allowed) {
                 total = total.plus(this.remindOne(installment, guardian, channel, origin, campaign,
                         title, message));
             }
         }
         return total;
+    }
+
+    /**
+     * Canaux demandés que l'école accepte pour cet événement.
+     *
+     * <p>Le réglage est celui de l'établissement de l'élève, non de l'appelant : une campagne
+     * lancée par YPYit depuis le back-office reste tenue par ce que l'école a décidé.
+     */
+    public List<ReminderChannel> allowedChannels(StudentEntity student, NotificationEvent event,
+                                                 Collection<ReminderChannel> requested) {
+        UUID establishmentId = Objects.isNull(student.getEstablishment())
+                ? null : student.getEstablishment().getId();
+        return requested.stream()
+                .filter(channel -> this.notificationPreferenceService.isEnabled(
+                        establishmentId, event, notificationChannelOf(channel)))
+                .toList();
+    }
+
+    private static NotificationChannel notificationChannelOf(ReminderChannel channel) {
+        return switch (channel) {
+            case PUSH -> NotificationChannel.PUSH;
+            case SMS -> NotificationChannel.SMS;
+        };
     }
 
     private Result remindOne(InstallmentEntity installment, UserEntity guardian,
@@ -122,6 +161,14 @@ public class ReminderDispatcher {
 
     private boolean sendPush(InstallmentEntity installment, UserEntity guardian,
                              String title, String message) {
+        // L'école a déjà autorisé le canal (`allowedChannels`). Reste à savoir si ce tuteur-ci
+        // l'accepte, et si l'on n'est pas dans ses heures calmes. Le rappel tu reste dans son fil.
+        if (!this.parentNotificationPreferenceService.accepts(guardian.getId(),
+                NotificationEvent.INSTALLMENT_DUE_SOON, NotificationChannel.PUSH)) {
+            log.debug("REMINDER_PUSH_MUTED: tuteur {}, réglage personnel ou heures calmes",
+                    guardian.getId());
+            return false;
+        }
         try {
             this.pushNotificationService.send(List.of(guardian.getId()), title, message,
                     Map.of("type", "INSTALLMENT_DUE",
@@ -134,6 +181,14 @@ public class ReminderDispatcher {
     }
 
     private boolean sendSms(UserEntity guardian, String message) {
+        // Le SMS se facture : couper le sien est le réglage le plus légitime qu'un parent puisse
+        // demander, et il doit être tenu.
+        if (!this.parentNotificationPreferenceService.accepts(guardian.getId(),
+                NotificationEvent.INSTALLMENT_DUE_SOON, NotificationChannel.SMS)) {
+            log.debug("REMINDER_SMS_MUTED: tuteur {}, réglage personnel ou heures calmes",
+                    guardian.getId());
+            return false;
+        }
         Optional<String> phone = phoneOf(guardian);
         if (phone.isEmpty()) {
             // Un tuteur sans numéro n'est pas un échec : il a pu être joint par notification.

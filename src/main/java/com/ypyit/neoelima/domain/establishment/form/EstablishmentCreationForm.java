@@ -8,6 +8,7 @@ import com.ypyit.neoelima.domain.user.form.EstablishmentPrincipalCreationForm;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
@@ -35,6 +36,15 @@ public class EstablishmentCreationForm {
     private String webSite;
     @Valid
     private AddressCreationForm address;
+
+    /**
+     * Ville de l'établissement.
+     *
+     * <p>Demandée dès la création : renseignée après coup, elle ne l'est jamais — et une liste de
+     * parc où la moitié des écoles ne sont situées nulle part ne sert plus à situer.
+     */
+    @Size(max = 120)
+    private String city;
     @Builder.Default
     private Boolean isPrimary = false;
     @NotEmpty

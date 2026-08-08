@@ -14,17 +14,20 @@ import com.ypyit.neoelima.domain.establishment.entity.StudentEntity;
 import com.ypyit.neoelima.domain.establishment.enums.InstallmentStatus;
 import com.ypyit.neoelima.domain.establishment.repository.InstallmentRepository;
 import com.ypyit.neoelima.domain.payment.dto.PaymentInitiationDto;
+import com.ypyit.neoelima.domain.payment.dto.PaymentIntentStatusDto;
 import com.ypyit.neoelima.domain.payment.dto.PaymentQuoteDto;
 import com.ypyit.neoelima.domain.payment.entity.PaymentIntentEntity;
 import com.ypyit.neoelima.domain.payment.enums.PaymentChannel;
 import com.ypyit.neoelima.domain.payment.enums.PaymentIntentStatus;
 import com.ypyit.neoelima.domain.payment.repository.PaymentIntentRepository;
+import com.ypyit.neoelima.domain.payment.repository.ReceiptRepository;
 import com.ypyit.neoelima.domain.user.entity.ContactEntity;
 import com.ypyit.neoelima.domain.user.entity.UserEntity;
 import com.ypyit.neoelima.domain.user.enums.ContactType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -57,10 +60,49 @@ public class OnlinePaymentService {
     private final PaymentService paymentService;
     private final InstallmentRepository installmentRepository;
     private final PaymentIntentRepository paymentIntentRepository;
+    private final ReceiptRepository receiptRepository;
     private final CurrentUserProvider currentUserProvider;
     private final BillingProperties billingProperties;
     /** Le taux est lu ici, et non dans la configuration : il est modifiable depuis le BO. */
     private final BillingSettingsService billingSettingsService;
+
+    /**
+     * Où en est une tentative de paiement.
+     *
+     * <p>Interrogée par l'application pendant qu'elle attend, tunnel de l'agrégateur ouvert.
+     * Jusqu'ici elle concluait sur la seule redirection d'URL — elle annonçait « paiement réussi »
+     * alors que la tranche était encore due, et si le webhook n'arrivait jamais, elle le disait
+     * durablement.
+     *
+     * <p><strong>Réservée au payeur.</strong> N'importe quel compte authentifié peut régler pour un
+     * élève, mais seul celui qui a lancé la tentative peut la suivre : l'ouvrir plus largement
+     * laisserait un tiers observer les règlements d'une famille en énumérant des identifiants.
+     */
+    @Transactional(readOnly = true)
+    public PaymentIntentStatusDto statusOf(UUID paymentIntentId) {
+        PaymentIntentEntity intent = this.paymentIntentRepository.findById(paymentIntentId)
+                .orElseThrow(() -> new NotFoundException(
+                        String.format("Payment intent %s not found", paymentIntentId)));
+
+        UUID caller = this.currentUserProvider.currentUser().getId();
+        if (Objects.isNull(intent.getPayer())
+                || !Objects.equals(intent.getPayer().getId(), caller)) {
+            throw new AccessDeniedException("Only the payer can follow this payment attempt");
+        }
+
+        return PaymentIntentStatusDto.builder()
+                .paymentIntentId(intent.getId())
+                .status(intent.getStatus())
+                .installmentId(intent.getInstallment().getId())
+                .totalAmount(intent.totalAmount())
+                .currency(intent.getCurrency())
+                // Émis dans la même transaction que le solde de la tranche : présent dès que le
+                // statut passe à SUCCEEDED, ce qui évite un second appel à l'écran de succès.
+                .receiptId(this.receiptRepository.findByPaymentIntent_Id(intent.getId())
+                        .map(receipt -> receipt.getId())
+                        .orElse(null))
+                .build();
+    }
 
     /**
      * Détail de ce que coûtera le règlement d'une tranche, sans rien engager.
@@ -106,6 +148,10 @@ public class OnlinePaymentService {
                         .amountCommission(commission)
                         .currency(this.billingProperties.getCurrency())
                         .channel(PaymentChannel.ONLINE)
+                        // Conservé, et pas seulement transmis : c'est le seul endroit où l'on sait
+                        // par quel opérateur la famille a choisi de régler, et c'est ce qu'elle
+                        // reconnaîtra sur son reçu.
+                        .paymentMethod(StringUtils.trimToNull(paymentMethod))
                         .status(PaymentIntentStatus.PENDING)
                         .build());
 

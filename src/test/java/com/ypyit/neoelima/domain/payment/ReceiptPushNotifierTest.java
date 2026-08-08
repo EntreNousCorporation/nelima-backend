@@ -1,19 +1,26 @@
 package com.ypyit.neoelima.domain.payment;
 
 import com.ypyit.neoelima.AbstractIntegrationTest;
+import com.ypyit.neoelima.common.exception.BadRequestException;
 import com.ypyit.neoelima.common.service.email.service.EmailService;
 import com.ypyit.neoelima.common.service.push.PushNotificationService;
 import com.ypyit.neoelima.domain.establishment.entity.EstablishmentEntity;
 import com.ypyit.neoelima.domain.establishment.entity.FeeEntity;
 import com.ypyit.neoelima.domain.establishment.entity.InstallmentEntity;
+import com.ypyit.neoelima.domain.establishment.entity.NotificationPreferenceEntity;
 import com.ypyit.neoelima.domain.establishment.entity.StudentEntity;
 import com.ypyit.neoelima.domain.establishment.entity.StudentFeeEntity;
 import com.ypyit.neoelima.domain.establishment.enums.InstallmentStatus;
+import com.ypyit.neoelima.domain.establishment.enums.NotificationChannel;
+import com.ypyit.neoelima.domain.establishment.enums.NotificationEvent;
+import com.ypyit.neoelima.domain.establishment.form.NotificationPreferenceForm;
 import com.ypyit.neoelima.domain.establishment.repository.EstablishmentRepository;
 import com.ypyit.neoelima.domain.establishment.repository.FeeRepository;
 import com.ypyit.neoelima.domain.establishment.repository.InstallmentRepository;
+import com.ypyit.neoelima.domain.establishment.repository.NotificationPreferenceRepository;
 import com.ypyit.neoelima.domain.establishment.repository.StudentFeeRepository;
 import com.ypyit.neoelima.domain.establishment.repository.StudentRepository;
+import com.ypyit.neoelima.domain.establishment.service.NotificationPreferenceService;
 import com.ypyit.neoelima.domain.payment.entity.ReceiptEntity;
 import com.ypyit.neoelima.domain.payment.enums.PaymentChannel;
 import com.ypyit.neoelima.domain.payment.form.OfflineCollectionForm;
@@ -43,8 +50,10 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -73,6 +82,10 @@ class ReceiptPushNotifierTest extends AbstractIntegrationTest {
     private InstallmentRepository installmentRepository;
     @Autowired
     private UserRepository userRepository;
+    @Autowired
+    private NotificationPreferenceRepository notificationPreferenceRepository;
+    @Autowired
+    private NotificationPreferenceService notificationPreferenceService;
 
     @MockitoBean
     private PushNotificationService pushNotificationService;
@@ -161,6 +174,34 @@ class ReceiptPushNotifierTest extends AbstractIntegrationTest {
                 .build());
 
         verify(pushNotificationService, never()).send(any(), anyString(), anyString(), any());
+    }
+
+    @Test
+    @DisplayName("l'annonce coupée aux paramètres n'envoie pas de push, mais le reçu part par courriel")
+    void disabledAnnouncementStillMailsTheReceipt() {
+        notificationPreferenceRepository.saveAndFlush(NotificationPreferenceEntity.builder()
+                .establishment(school).event(NotificationEvent.RECEIPT_ISSUED)
+                .channel(NotificationChannel.PUSH).enabled(false).build());
+
+        collect();
+
+        verify(pushNotificationService, never()).send(any(), anyString(), anyString(), any());
+        // Le courriel porte la pièce comptable : il part quoi qu'en dise le réglage.
+        verify(emailService, atLeastOnce()).sendWithAttachment(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("le courriel du reçu ne se coupe pas")
+    void theReceiptEmailCannotBeDisabled() {
+        NotificationPreferenceForm form = new NotificationPreferenceForm();
+        form.setEvent(NotificationEvent.RECEIPT_ISSUED);
+        form.setChannel(NotificationChannel.EMAIL);
+        form.setEnabled(false);
+
+        // La case est montrée cochée et inactive, avec sa raison : la retirer laisserait croire à
+        // un oubli, et l'accepter ferait disparaître la quittance.
+        assertThatThrownBy(() -> notificationPreferenceService.update(form))
+                .isInstanceOf(BadRequestException.class);
     }
 
     @SuppressWarnings("unchecked")

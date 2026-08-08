@@ -24,6 +24,8 @@ public class EstablishmentDto extends BaseDto {
 
     private UUID id;
     private String name;
+    private String shortName;
+    private String accreditationNumber;
     private String webSite;
     private String logo;
     private boolean isPrimary;

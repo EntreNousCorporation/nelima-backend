@@ -3,6 +3,7 @@ package com.ypyit.neoelima.domain.user.controller;
 import com.ypyit.neoelima.domain.authentication.dto.TokenIntrospection;
 import com.ypyit.neoelima.domain.establishment.dto.StudentLiteDto;
 import com.ypyit.neoelima.domain.transverse.dto.CheckResourceDto;
+import com.ypyit.neoelima.domain.user.dto.ParentNotificationSettingsDto;
 import com.ypyit.neoelima.domain.user.dto.UserDto;
 import com.ypyit.neoelima.domain.user.form.ChangePasswordForm;
 import com.ypyit.neoelima.domain.user.form.InitResetPasswordForm;
@@ -10,8 +11,12 @@ import com.ypyit.neoelima.domain.user.form.MobileUserSignupForm;
 import com.ypyit.neoelima.domain.user.form.ResetMobilePasswordForm;
 import com.ypyit.neoelima.domain.user.form.ResetPasswordForm;
 import com.ypyit.neoelima.domain.user.form.UserUpdateForm;
+import com.ypyit.neoelima.domain.user.form.ParentNotificationPreferenceForm;
+import com.ypyit.neoelima.domain.user.form.QuietHoursForm;
+import com.ypyit.neoelima.domain.user.service.ParentNotificationPreferenceService;
 import com.ypyit.neoelima.domain.user.service.UserService;
 import com.ypyit.neoelima.domain.utils.ControllerUtils;
+import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,6 +44,8 @@ import java.util.UUID;
 public class UserController {
 
     private final UserService userService;
+
+    private final ParentNotificationPreferenceService parentNotificationPreferenceService;
 
     @PutMapping(value = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<UserDto> update(@RequestBody @Valid UserUpdateForm updateForm, @PathVariable("id") final UUID id) {
@@ -79,6 +86,39 @@ public class UserController {
         log.info("calling path /mobile/init-reset-password");
         var response = this.userService.initMobileResetPassword(initResetPasswordForm);
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Ce que le compte accepte de recevoir.
+     *
+     * <p><strong>Aucune permission ici.</strong> Le rôle parent n'en porte aucune, et la portée est
+     * le compte appelant lui-même — il n'y a rien à autoriser au-delà d'être authentifié.
+     */
+    @GetMapping(value = "/me/notification-preferences", produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Ce que le compte accepte de recevoir",
+            description = "Un réglage par événement et par canal réellement raccordé, plus les "
+                    + "heures calmes. Distinct des préférences de l'école, qui disent ce qu'elle "
+                    + "accepte d'envoyer : les deux se croisent par un ET à l'envoi.")
+    public ResponseEntity<ParentNotificationSettingsDto> myNotificationPreferences() {
+        return ResponseEntity.ok(this.parentNotificationPreferenceService.mySettings());
+    }
+
+    @PutMapping(value = "/me/notification-preferences", consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Change un interrupteur")
+    public ResponseEntity<ParentNotificationSettingsDto> updateNotificationPreference(
+            @RequestBody @Valid ParentNotificationPreferenceForm form) {
+        return ResponseEntity.ok(this.parentNotificationPreferenceService.update(form));
+    }
+
+    @PutMapping(value = "/me/quiet-hours", consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Règle ou lève les heures calmes",
+            description = "Les deux bornes vont ensemble. Le silence tait la notification, il ne "
+                    + "supprime pas l'information : le fil la porte toujours au réveil.")
+    public ResponseEntity<ParentNotificationSettingsDto> updateQuietHours(
+            @RequestBody @Valid QuietHoursForm form) {
+        return ResponseEntity.ok(this.parentNotificationPreferenceService.updateQuietHours(form));
     }
 
     @GetMapping(value = "/me", produces = MediaType.APPLICATION_JSON_VALUE)

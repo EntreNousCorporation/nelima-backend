@@ -82,6 +82,18 @@ public class PaymentIntentEntity extends BaseEntity {
     /** Renseigné par l'agrégateur via PaySwitch. */
     private String providerType;
 
+    /**
+     * Opérateur choisi par la famille — {@code orange}, {@code wave}, {@code mtn}…
+     *
+     * <p>À ne pas confondre avec {@link #providerType}, qui est l'agrégateur ({@code JEKO}) : celui
+     * par lequel l'argent transite n'est pas celui que le parent reconnaît sur son reçu.
+     *
+     * <p>Ce choix était transmis à l'agrégateur sans être conservé. Il l'est désormais, faute de
+     * quoi rien ne permet de dire à une famille par quel moyen elle a réglé.
+     */
+    @Column(length = 32)
+    private String paymentMethod;
+
     @Column(length = 2048)
     private String checkoutUrl;
 

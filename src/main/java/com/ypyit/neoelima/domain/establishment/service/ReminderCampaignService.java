@@ -12,7 +12,9 @@ import com.ypyit.neoelima.domain.establishment.entity.ReminderCampaignEntity;
 import com.ypyit.neoelima.domain.establishment.entity.ReminderDeliveryEntity;
 import com.ypyit.neoelima.domain.establishment.entity.SchoolClassEntity;
 import com.ypyit.neoelima.domain.establishment.entity.StudentEntity;
+import com.ypyit.neoelima.domain.establishment.enums.AuditAction;
 import com.ypyit.neoelima.domain.establishment.enums.InstallmentStatus;
+import com.ypyit.neoelima.domain.establishment.enums.NotificationEvent;
 import com.ypyit.neoelima.domain.establishment.enums.ReminderChannel;
 import com.ypyit.neoelima.domain.establishment.enums.ReminderOrigin;
 import com.ypyit.neoelima.domain.establishment.enums.ReminderTarget;
@@ -58,7 +60,20 @@ public class ReminderCampaignService {
     private final ReminderDeliveryRepository deliveryRepository;
     private final EstablishmentRepository establishmentRepository;
     private final ReminderDispatcher dispatcher;
+    private final AuditService auditService;
     private final CurrentUserProvider currentUserProvider;
+
+    /**
+     * L'événement auquel une cible se rapporte, pour interroger le bon réglage.
+     *
+     * <p>« Toutes les tranches dues » est traitée comme un retard : elle contient les échues, et
+     * c'est le réglage le plus proche de l'intention d'une école qui relance largement.
+     */
+    private static NotificationEvent eventOf(ReminderTarget target) {
+        return ReminderTarget.DUE_SOON.equals(target)
+                ? NotificationEvent.INSTALLMENT_DUE_SOON
+                : NotificationEvent.INSTALLMENT_OVERDUE;
+    }
 
     /** Ce que chaque cible représente aujourd'hui : familles jointes, montant en jeu. */
     public List<ReminderTargetDto> targets() {
@@ -94,6 +109,15 @@ public class ReminderCampaignService {
                     "Aucune famille ne correspond à cette cible : rien ne serait envoyé.");
         }
 
+        NotificationEvent event = eventOf(form.getTarget());
+        // Le refus est explicite plutôt que silencieux : une campagne enregistrée à zéro envoi
+        // laisserait l'école chercher la panne du côté du canal, pas de son propre réglage.
+        if (this.dispatcher.allowedChannels(targeted.getFirst().getStudentFee().getStudent(),
+                event, form.getChannels()).isEmpty()) {
+            throw new BadRequestException(
+                    "Les canaux choisis sont désactivés dans les paramètres de notification.");
+        }
+
         ReminderCampaignEntity campaign = this.campaignRepository.saveAndFlush(
                 ReminderCampaignEntity.builder()
                         .name(form.getName().trim())
@@ -107,13 +131,19 @@ public class ReminderCampaignService {
         ReminderDispatcher.Result total = new ReminderDispatcher.Result(0, 0);
         for (InstallmentEntity installment : targeted) {
             total = total.plus(this.dispatcher.remind(installment,
-                    form.getChannels(), ReminderOrigin.CAMPAIGN, campaign,
+                    form.getChannels(), ReminderOrigin.CAMPAIGN, campaign, event,
                     "Échéance à régler", this.render(form.getMessageTemplate(), installment)));
         }
 
         campaign.setSentCount(total.sent());
         campaign.setSkippedCount(total.skipped());
         this.campaignRepository.saveAndFlush(campaign);
+
+        // Solliciter des familles se journalise : c'est un geste visible de l'extérieur, et il se
+        // paie quand le canal est le SMS.
+        this.auditService.record(scope, AuditAction.REMINDER_CAMPAIGN_SENT, campaign.getName(),
+                String.format("Cible %s, %d envoi(s), %d écarté(s), canaux %s",
+                        form.getTarget(), total.sent(), total.skipped(), form.getChannels()));
 
         log.info("REMINDER_CAMPAIGN_SENT: {} — {} envoi(s), {} écarté(s)",
                 campaign.getId(), total.sent(), total.skipped());

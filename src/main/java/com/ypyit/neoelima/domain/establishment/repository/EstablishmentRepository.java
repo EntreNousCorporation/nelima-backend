@@ -17,4 +17,7 @@ public interface EstablishmentRepository extends JpaRepository<EstablishmentEnti
     Optional<EstablishmentEntity> findByNameIgnoreCase(String name);
 
     List<EstablishmentEntity> findByParent_Id(UUID parentId);
+
+    /** Écoles actuellement sous une formule : elles en interdisent la suppression. */
+    long countBySubscriptionPlan(String subscriptionPlan);
 }

@@ -1,0 +1,47 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+        "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta content="text/html; charset=us-ascii" http-equiv="Content-Type">
+</head>
+<body>
+<table align="center" style="background-color: #edf2f9; width: 100%;">
+    <tr>
+        <td>
+            <table align="center" cellspacing="20"
+                   style="background-color: white; max-width: 700px; padding: 30px; border-radius: 5px;">
+                <tr>
+                    <td style="color: #0B2E66; font-family: Roboto, Arial, sans-serif; font-size: 20px; font-weight: bold;">
+                        Nouvelle demande de d&eacute;monstration
+                    </td>
+                </tr>
+                <tr>
+                    <td style="font-family: Roboto, Arial, sans-serif; color: #576476; font-size: 15px;">
+                        <p style="margin: 0 0 14px 0;">
+                            <strong th:utext="${schoolName}"></strong>
+                            <span th:if="${city}" th:utext="' &middot; ' + ${city}"></span>
+                            <span th:if="${studentCount}" th:utext="' &middot; ' + ${studentCount} + ' &eacute;l&egrave;ves'"></span>
+                        </p>
+                        <p style="margin: 0 0 6px 0;">
+                            Contact : <span th:utext="${contactName}"></span>
+                        </p>
+                        <p style="margin: 0 0 6px 0;">
+                            Courriel : <a th:href="'mailto:' + ${contactEmail}" th:utext="${contactEmail}"></a>
+                        </p>
+                        <p style="margin: 0 0 14px 0;" th:if="${phone}">
+                            T&eacute;l&eacute;phone : <span th:utext="${phone}"></span>
+                        </p>
+                        <p style="margin: 0 0 14px 0; white-space: pre-line;" th:if="${message}"
+                           th:utext="${message}"></p>
+                        <p style="margin: 0; color: #8A99AD; font-size: 13px;">
+                            Cette demande est enregistr&eacute;e dans la console interne, onglet
+                            Prospects. Ce message n'est qu'une alerte : le suivi se fait l&agrave;-bas.
+                        </p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+</body>
+</html>

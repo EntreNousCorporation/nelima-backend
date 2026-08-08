@@ -9,6 +9,7 @@ import com.ypyit.neoelima.common.exception.ValidationException;
 import com.ypyit.neoelima.domain.establishment.dto.EstablishmentDto;
 import com.ypyit.neoelima.domain.establishment.dto.EstablishmentLiteDto;
 import com.ypyit.neoelima.domain.establishment.entity.EstablishmentEntity;
+import com.ypyit.neoelima.domain.user.entity.AddressEntity;
 import com.ypyit.neoelima.domain.establishment.entity.LevelOfStudyEntity;
 import com.ypyit.neoelima.domain.establishment.entity.QEstablishmentEntity;
 import com.ypyit.neoelima.domain.establishment.form.EstablishmentCreationForm;
@@ -153,6 +154,7 @@ public class EstablishmentServiceImpl implements EstablishmentService {
                 }
             }
             this.establishmentMapper.toUpdate(updateForm, establishment);
+            this.applyAddress(updateForm.getAddressName(), establishment);
             this.updateCoverImage(updateForm.getCoverImage(), establishment);
             return this.establishmentMapper.toDto(this.establishmentRepository.save(establishment));
         } catch (NotFoundException | ValidationException | DuplicateResourceException e) {
@@ -273,6 +275,25 @@ public class EstablishmentServiceImpl implements EstablishmentService {
                 establishment.getCoverImage().setLink(link);
             });
         }
+    }
+
+    /**
+     * Adresse du siège, créée si l'établissement n'en avait pas.
+     *
+     * <p>Écrit à la main plutôt que par le mappeur : le formulaire porte une chaîne, l'entité une
+     * relation. Laisser MapStruct deviner reviendrait à remplacer l'adresse entière — et ses
+     * coordonnées géographiques — à chaque enregistrement du formulaire d'identité.
+     */
+    private void applyAddress(String addressName, EstablishmentEntity establishment) {
+        if (Objects.isNull(addressName)) {
+            return;
+        }
+        AddressEntity address = establishment.getAddress();
+        if (Objects.isNull(address)) {
+            address = new AddressEntity();
+            establishment.setAddress(address);
+        }
+        address.setName(addressName.isBlank() ? null : addressName.trim());
     }
 
     private void updateCoverImage(FileMediaUpdateForm logoUpdateForm, EstablishmentEntity establishment) {

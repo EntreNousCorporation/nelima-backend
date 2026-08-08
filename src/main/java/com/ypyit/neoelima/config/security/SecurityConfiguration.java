@@ -36,6 +36,9 @@ import java.util.List;
 import static com.ypyit.neoelima.domain.utils.SecurityUtils.AUTH_RESOURCES;
 import static com.ypyit.neoelima.domain.utils.SecurityUtils.PAYMENT_ADMIN_RESOURCES;
 import static com.ypyit.neoelima.domain.utils.SecurityUtils.PLATFORM_CONSOLE_RESOURCES;
+import static com.ypyit.neoelima.domain.utils.SecurityUtils.PROSPECT_RESOURCES;
+import static com.ypyit.neoelima.domain.utils.SecurityUtils.PUBLIC_SITE_RESOURCES;
+import static com.ypyit.neoelima.domain.utils.SecurityUtils.SUBSCRIPTION_RESOURCES;
 import static com.ypyit.neoelima.domain.utils.SecurityUtils.PLATFORM_ONBOARDING_RESOURCES;
 import static com.ypyit.neoelima.domain.utils.SecurityUtils.PLATFORM_SETTINGS_WRITE_RESOURCES;
 import static com.ypyit.neoelima.domain.utils.SecurityUtils.PAYMENT_WEBHOOK_RESOURCES;
@@ -116,6 +119,12 @@ public class SecurityConfiguration {
                             // basculer le provider actif. Le starter ne les protège pas.
                             .requestMatchers(PAYMENT_ADMIN_RESOURCES).access(platformAdminOnly())
                             .requestMatchers(HttpMethod.GET, PLATFORM_CONSOLE_RESOURCES).access(platformAdminOnly())
+                            // Sans verbe, donc toutes méthodes : les routes d'abonnement écrivent
+                            // autant qu'elles lisent, et une école n'a rien à y faire.
+                            .requestMatchers(HttpMethod.POST, PUBLIC_SITE_RESOURCES).permitAll()
+                            .requestMatchers(HttpMethod.GET, PUBLIC_SITE_RESOURCES).permitAll()
+                            .requestMatchers(PROSPECT_RESOURCES).access(platformAdminOnly())
+                            .requestMatchers(SUBSCRIPTION_RESOURCES).access(platformAdminOnly())
                             // Création d'écoles : l'onboarding est le métier de YPYit. La lecture
                             // de la liste reste ouverte, l'application parent en dépend.
                             .requestMatchers(HttpMethod.POST, PLATFORM_ONBOARDING_RESOURCES).access(platformAdminOnly())

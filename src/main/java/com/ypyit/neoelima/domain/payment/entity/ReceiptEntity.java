@@ -83,6 +83,51 @@ public class ReceiptEntity extends BaseEntity {
     private PaymentChannel channel;
 
     /**
+     * Ce qui a été réglé — « Scolarité de Février ».
+     *
+     * <p>Recopié depuis la tranche, comme les autres libellés : une école corrige parfois
+     * l'intitulé d'une échéance, et un reçu qui suivrait cette correction cesserait d'attester ce
+     * qui a été payé.
+     */
+    private String feeLabel;
+
+    /**
+     * Classe de l'élève au jour du paiement.
+     *
+     * <p>Nulle sur les reçus antérieurs à ce champ, et sur ceux d'un élève non réparti. La relire
+     * aujourd'hui donnerait la classe de cette année pour un règlement de l'an dernier.
+     */
+    @Column(length = 64)
+    private String studentClassName;
+
+    /**
+     * Nom de l'école, figé lui aussi.
+     *
+     * <p>La relation existe pourtant sur le reçu, mais elle est paresseuse à dessein : la joindre
+     * pour afficher une liste coûterait une requête par ligne.
+     */
+    private String establishmentName;
+
+    /**
+     * Ventilation du montant : ce qui revient à l'école, et la commission de la plateforme.
+     *
+     * <p>Figée parce que le taux de commission évolue. Recalculer la part de frais d'un règlement
+     * de l'an dernier au taux d'aujourd'hui donnerait un reçu qui ne correspond à rien.
+     */
+    private BigDecimal amountSchool;
+
+    private BigDecimal amountCommission;
+
+    /**
+     * Opérateur choisi par la famille — {@code orange}, {@code wave}, {@code mtn}…
+     *
+     * <p>Nul au guichet, où c'est {@code channel} qui parle, et nul sur tous les reçus émis avant
+     * que la tentative ne conserve ce choix. L'application omet alors la ligne.
+     */
+    @Column(length = 32)
+    private String paymentMethod;
+
+    /**
      * Chargement paresseux volontaire. Un reçu porte déjà les libellés dont il a besoin, recopiés
      * à l'émission : rien ne justifie de joindre l'établissement pour l'afficher.
      */

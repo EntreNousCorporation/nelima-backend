@@ -124,5 +124,26 @@
       "fr": "Lancer une campagne de relance",
       "en": "Send reminder campaigns"
     }
+  },
+  {
+    "code": "settings:read",
+    "name": {
+      "fr": "Consulter les paramètres",
+      "en": "Read settings"
+    }
+  },
+  {
+    "code": "settings:write",
+    "name": {
+      "fr": "Modifier les paramètres",
+      "en": "Manage settings"
+    }
+  },
+  {
+    "code": "audit:read",
+    "name": {
+      "fr": "Consulter le journal d'audit",
+      "en": "Read the audit log"
+    }
   }
 ]

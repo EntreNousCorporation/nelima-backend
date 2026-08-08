@@ -236,6 +236,13 @@ class CalendarServiceTest extends AbstractIntegrationTest {
         assertThat(seen.stream()
                 .filter(line -> CalendarEntryKind.FEE_DUE.equals(line.getKind()))
                 .findFirst().orElseThrow().getStudentsConcerned()).isEqualTo(1);
+
+        // Chaque entrée dit de quelle école elle vient. Sans cela, un parent dont les enfants sont
+        // dans deux établissements reçoit un fil mêlé qu'il ne peut ni trier ni attribuer.
+        assertThat(seen).allSatisfy(line -> {
+            assertThat(line.getEstablishmentId()).isNotBlank();
+            assertThat(line.getEstablishmentName()).isNotBlank();
+        });
     }
 
     @Test
