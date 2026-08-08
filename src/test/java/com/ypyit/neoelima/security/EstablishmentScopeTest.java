@@ -3,7 +3,9 @@ package com.ypyit.neoelima.security;
 import com.ypyit.neoelima.AbstractIntegrationTest;
 import com.ypyit.neoelima.config.security.CurrentUserProvider;
 import com.ypyit.neoelima.domain.establishment.entity.EstablishmentEntity;
+import com.ypyit.neoelima.domain.establishment.form.EstablishmentUpdateForm;
 import com.ypyit.neoelima.domain.establishment.repository.EstablishmentRepository;
+import com.ypyit.neoelima.domain.establishment.service.EstablishmentService;
 import com.ypyit.neoelima.domain.user.entity.ContactEntity;
 import com.ypyit.neoelima.domain.user.entity.EstablishmentUserEntity;
 import com.ypyit.neoelima.domain.user.entity.StudentParentUserEntity;
@@ -23,6 +25,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -41,6 +44,8 @@ class EstablishmentScopeTest extends AbstractIntegrationTest {
     private CurrentUserProvider currentUserProvider;
     @Autowired
     private EstablishmentRepository establishmentRepository;
+    @Autowired
+    private EstablishmentService establishmentService;
     @Autowired
     private UserRepository userRepository;
 
@@ -81,6 +86,43 @@ class EstablishmentScopeTest extends AbstractIntegrationTest {
         assertThatThrownBy(() -> this.currentUserProvider
                 .assertCanAdministerEstablishment(this.mine.getId()))
                 .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("une modification partielle ne rétrograde pas l'établissement principal")
+    void aPartialUpdateKeepsThePrimaryFlag() {
+        this.authenticateOn(this.mine);
+
+        // L'écran des paramètres n'a rien à dire du drapeau « principal » et ne l'envoie pas.
+        // Tant que le formulaire portait une primitive, l'omission valait « false ».
+        this.establishmentService.update(this.mine.getId(), EstablishmentUpdateForm.builder()
+                .name("École rebaptisée " + UUID.randomUUID())
+                .shortName("ERB")
+                .build());
+
+        assertThat(this.establishmentRepository.findById(this.mine.getId()).orElseThrow().isPrimary())
+                .isTrue();
+    }
+
+    @Test
+    @DisplayName("le drapeau principal, envoyé explicitement, s'écrit enfin")
+    void anExplicitPrimaryFlagIsPersisted() {
+        this.authenticateOn(this.mine);
+
+        // B7 : `toUpdate` n'écrivait jamais `isPrimary` — écart de nom entre le formulaire
+        // (« isPrimary ») et l'entité (« primary »). Une école mal marquée restait invisible
+        // (`findAll` filtre sur `isPrimary = true`) et l'API de correction répondait 200 sans effet.
+        this.establishmentService.update(this.mine.getId(), EstablishmentUpdateForm.builder()
+                .name(this.mine.getName()).isPrimary(false).build());
+        assertThat(this.establishmentRepository.findById(this.mine.getId()).orElseThrow().isPrimary())
+                .as("un faux explicite doit se poser")
+                .isFalse();
+
+        this.establishmentService.update(this.mine.getId(), EstablishmentUpdateForm.builder()
+                .name(this.mine.getName()).isPrimary(true).build());
+        assertThat(this.establishmentRepository.findById(this.mine.getId()).orElseThrow().isPrimary())
+                .as("et la correction doit rendre l'école de nouveau visible")
+                .isTrue();
     }
 
     private EstablishmentEntity school() {
