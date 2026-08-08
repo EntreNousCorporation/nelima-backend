@@ -82,9 +82,12 @@ public class EmailServiceImpl implements EmailService {
 
             MimeMessage message = javaMailSender.createMimeMessage();
             boolean multipart = Objects.nonNull(attachment);
-            MimeMessageHelper msgHelper = multipart
-                    ? new MimeMessageHelper(message, true, StandardCharsets.UTF_8.name())
-                    : new MimeMessageHelper(message, false);
+            // Toujours en UTF-8, y compris sans pièce jointe : sans charge, le corps partait dans
+            // l'encodage par défaut de la plateforme et les accents des gabarits arrivaient en
+            // caractères de remplacement (« R�initialisation »). Seuls les e-mails à pièce jointe,
+            // déjà en UTF-8, y échappaient.
+            MimeMessageHelper msgHelper =
+                    new MimeMessageHelper(message, multipart, StandardCharsets.UTF_8.name());
 
             String platformName = (String) context.getVariable(EmailConstants.PLATFORM_NAME);
 
