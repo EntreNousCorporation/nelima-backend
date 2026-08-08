@@ -16,7 +16,6 @@ import io.jsonwebtoken.security.SignatureException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -36,7 +35,6 @@ import java.util.List;
 import java.util.Set;
 import java.util.Objects;
 import java.util.Locale;
-import java.util.StringJoiner;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -124,13 +122,13 @@ public class RestErrorHandler {
     public ApiError processError(HttpMessageNotReadableException exception, HttpServletRequest httpServletRequest) {
 
         Throwable rootCause = exception.getMostSpecificCause();
-        String message = new StringJoiner(":")
-                .add(rootCause.getClass().getName())
-                .add(rootCause.getMessage()).toString();
+        // Le nom de classe et le détail de l'analyseur JSON partaient au client. Ils restent au
+        // journal ; l'appelant reçoit un message clair.
+        log.warn("Malformed request body: {}:{}", rootCause.getClass().getName(), rootCause.getMessage());
 
         return ApiError.builder()
                 .status(HttpStatus.BAD_REQUEST)
-                .debugMessage(message)
+                .debugMessage("La requête est mal formée.")
                 .path(httpServletRequest.getRequestURI())
                 .build();
     }
@@ -164,22 +162,53 @@ public class RestErrorHandler {
     @ExceptionHandler({NotFoundException.class, UsernameNotFoundException.class})
     @ResponseStatus(HttpStatus.NOT_FOUND)
     public ApiError handleNotFoundException(Exception exception, HttpServletRequest httpServletRequest) {
-
+        // Le détail brut (« Cannot find user with email … », identifiants techniques) reste au
+        // journal ; l'appelant ne reçoit qu'un message générique, en français et sans donnée sensible.
+        log.warn("Not found: {}", exception.getLocalizedMessage());
         return ApiError.builder()
                 .status(HttpStatus.NOT_FOUND)
-                .debugMessage(exception.getLocalizedMessage())
+                .debugMessage("La ressource demandée est introuvable.")
                 .path(httpServletRequest.getRequestURI())
                 .build();
     }
 
 
-    @ExceptionHandler({BadRequestException.class, IllegalArgumentException.class, BadCredentialsException.class})
+    /**
+     * Les exceptions métier ({@link BadRequestException}) portent des messages rédigés pour
+     * l'utilisateur, en français : ils sont transmis tels quels.
+     */
+    @ExceptionHandler({BadRequestException.class})
     @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public ApiError handleBadRequestException(Exception exception, HttpServletRequest httpServletRequest) {
+    public ApiError handleBadRequestException(BadRequestException exception, HttpServletRequest httpServletRequest) {
 
         return ApiError.builder()
                 .status(HttpStatus.BAD_REQUEST)
                 .debugMessage(exception.getLocalizedMessage())
+                .path(httpServletRequest.getRequestURI())
+                .build();
+    }
+
+    /**
+     * Argument invalide ou identifiants erronés : messages internes, souvent techniques. On ne les
+     * expose pas — un libellé français générique, le détail au journal.
+     */
+    @ExceptionHandler({IllegalArgumentException.class})
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiError handleIllegalArgument(Exception exception, HttpServletRequest httpServletRequest) {
+        log.warn("Invalid request: {}", exception.getLocalizedMessage());
+        return ApiError.builder()
+                .status(HttpStatus.BAD_REQUEST)
+                .debugMessage("La requête n'a pas pu être traitée.")
+                .path(httpServletRequest.getRequestURI())
+                .build();
+    }
+
+    @ExceptionHandler({BadCredentialsException.class})
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiError handleBadCredentials(Exception exception, HttpServletRequest httpServletRequest) {
+        return ApiError.builder()
+                .status(HttpStatus.BAD_REQUEST)
+                .debugMessage("Identifiant ou mot de passe incorrect.")
                 .path(httpServletRequest.getRequestURI())
                 .build();
     }
@@ -189,13 +218,9 @@ public class RestErrorHandler {
     @ResponseStatus(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
     public ApiError processError(HttpMediaTypeNotSupportedException exception, HttpServletRequest httpServletRequest) {
 
-        String unsupported = "Unsupported content type : " + exception.getContentType();
-        String supported = "Supported content type : " + MediaType.toString(exception.getSupportedMediaTypes());
-
         return ApiError.builder()
                 .status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
-                .debugMessage(new StringJoiner(" - ")
-                        .add(unsupported).add(supported).toString())
+                .debugMessage("Le format du contenu envoyé n'est pas pris en charge.")
                 .path(httpServletRequest.getRequestURI())
                 .build();
     }
@@ -214,8 +239,7 @@ public class RestErrorHandler {
 
         return ApiError.builder()
                 .status(HttpStatus.NOT_ACCEPTABLE)
-                .debugMessage("This endpoint only produces : "
-                        + MediaType.toString(exception.getSupportedMediaTypes()))
+                .debugMessage("Le format de réponse demandé n'est pas disponible.")
                 .path(httpServletRequest.getRequestURI())
                 .build();
     }
@@ -226,7 +250,7 @@ public class RestErrorHandler {
 
         return ApiError.builder()
                 .status(HttpStatus.METHOD_NOT_ALLOWED)
-                .debugMessage(exception.getLocalizedMessage())
+                .debugMessage("Cette action n'est pas autorisée sur cette ressource.")
                 .path(httpServletRequest.getRequestURI())
                 .build();
     }
@@ -238,7 +262,7 @@ public class RestErrorHandler {
         return ApiError.builder()
                 .status(HttpStatus.PARTIAL_CONTENT)
                 .path(httpServletRequest.getRequestURI())
-                .debugMessage(exception.getLocalizedMessage())
+                .debugMessage("La signature de la requête est invalide.")
                 .build();
     }
 
@@ -247,11 +271,11 @@ public class RestErrorHandler {
             MalformedJwtException.class})
     @ResponseStatus(HttpStatus.UNAUTHORIZED)
     public ApiError handleUnauthorized(Exception exception, HttpServletRequest httpServletRequest) {
-
+        log.warn("Unauthorized: {}", exception.getLocalizedMessage());
         return ApiError.builder()
                 .status(HttpStatus.UNAUTHORIZED)
                 .path(httpServletRequest.getRequestURI())
-                .debugMessage(exception.getLocalizedMessage())
+                .debugMessage("Votre session a expiré. Veuillez vous reconnecter.")
                 .build();
     }
 
@@ -264,18 +288,20 @@ public class RestErrorHandler {
         return ApiError.builder()
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .path(httpServletRequest.getRequestURI())
-                .debugMessage("Internal server error")
+                .debugMessage("Une erreur est survenue. Veuillez réessayer plus tard.")
                 .build();
     }
 
     @ExceptionHandler({AccessDeniedException.class})
     @ResponseStatus(HttpStatus.FORBIDDEN)
     public ApiError processForbiddenError(Exception exception, HttpServletRequest httpServletRequest) {
-        log.error("Forbidden error {}", exception.getLocalizedMessage());
+        // Le motif exact (élève, compte, permission visés — souvent avec un identifiant) reste au
+        // journal : le divulguer renseignerait sur des ressources auxquelles l'appelant n'a pas droit.
+        log.warn("Forbidden: {}", exception.getLocalizedMessage());
         return ApiError.builder()
                 .status(HttpStatus.FORBIDDEN)
                 .path(httpServletRequest.getRequestURI())
-                .debugMessage(exception.getLocalizedMessage())
+                .debugMessage("Vous n'êtes pas autorisé à effectuer cette action.")
                 .build();
     }
 }

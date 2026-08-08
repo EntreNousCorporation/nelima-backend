@@ -130,7 +130,7 @@ class OfflineCollectionServiceTest extends AbstractIntegrationTest {
         assertThatThrownBy(() -> offlineCollectionService.collect(OfflineCollectionForm.builder()
                 .installmentId(installment.getId()).channel(PaymentChannel.CASH).build()))
                 .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("already");
+                .hasMessageContaining("n'est plus en attente");
 
         assertThat(paymentIntentRepository.findAll().stream()
                 .filter(i -> i.getInstallment().getId().equals(installment.getId())).toList())

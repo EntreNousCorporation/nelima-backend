@@ -198,7 +198,7 @@ public class OnlinePaymentService {
 
         if (!InstallmentStatus.PENDING.equals(installment.getStatus())) {
             throw new BadRequestException(String.format(
-                    "Installment %s is already %s", installmentId, installment.getStatus()));
+                    "Cette tranche n'est plus en attente de règlement.", installmentId, installment.getStatus()));
         }
         return installment;
     }

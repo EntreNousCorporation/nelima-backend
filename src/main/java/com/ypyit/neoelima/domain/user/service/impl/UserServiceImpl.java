@@ -257,7 +257,7 @@ public class UserServiceImpl implements UserService {
             // « mot de passe erroné » : de quoi énumérer les comptes de la plateforme.
             UserEntity user = this.currentUserProvider.currentUser();
             if (!this.passwordEncoder.matches(changePasswordForm.getOldPassword(), user.getPassword())) {
-                throw new BadRequestException("User password is not valid");
+                throw new BadRequestException("Le mot de passe ne respecte pas les règles de sécurité.");
             }
             String newPassword = this.passwordEncoder.encode(changePasswordForm.getNewPassword());
             user.getPasswordValue().setValue(newPassword);
@@ -321,12 +321,12 @@ public class UserServiceImpl implements UserService {
                             new NotFoundException(String.format("Cannot find user with provided username %s", resetPasswordForm.getUsername())));
 
             if (CredentialsUtils.isNotValidPassword(resetPasswordForm.getPassword())) {
-                throw new BadRequestException("User password is not valid");
+                throw new BadRequestException("Le mot de passe ne respecte pas les règles de sécurité.");
             }
             String key = String.format(PARTNER_ROOT_USER_EMAIL_KEY, resetPasswordForm.getUsername());
             String token = (String) this.cacheService.getValue(key);
             if (!StringUtils.equalsIgnoreCase(token, resetPasswordForm.getToken())) {
-                throw new BadRequestException("Token has expired or is not valid !");
+                throw new BadRequestException("Le lien est expiré ou invalide.");
             }
             String newPassword = this.passwordEncoder.encode(resetPasswordForm.getPassword());
             if (Objects.isNull(user.getPasswordValue())) {
@@ -453,7 +453,7 @@ public class UserServiceImpl implements UserService {
         try {
             String otpInCache = (String) this.cacheService.getValue(String.format(MOBILE_USER_KEY, username));
             if (StringUtils.isNotBlank(otpInCache)) {
-                throw new DuplicateResourceException("OTP already exists");
+                throw new DuplicateResourceException("Un code a déjà été envoyé. Patientez avant d'en redemander un.");
             }
             Optional<UserEntity> optionalUser = this.userRepository.findByPrimaryContact(username);
             if (optionalUser.isEmpty()) {
@@ -527,12 +527,12 @@ public class UserServiceImpl implements UserService {
                         new NotFoundException(String.format("Cannot find user with provided username %s", username)));
 
         if (CredentialsUtils.isNotValidPassword(password)) {
-            throw new BadRequestException("User password is not valid");
+            throw new BadRequestException("Le mot de passe ne respecte pas les règles de sécurité.");
         }
         String key = String.format(MOBILE_USER_KEY, username);
         String otp = (String) this.cacheService.getValue(key);
         if (!StringUtils.equalsIgnoreCase(otp, cacheValue)) {
-            throw new BadRequestException("Otp has expired or is not valid !");
+            throw new BadRequestException("Le code est expiré ou invalide.");
         }
         String newPassword = this.passwordEncoder.encode(password);
         if (Objects.isNull(user.getPasswordValue())) {
@@ -623,10 +623,10 @@ public class UserServiceImpl implements UserService {
         long count = FunctionalUtils.safelyGetStream(contacts)
                 .filter(ContactCreationForm::getIsPrimary).count();
         if (count == 0) {
-            throw new BadRequestException("Cannot create user without primary contacts");
+            throw new BadRequestException("Un compte doit avoir un contact principal.");
         }
         if (count > 1) {
-            throw new BadRequestException("Cannot create user with more primary contacts");
+            throw new BadRequestException("Un compte ne peut avoir qu'un seul contact principal.");
         }
         FunctionalUtils.checkDuplicatedOnCreation(contacts);
         contacts.forEach(contact -> {

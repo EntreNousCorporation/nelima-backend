@@ -62,7 +62,7 @@ public final class FunctionalUtils {
                 .entrySet().stream().anyMatch(e -> e.getValue() > 1);
 
         if (containsDuplicatedValues) {
-            throw new BadRequestException("Contact contains one or more duplicated values");
+            throw new BadRequestException("Un même contact figure en double.");
         }
     }
 
@@ -73,7 +73,7 @@ public final class FunctionalUtils {
                 .entrySet().stream().anyMatch(e -> e.getValue() > 1);
 
         if (containsDuplicatedValues) {
-            throw new BadRequestException("Contact contains one or more duplicated values");
+            throw new BadRequestException("Un même contact figure en double.");
         }
     }
 

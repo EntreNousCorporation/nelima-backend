@@ -70,7 +70,7 @@ public class FeeServiceImpl implements FeeService {
                 throw new AccessDeniedException("An explicit establishment is required to create a fee");
             }
             if (this.feeRepository.existsByEstablishment_IdAndNameIgnoreCase(establishmentId, creationForm.getName())) {
-                throw new DuplicateResourceException(String.format("Fee with name %s already exists for this company", creationForm.getName()));
+                throw new DuplicateResourceException(String.format("Un frais portant ce nom existe déjà.", creationForm.getName()));
             }
             if (CollectionUtils.isEmpty(creationForm.getLevelOfStudiesCodes()) &&
                     (StringUtils.isBlank(creationForm.getStartLevelOfStudy()) && StringUtils.isBlank(creationForm.getEndLevelOfStudy()))) {
@@ -114,7 +114,7 @@ public class FeeServiceImpl implements FeeService {
                 Optional<FeeEntity> existingName = this.feeRepository
                         .findByEstablishment_IdAndNameIgnoreCase(fee.getEstablishment().getId(), updateForm.getName());
                 if (existingName.isPresent() && !id.equals(existingName.get().getId())) {
-                    throw new DuplicateResourceException(String.format("Fee with provided name number %s already exists",
+                    throw new DuplicateResourceException(String.format("Un frais portant ce nom existe déjà.",
                             updateForm.getName()));
                 }
             }

@@ -235,7 +235,7 @@ public class StudentServiceImpl implements StudentService {
             UUID establishmentId = this.requireWritableEstablishment(creationForm.getEstablishmentId());
             if (this.studentRepository.existsByEstablishment_IdAndRegistrationNumber(establishmentId,
                     creationForm.getRegistrationNumber())) {
-                throw new DuplicateResourceException(String.format("Student with provided registration number %s already exists",
+                throw new DuplicateResourceException(String.format("Un élève portant ce matricule existe déjà.",
                         creationForm.getRegistrationNumber()));
             }
             StudentEntity student = this.studentMapper.toEntity(creationForm);
@@ -263,7 +263,7 @@ public class StudentServiceImpl implements StudentService {
                         .findByEstablishment_IdAndRegistrationNumber(student.getEstablishment().getId(),
                                 updateForm.getRegistrationNumber());
                 if (existingNumber.isPresent() && !id.equals(existingNumber.get().getId())) {
-                    throw new DuplicateResourceException(String.format("Student with provided registration number %s already exists",
+                    throw new DuplicateResourceException(String.format("Un élève portant ce matricule existe déjà.",
                             updateForm.getRegistrationNumber()));
                 }
             }
@@ -329,7 +329,7 @@ public class StudentServiceImpl implements StudentService {
             boolean levelOfStudyNotExists = FunctionalUtils.safelyGetStream(establishment.getLevelOfStudies())
                     .noneMatch(levelOfStudyEntity -> levelOfStudyCode.equals(levelOfStudyEntity.getCode()));
             if (levelOfStudyNotExists) {
-                throw new BadRequestException("Level of study code " + levelOfStudyCode + " does not exist within this establishment");
+                throw new BadRequestException("Le niveau scolaire " + levelOfStudyCode + " n'existe pas dans cet établissement.");
             }
             List<FeeEntity> allByEstablishmentId = this.feeRepository.findAllByEstablishment_Id(establishmentId);
             if (CollectionUtils.isNotEmpty(allByEstablishmentId)) {
@@ -387,7 +387,7 @@ public class StudentServiceImpl implements StudentService {
 
                 if (this.studentRepository.existsByEstablishment_IdAndRegistrationNumber(establishment.getId(),
                         registrationNumber.getStringCellValue())) {
-                    throw new DuplicateResourceException(String.format("Student with provided registration number %s already exists",
+                    throw new DuplicateResourceException(String.format("Un élève portant ce matricule existe déjà.",
                             registrationNumber.getStringCellValue()));
                 }
                 LevelOfStudyEntity levelOfStudyInDb = this.levelOfStudyRepository.findByCode(levelOfStudy.getStringCellValue())
@@ -411,7 +411,7 @@ public class StudentServiceImpl implements StudentService {
 
     private void manageParent(UUID parentId, MobileUserSignupForm parentCreationForm, StudentEntity student) {
         if (Objects.nonNull(parentId) && Objects.nonNull(parentCreationForm)) {
-            throw new BadRequestException("Only one parent can be specified at the moment");
+            throw new BadRequestException("Un seul parent peut être renseigné pour le moment.");
         }
         if (Objects.nonNull(parentId)) {
             Optional<UserEntity> parent = this.userRepository.findById(parentId);
@@ -419,7 +419,7 @@ public class StudentServiceImpl implements StudentService {
                 throw new NotFoundException(String.format("Cannot find user with provided id %s", parentId));
             }
             if (!RoleType.STUDENT_PARENT.name().equals(parent.get().getRole().getCode())) {
-                throw new BadRequestException("Only mobile user is allowed");
+                throw new BadRequestException("Cette action est réservée à un compte parent.");
             }
             student.getParentUsers().add(parent.get());
         }

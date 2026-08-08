@@ -254,10 +254,10 @@ public class EstablishmentServiceImpl implements EstablishmentService {
         }
         long count = contacts.stream().filter(ContactCreationForm::getIsPrimary).count();
         if (count == 0) {
-            throw new BadRequestException("Cannot create establishment without primary contacts");
+            throw new BadRequestException("Un établissement doit avoir un contact principal.");
         }
         if (count > 1) {
-            throw new BadRequestException("Cannot create establishment with more primary contacts");
+            throw new BadRequestException("Un établissement ne peut avoir qu'un seul contact principal.");
         }
     }
 
@@ -324,10 +324,10 @@ public class EstablishmentServiceImpl implements EstablishmentService {
     private void validateContacts(Set<ContactUpdateForm> contacts) {
         long count = contacts.stream().filter(ContactUpdateForm::getIsPrimary).count();
         if (count == 0) {
-            throw new BadRequestException("Cannot create establishment without primary contacts");
+            throw new BadRequestException("Un établissement doit avoir un contact principal.");
         }
         if (count > 1) {
-            throw new BadRequestException("Cannot create establishment with more primary contacts");
+            throw new BadRequestException("Un établissement ne peut avoir qu'un seul contact principal.");
         }
         FunctionalUtils.checkDuplicatedOnUpdate(contacts);
     }
@@ -335,10 +335,10 @@ public class EstablishmentServiceImpl implements EstablishmentService {
     private void validateUpdateContacts(Set<ContactCreationForm> contacts) {
         long count = contacts.stream().filter(ContactCreationForm::getIsPrimary).count();
         if (count == 0) {
-            throw new BadRequestException("Cannot create establishment without primary contacts");
+            throw new BadRequestException("Un établissement doit avoir un contact principal.");
         }
         if (count > 1) {
-            throw new BadRequestException("Cannot create establishment with more primary contacts");
+            throw new BadRequestException("Un établissement ne peut avoir qu'un seul contact principal.");
         }
         FunctionalUtils.checkDuplicatedOnCreation(contacts);
     }

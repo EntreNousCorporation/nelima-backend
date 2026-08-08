@@ -52,7 +52,7 @@ public class OfflineCollectionService {
     @Transactional
     public ReceiptEntity collect(OfflineCollectionForm form) {
         if (PaymentChannel.ONLINE.equals(form.getChannel())) {
-            throw new BadRequestException("ONLINE is not an offline collection channel");
+            throw new BadRequestException("Ce canal n'est pas un canal d'encaissement hors ligne.");
         }
 
         InstallmentEntity installment = this.installmentRepository.findById(form.getInstallmentId())
@@ -65,7 +65,7 @@ public class OfflineCollectionService {
         // saisie au guichet produirait deux reçus pour un seul règlement.
         if (!InstallmentStatus.PENDING.equals(installment.getStatus())) {
             throw new BadRequestException(String.format(
-                    "Installment %s is already %s", installment.getId(), installment.getStatus()));
+                    "Cette tranche n'est plus en attente de règlement.", installment.getId(), installment.getStatus()));
         }
 
         Instant settledAt = Instant.now();
