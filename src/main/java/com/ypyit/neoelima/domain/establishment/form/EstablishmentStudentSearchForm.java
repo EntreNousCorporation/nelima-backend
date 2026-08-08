@@ -1,6 +1,5 @@
 package com.ypyit.neoelima.domain.establishment.form;
 
-import com.ypyit.neoelima.common.validator.ContactValueCheck;
 import com.ypyit.neoelima.common.validator.NoXssContent;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
@@ -17,7 +16,6 @@ import java.util.UUID;
 @Getter
 @Setter
 @Builder
-@ContactValueCheck
 @NoArgsConstructor
 @AllArgsConstructor
 public class EstablishmentStudentSearchForm {

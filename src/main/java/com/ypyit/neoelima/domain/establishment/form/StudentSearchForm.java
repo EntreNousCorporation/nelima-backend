@@ -1,6 +1,5 @@
 package com.ypyit.neoelima.domain.establishment.form;
 
-import com.ypyit.neoelima.common.validator.ContactValueCheck;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -13,7 +12,6 @@ import java.util.UUID;
 @Getter
 @Setter
 @Builder
-@ContactValueCheck
 @NoArgsConstructor
 @AllArgsConstructor
 public class StudentSearchForm {
