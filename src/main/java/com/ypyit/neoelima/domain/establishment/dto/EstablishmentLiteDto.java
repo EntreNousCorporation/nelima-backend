@@ -24,6 +24,9 @@ public class EstablishmentLiteDto extends BaseDto {
     private String webSite;
     private boolean active;
     private String logo;
+    // La ville, servie au sélecteur d'école du mobile : c'est ce qui distingue deux établissements
+    // de nom proche quand un parent rattache son enfant. Colonne posée par V20__establishment_city.
+    private String city;
     @Builder.Default
     private Set<EstablishmentLiteDto> subsidiaries = new HashSet<>();
     @Builder.Default
