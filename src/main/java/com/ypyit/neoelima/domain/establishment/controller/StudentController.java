@@ -15,7 +15,6 @@ import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.web.multipart.MultipartFile;
 import com.ypyit.neoelima.domain.establishment.form.StudentClaimForm;
 import com.ypyit.neoelima.domain.establishment.service.StudentClaimService;
-import com.ypyit.neoelima.domain.establishment.mapper.StudentMapper;
 import lombok.RequiredArgsConstructor;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Page;
@@ -46,10 +45,12 @@ public class StudentController {
     private final StudentFeeService studentFeeService;
     private final StudentCsvImporter studentCsvImporter;
     private final StudentClaimService studentClaimService;
-    private final StudentMapper studentMapper;
 
+    // `@Valid` sur le `@ModelAttribute` : sans lui, les `@NotBlank`/`@NotNull` du formulaire ne
+    // s'exécutaient pas. Un `GET /students` nu chargeait alors la table élève entière avant de rendre
+    // un 500, là où un 400 dit ce qui manque — matricule, date de naissance ou établissement.
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<StudentDto> findByEstablishment(@ModelAttribute @ParameterObject EstablishmentStudentSearchForm searchForm) {
+    public ResponseEntity<StudentDto> findByEstablishment(@Valid @ModelAttribute @ParameterObject EstablishmentStudentSearchForm searchForm) {
         return ResponseEntity.ok(this.studentService.findByEstablishment(searchForm));
     }
 
@@ -83,13 +84,13 @@ public class StudentController {
                     + "revérifié côté serveur : un identifiant d'élève seul ne suffit pas. "
                     + "Le rattachement fait du parent un destinataire des reçus et des rappels.")
     public ResponseEntity<StudentDto> claim(@RequestBody @Valid StudentClaimForm claimForm) {
-        return ResponseEntity.ok(this.studentMapper.toDto(this.studentClaimService.claim(claimForm)));
+        return ResponseEntity.ok(this.studentClaimService.claimView(claimForm));
     }
 
     @GetMapping(value = "/mine", produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "Élèves rattachés au compte du parent authentifié")
     public ResponseEntity<List<StudentDto>> myChildren() {
-        return ResponseEntity.ok(this.studentMapper.toDtos(this.studentClaimService.myChildren()));
+        return ResponseEntity.ok(this.studentClaimService.myChildrenView());
     }
 
     @PostMapping(value = "/import-csv", consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
