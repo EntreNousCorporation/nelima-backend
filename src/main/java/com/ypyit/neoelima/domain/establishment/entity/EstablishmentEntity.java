@@ -9,6 +9,7 @@ import com.ypyit.neoelima.domain.user.entity.UserEntity;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinTable;
 import jakarta.persistence.ManyToMany;
@@ -97,11 +98,16 @@ public class EstablishmentEntity extends BaseEntity {
      */
     @Column(length = 120)
     private String city;
-    @ManyToOne
+    // LAZY, et non le défaut EAGER d'un @ManyToOne : `principal` (un utilisateur, avec son rôle et
+    // ses permissions) et `parent` (auto-référence) formaient un graphe eager que Hibernate déroulait
+    // en une jointure d'une cinquantaine de tables à chaque chargement d'établissement. Un findById
+    // d'une tranche — via studentFee → fee/établissement — mettait ~90 s et saturait le tas (OOM).
+    // Chargées à la demande, elles n'apparaissent plus dans le graphe du paiement, qui n'en a pas besoin.
+    @ManyToOne(fetch = FetchType.LAZY)
     @ToString.Exclude
     @JoinColumn(name = "principal_id", referencedColumnName = "id")
     private UserEntity principal;
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @ToString.Exclude
     @JoinColumn(name = "parent_id", referencedColumnName = "id")
     private EstablishmentEntity parent;
