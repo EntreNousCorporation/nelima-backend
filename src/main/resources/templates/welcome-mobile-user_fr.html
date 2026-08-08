@@ -1,62 +1,56 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
-        "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml">
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org" lang="fr">
 <head>
-    <meta content="text/html; charset=us-ascii" http-equiv="Content-Type">
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Bienvenue sur Nelima</title>
 </head>
-<body>
-<style>
-    @import url('https://fonts.googleapis.com/css?family=Roboto&display=swap');
-</style>
-<table align="center" style="background-color: #edf2f9; width: 100%;">
+<body style="margin:0; padding:0; background-color:#EEF2F9;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#EEF2F9;">
     <tr>
-        <td style="text-align: center; padding: 30px 0;">
-
-        </td>
-    </tr>
-    <tr>
-        <td>
-            <table align="center" cellspacing="20"
-                   style="background-color: white; max-width: 700px; padding: 30px; border-radius: 5px;">
+        <td align="center" style="padding:32px 16px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" style="max-width:560px; width:100%;">
                 <tr>
-                    <td style="color: #576476; font-family: Roboto, sans-serif; float:left; padding-left: 10px; padding-top: 55px; width: 90%;">
-                        <h3>
-                            Cr&eacute;ation de votre compte sur <span th:utext="${platformDomain}"></span> !
-                        </h3>
+                    <td align="center" style="padding-bottom:20px;">
+                        <span style="font-family:Arial,Helvetica,sans-serif; font-size:30px; font-weight:bold; color:#0061FF; letter-spacing:0.5px;">Nelima</span>
                     </td>
                 </tr>
                 <tr>
-                    <td colspan="2" style="font-family: Roboto, sans-serif; color: #576476; font-size: 16px;">
-                        Votre compte cr&eacute;&eacute; sur <a target="_blank"
-                                                               th:href="@{${platformAddress}}"><span
-                            th:utext="${platformDomain}"></span></a> a bien &eacute;t&eacute; pris en compte.<br/>
-                        Vous devez &agrave; pr&eacute;sent d&eacute;finir un nouveau mot de passe pour vous
-                        connecter en utilisant ce code temporaire:<br/><br/><br/><br/>
-                        Code temporaire : <span style="font-weight: bold" th:utext="${otp}"></span><br/><br/>
-                        Validit&eacute;: <span style="font-weight: bold" th:utext="${otp_validity}"></span> minutes.
-                        <br/>
-                        <br/>
+                    <td style="background-color:#ffffff; border-radius:16px; padding:32px;">
+                        <h1 style="margin:0 0 16px 0; font-family:Arial,Helvetica,sans-serif; font-size:20px; font-weight:bold; color:#0C285D;">
+                            Bienvenue sur Nelima
+                        </h1>
+                        <div style="font-family:Arial,Helvetica,sans-serif; font-size:15px; line-height:1.6; color:#3F4A5A;">
+                            Votre compte sur
+                            <a target="_blank" th:href="@{${platformAddress}}" style="color:#0061FF; text-decoration:none;"><span th:utext="${platformDomain}">nelima.ci</span></a>
+                            a bien été créé. Définissez votre mot de passe à l'aide de ce code temporaire :
+                        </div>
+                        <table role="presentation" cellpadding="0" cellspacing="0" style="margin:20px 0 8px 0;">
+                            <tr>
+                                <td style="background-color:#EAF1FF; border:1px solid #CFE0FF; border-radius:12px; padding:16px 28px;">
+                                    <span style="font-family:Arial,Helvetica,sans-serif; font-size:30px; font-weight:bold; letter-spacing:6px; color:#0061FF;" th:utext="${otp}">000000</span>
+                                </td>
+                            </tr>
+                        </table>
+                        <p style="margin:0; font-family:Arial,Helvetica,sans-serif; font-size:13px; color:#8A99AD;">
+                            Valable <strong style="color:#3F4A5A;" th:utext="${otp_validity}">10</strong> minutes.
+                        </p>
+                        <p style="margin:24px 0 0 0; font-family:Arial,Helvetica,sans-serif; font-size:15px; color:#3F4A5A;">
+                            Cordialement,<br/><strong style="color:#0C285D;">L'équipe Nelima</strong>
+                        </p>
                     </td>
                 </tr>
                 <tr>
-                    <td align="left"
-                        colspan="2"
-                        style="color: #576476; font-family: Roboto, sans-serif; font-size: 16px;">
-                        Cordialement,<br/>
-                        L'&eacute;quipe ypy-it
+                    <td align="center" style="padding:20px 16px;">
+                        <p style="margin:0; font-family:Arial,Helvetica,sans-serif; font-size:12px; line-height:1.5; color:#8A99AD;">
+                            Besoin d'aide ? Répondez simplement à ce courriel.<br/>
+                            Nelima · <a target="_blank" th:href="@{${platformAddress}}" style="color:#0061FF; text-decoration:none;"><span th:utext="${platformDomain}">nelima.ci</span></a>
+                        </p>
                     </td>
                 </tr>
             </table>
         </td>
     </tr>
-
-    <tr align="center">
-        <td>
-            <p style="height: 21px;font-family: Roboto, sans-serif; font-size: 0.7em; color: #7f8fa4; text-align: center; margin-top: 25px;">
-                Si vous souhaitez faire un retour d'exp&eacute;rience ou un
-                commentaire, vous pouvez contacter le support ypy-it en r&eacute;pondant &agrave; ce courriel.</p>
-        </td>
-    <tr/>
 </table>
 </body>
 </html>
