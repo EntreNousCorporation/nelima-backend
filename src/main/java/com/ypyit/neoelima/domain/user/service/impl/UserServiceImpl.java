@@ -197,6 +197,9 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public UserDto update(UUID userId, UserUpdateForm updateForm) throws BusinessException {
+        // Hors du try : un refus de propriété est un 403 que le handler global doit voir tel quel,
+        // pas une Exception ré-emballée en 500. Le contrôle vient avant toute lecture ou écriture.
+        this.currentUserProvider.assertCanManageUserAccount(userId);
         try {
             UserEntity userToUpdate = this.userRepository.findById(userId)
                     .orElseThrow(() -> new
@@ -208,14 +211,41 @@ public class UserServiceImpl implements UserService {
                 if (count == 0 | count > 1) {
                     throw new ValidationException("contacts", "Cannot create a new establishment without or more primary contacts");
                 }
+                this.assertPrimaryContactNotTaken(userId, updateForm);
                 this.manageContacts(updateForm, userToUpdate);
             }
             return this.userMapper.toDto(this.userRepository.save(userToUpdate));
-        } catch (NotFoundException e) {
+        } catch (NotFoundException | DuplicateResourceException e) {
             throw e;
         } catch (Exception e) {
             throw new BusinessException(e);
         }
+    }
+
+    /**
+     * Refuse un contact principal déjà porté par un autre compte.
+     *
+     * <p>Deux comptes de même contact principal rendent {@code findByPrimaryContact} ambigu, et
+     * l'échec ne tombe pas dans un contrôleur mais dans le filtre JWT, en 500 pour toute la
+     * plateforme. La création vérifie déjà l'unicité ({@code validateContacts}) ; la mise à jour le
+     * faisait nulle part, et c'était la porte.
+     *
+     * <p>Le contrôle vise l'utilisateur, pas l'établissement : {@code findByPrimaryContact} ne
+     * regarde que {@code user_contacts}. Deux écoles peuvent partager un standard ; deux comptes,
+     * jamais leur identifiant de connexion. Rester sur son propre contact est permis — il se
+     * retrouve alors soi-même.
+     */
+    private void assertPrimaryContactNotTaken(UUID userId, UserUpdateForm updateForm) {
+        updateForm.getContacts().stream()
+                .filter(ContactUpdateForm::getIsPrimary)
+                .map(ContactUpdateForm::getValue)
+                .filter(StringUtils::isNotBlank)
+                .forEach(value -> this.userRepository.findByPrimaryContact(value)
+                        .filter(owner -> !Objects.equals(owner.getId(), userId))
+                        .ifPresent(owner -> {
+                            throw new DuplicateResourceException(String.format(
+                                    "Le contact principal %s est déjà utilisé par un autre compte", value));
+                        }));
     }
 
     @Override
@@ -463,6 +493,10 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public List<StudentLiteDto> findStudents(UUID parentId) throws BusinessException {
+        // Même garde que la mise à jour, et pour la même raison : la liste des enfants — matricule
+        // et date de naissance, soit deux des trois preuves de rattachement — ne se lit que pour son
+        // propre compte. Hors du try pour que le refus reste un 403.
+        this.currentUserProvider.assertCanManageUserAccount(parentId);
         try {
             if (!this.userRepository.existsById(parentId)) {
                 throw new NotFoundException(String.format("Cannot find user with provided id %s", parentId));

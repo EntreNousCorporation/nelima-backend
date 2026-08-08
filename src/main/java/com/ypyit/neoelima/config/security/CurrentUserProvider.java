@@ -103,6 +103,19 @@ public class CurrentUserProvider {
     }
 
     /**
+     * Exige une permission, en laissant passer l'équipe YPYit.
+     *
+     * <p>À préférer à {@code @PreAuthorize} sur les routes que le back-office peut avoir à appeler :
+     * le rôle {@code ADMIN} ne porte aucune permission — ses accès se jouent au niveau du filtre de
+     * sécurité — et une annotation le refuserait sans que rien ne l'annonce.
+     */
+    public void assertPermission(String code) {
+        if (!this.hasPermission(code)) {
+            throw new AccessDeniedException("Permission " + code + " is required");
+        }
+    }
+
+    /**
      * Vérifie que l'appelant a le droit d'agir sur cet établissement.
      *
      * <p>Un admin YPYit passe partout. Un utilisateur d'établissement ne passe que sur le sien. Un
@@ -122,6 +135,28 @@ public class CurrentUserProvider {
         if (!own.equals(establishmentId)) {
             throw new AccessDeniedException(String.format(
                     "User is not allowed to administer establishment %s", establishmentId));
+        }
+    }
+
+    /**
+     * Vérifie que l'appelant agit bien sur son propre compte.
+     *
+     * <p>Un admin YPYit passe — ses accès se jouent au filtre de sécurité. Tout autre appelant ne
+     * peut viser que le compte dont il détient le jeton : l'identifiant de l'URL doit être le sien.
+     *
+     * <p>Garde les deux routes qui portent un {@code {id}} de compte : la mise à jour du profil et
+     * la lecture des enfants rattachés. Sans elle, l'identifiant reçu dans l'URL suffisait à écrire
+     * le profil d'un autre — réécrire son contact principal, donc son identifiant de connexion, et
+     * le verrouiller dehors — ou à lire ses enfants et les UUID de ses co-tuteurs. Le fait d'être
+     * authentifié ne dit rien du compte que l'on a le droit de toucher.
+     */
+    public void assertCanManageUserAccount(UUID userId) {
+        UserEntity user = this.currentUser();
+        if (user instanceof AdminUserEntity) {
+            return;
+        }
+        if (!Objects.equals(user.getId(), userId)) {
+            throw new AccessDeniedException("User is not allowed to act on account " + userId);
         }
     }
 

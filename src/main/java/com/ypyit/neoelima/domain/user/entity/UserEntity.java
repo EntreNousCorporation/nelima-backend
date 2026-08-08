@@ -29,6 +29,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 
 import java.io.Serial;
 import java.time.Instant;
+import java.time.LocalTime;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
@@ -57,6 +58,31 @@ public class UserEntity extends BaseEntity implements UserDetails {
     @Builder.Default
     private boolean enabled = true;
     private Instant lastLogin;
+
+    /**
+     * Dernière ouverture du panneau de notifications.
+     *
+     * <p>C'est tout l'état « lu » du produit : un élément postérieur à cette date est non lu. Le
+     * flux lui-même n'est pas stocké — il se recalcule des données existantes —, et lui donner une
+     * table entière pour n'y écrire qu'un compteur de badge serait une seconde vérité à tenir
+     * d'accord avec la première.
+     */
+    private Instant notificationsSeenAt;
+
+    /**
+     * Heures calmes : bornes pendant lesquelles rien ne sonne.
+     *
+     * <p>Elles <strong>taisent la notification, elles ne suppriment pas l'information</strong> : le
+     * fil se déduit de faits datés, rien n'y est stocké, et un rappel tu à 23h y reste — il compte
+     * dans la pastille au réveil. C'est ce qui permet de s'en tenir à deux colonnes plutôt qu'à une
+     * file d'envois différés. Un rappel d'échéance purement supprimé, lui, deviendrait un impayé.
+     *
+     * <p>Nulles par défaut : personne n'est mis en silence sans l'avoir demandé. La fenêtre peut
+     * franchir minuit — 22h00 → 06h00 est le cas courant, et le plus utile.
+     */
+    private LocalTime quietFrom;
+
+    private LocalTime quietTo;
     private boolean locked;
     @ManyToOne
     @ToString.Exclude
@@ -108,13 +134,17 @@ public class UserEntity extends BaseEntity implements UserDetails {
     }
 
     public String getUsername() {
+        // Null plutôt qu'une exception quand le contact principal manque : cette méthode est appelée
+        // pour chaque tuteur lors de la sérialisation d'un élève, et un seul co-tuteur aux données
+        // abîmées faisait alors échouer toute la fratrie — 400 sur /students/mine, 500 sur /students.
+        // Un compte qui s'authentifie a forcément un contact principal (il est chargé par lui) : le
+        // null ne concerne que ces données héritées cassées, où taire le champ vaut mieux que rompre.
         return FunctionalUtils
                 .safelyGetStream(this.getContacts())
                 .filter(ContactEntity::isPrimary)
                 .map(ContactEntity::getValue)
                 .findFirst()
-                .orElseThrow(IllegalArgumentException::new);
-
+                .orElse(null);
     }
 
     @Override
