@@ -48,7 +48,8 @@ public final class SecurityUtils {
      * cliente : une école y verrait ceux de ses concurrentes.
      */
     public static final String[] PLATFORM_CONSOLE_RESOURCES = new String[]{
-            "/dashboard/platform"
+            "/dashboard/platform",
+            "/admin/parents"
     };
 
     /**
