@@ -60,13 +60,17 @@ public class ContactServiceImpl implements ContactService {
         }
         try {
             contactsForm.forEach(slotUpdateForm -> {
-                if (Objects.nonNull(slotUpdateForm.getId())) {
-                    ContactDto updated = this.update(slotUpdateForm.getId(), slotUpdateForm);
-                    contacts.add(this.contactMapper.toEntity(updated));
-                } else {
-                    ContactDto created = this.create(this.contactMapper.toCreate(slotUpdateForm));
-                    contacts.add(this.contactMapper.toEntity(created));
-                }
+                UUID contactId = Objects.nonNull(slotUpdateForm.getId())
+                        ? this.update(slotUpdateForm.getId(), slotUpdateForm).getId()
+                        : this.create(this.contactMapper.toCreate(slotUpdateForm)).getId();
+                // On rattache l'instance MANAGÉE (déjà en session après update/create), pas un nouvel
+                // objet détaché issu du mapper. Sans ça, l'établissement (ou l'utilisateur) qui
+                // remplace ses contacts se retrouve avec deux ContactEntity de même id dans la
+                // session, et son save échoue : « A different object with the same identifier value
+                // was already associated with the session ». C'était le 500 sur la modif d'école.
+                contacts.add(this.contactRepository.findById(contactId).orElseThrow(() ->
+                        new NotFoundException(
+                                String.format("Cannot find contact with provided id %s", contactId))));
             });
             return contacts;
         } catch (NotFoundException e) {
