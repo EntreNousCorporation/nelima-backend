@@ -93,6 +93,42 @@ public class ReceiptService {
         return this.receiptRepository.findAll(builder, pageable);
     }
 
+    /**
+     * Reçus d'un établissement (ou de tout le parc), pour la console opérateur YPYit.
+     *
+     * <p>Volontairement distinct de {@link #search} : ici pas de portée d'appelant à résoudre — un
+     * opérateur n'a pas d'établissement propre, et son droit de tout voir est garanti en amont par
+     * le filtre de sécurité ({@code PLATFORM_CONSOLE_RESOURCES}). On borne seulement à
+     * {@code establishmentId} quand il est fourni. Le payeur ({@code payerLabel}) est déjà porté par
+     * chaque reçu.
+     */
+    public Page<ReceiptEntity> searchForPlatform(UUID establishmentId, Instant issuedFrom,
+                                                 Instant issuedTo, PaymentChannel channel,
+                                                 String keyword, Pageable pageable) {
+        BooleanBuilder builder = new BooleanBuilder();
+        QReceiptEntity receipt = QReceiptEntity.receiptEntity;
+        if (Objects.nonNull(issuedFrom)) {
+            builder.and(receipt.issuedAt.goe(issuedFrom));
+        }
+        if (Objects.nonNull(issuedTo)) {
+            builder.and(receipt.issuedAt.lt(issuedTo));
+        }
+        if (Objects.nonNull(channel)) {
+            builder.and(receipt.channel.eq(channel));
+        }
+        if (Objects.nonNull(keyword) && !keyword.isBlank()) {
+            String term = keyword.trim();
+            builder.and(receipt.number.containsIgnoreCase(term)
+                    .or(receipt.studentLabel.containsIgnoreCase(term))
+                    .or(receipt.studentRegistrationNumber.containsIgnoreCase(term))
+                    .or(receipt.payerLabel.containsIgnoreCase(term)));
+        }
+        if (Objects.nonNull(establishmentId)) {
+            builder.and(receipt.establishment.id.eq(establishmentId));
+        }
+        return this.receiptRepository.findAll(builder, pageable);
+    }
+
     public ReceiptEntity findById(UUID id) {
         ReceiptEntity receipt = this.receiptRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException(

@@ -49,7 +49,8 @@ public final class SecurityUtils {
      */
     public static final String[] PLATFORM_CONSOLE_RESOURCES = new String[]{
             "/dashboard/platform",
-            "/admin/parents"
+            "/admin/parents",
+            "/admin/receipts"
     };
 
     /**
