@@ -1,6 +1,7 @@
 package com.ypyit.neoelima.domain.establishment;
 
 import com.ypyit.neoelima.AbstractIntegrationTest;
+import com.ypyit.neoelima.common.exception.BadRequestException;
 import com.ypyit.neoelima.common.exception.NotFoundException;
 import com.ypyit.neoelima.domain.establishment.dto.PayrollSummaryDto;
 import com.ypyit.neoelima.domain.establishment.dto.SchoolClassDto;
@@ -227,6 +228,21 @@ class StaffServiceTest extends AbstractIntegrationTest {
         this.staffService.deactivate(UUID.fromString(created.getId()));
 
         assertThat(this.staffRepository.findById(UUID.fromString(created.getId()))).isEmpty();
+    }
+
+    @Test
+    @DisplayName("le rattachement de classe n'accepte qu'un profil enseignant")
+    void refusesClassAssignmentForNonTeacher() {
+        StaffForm director = this.form("KOFFI", "Marc");
+        director.setRole(StaffRole.DIRECTION);
+        StaffDto member = this.staffService.create(director);
+        SchoolClassDto mine = this.schoolClassService.create(this.classForm("CM2 C"));
+
+        // Un membre de la direction n'intervient pas devant une classe : lui en rattacher une
+        // n'aurait pas de sens, et le titulaire ne doit pouvoir être qu'un enseignant.
+        assertThatThrownBy(() -> this.staffService.assignClasses(
+                UUID.fromString(member.getId()), List.of(UUID.fromString(mine.getId()))))
+                .isInstanceOf(BadRequestException.class);
     }
 
     private StaffForm form(String lastName, String firstName) {

@@ -156,6 +156,13 @@ public class StaffService {
     @Transactional
     public StaffDto assignClasses(UUID id, List<UUID> classIds) {
         StaffEntity entity = this.load(id);
+        // On ne rattache une classe qu'à un enseignant : un administratif ou un membre de la
+        // direction n'intervient pas devant une classe, et lui en rattacher n'aurait pas de sens.
+        if (entity.getRole() != StaffRole.TEACHER) {
+            throw new BadRequestException(String.format(
+                    "%s %s n'a pas le profil enseignant : seul un enseignant peut être rattaché à une classe.",
+                    entity.getFirstName(), entity.getLastName()));
+        }
         for (UUID classId : classIds) {
             SchoolClassEntity schoolClass = this.schoolClassRepository.findById(classId)
                     .orElseThrow(() -> new NotFoundException(

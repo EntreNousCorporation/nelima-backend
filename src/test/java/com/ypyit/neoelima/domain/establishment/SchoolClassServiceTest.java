@@ -205,6 +205,23 @@ class SchoolClassServiceTest extends AbstractIntegrationTest {
                 .isInstanceOf(BadRequestException.class);
     }
 
+    @Test
+    @DisplayName("un membre sans profil enseignant ne peut pas être désigné titulaire")
+    void refusesANonTeacherAsMainTeacher() {
+        StaffForm director = new StaffForm();
+        director.setFirstName("Aya");
+        director.setLastName("KONÉ");
+        director.setRole(StaffRole.DIRECTION);
+        StaffDto member = this.staffService.create(director);
+
+        SchoolClassForm form = this.form("CM2 D", 40);
+        form.setMainTeacherId(UUID.fromString(member.getId()));
+
+        // Seul un enseignant tient une classe : la direction et l'administratif en sont exclus.
+        assertThatThrownBy(() -> this.schoolClassService.create(form))
+                .isInstanceOf(BadRequestException.class);
+    }
+
     private StaffDto staff(EstablishmentEntity establishment, String lastName, String firstName) {
         StaffForm form = new StaffForm();
         form.setFirstName(firstName);

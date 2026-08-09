@@ -15,6 +15,7 @@ import com.ypyit.neoelima.domain.establishment.entity.SchoolClassEntity;
 import com.ypyit.neoelima.domain.establishment.entity.StaffEntity;
 import com.ypyit.neoelima.domain.establishment.entity.StudentEntity;
 import com.ypyit.neoelima.domain.establishment.enums.InstallmentStatus;
+import com.ypyit.neoelima.domain.establishment.enums.StaffRole;
 import com.ypyit.neoelima.domain.establishment.form.SchoolClassForm;
 import com.ypyit.neoelima.domain.establishment.repository.EstablishmentRepository;
 import com.ypyit.neoelima.domain.establishment.repository.LevelOfStudyRepository;
@@ -198,6 +199,13 @@ public class SchoolClassService {
         if (!member.isActive()) {
             throw new BadRequestException(String.format(
                     "%s ne fait plus partie du personnel actif.", member.getLastName()));
+        }
+        // Seul un enseignant tient une classe : un administratif ou un membre de la direction n'a
+        // pas vocation à en être titulaire, et le proposer brouillait la liste des candidats.
+        if (member.getRole() != StaffRole.TEACHER) {
+            throw new BadRequestException(String.format(
+                    "%s n'a pas le profil enseignant : seul un enseignant peut être titulaire d'une classe.",
+                    member.getLastName()));
         }
         return member;
     }
