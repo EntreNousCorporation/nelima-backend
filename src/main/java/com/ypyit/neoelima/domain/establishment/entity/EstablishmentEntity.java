@@ -32,8 +32,6 @@ import java.io.Serial;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import java.time.LocalDate;
 
 @Getter

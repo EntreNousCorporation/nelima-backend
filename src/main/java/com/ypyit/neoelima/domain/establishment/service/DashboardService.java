@@ -12,7 +12,6 @@ import com.ypyit.neoelima.domain.establishment.entity.QSchoolClassEntity;
 import com.ypyit.neoelima.domain.establishment.entity.QStudentFeeEntity;
 import com.ypyit.neoelima.domain.establishment.enums.InstallmentStatus;
 import com.ypyit.neoelima.domain.payment.entity.QReceiptEntity;
-import com.ypyit.neoelima.domain.payment.entity.ReceiptEntity;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

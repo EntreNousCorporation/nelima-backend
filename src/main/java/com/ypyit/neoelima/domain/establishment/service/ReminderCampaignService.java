@@ -15,7 +15,6 @@ import com.ypyit.neoelima.domain.establishment.entity.StudentEntity;
 import com.ypyit.neoelima.domain.establishment.enums.AuditAction;
 import com.ypyit.neoelima.domain.establishment.enums.InstallmentStatus;
 import com.ypyit.neoelima.domain.establishment.enums.NotificationEvent;
-import com.ypyit.neoelima.domain.establishment.enums.ReminderChannel;
 import com.ypyit.neoelima.domain.establishment.enums.ReminderOrigin;
 import com.ypyit.neoelima.domain.establishment.enums.ReminderTarget;
 import com.ypyit.neoelima.domain.establishment.form.ReminderCampaignForm;

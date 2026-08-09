@@ -47,7 +47,6 @@ public final class StorageUtils {
 
     private static final String DELIMITER_SLASH = "/";
 
-    private static final String DELIMITER_COMMA = ",";
 
     private static final String DELIMITER_DOT = ".";
 
