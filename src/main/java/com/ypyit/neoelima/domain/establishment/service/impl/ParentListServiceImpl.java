@@ -82,11 +82,16 @@ public class ParentListServiceImpl implements ParentListService {
         }
         if (StringUtils.isNotBlank(keyword)) {
             String kw = keyword.trim();
-            // Le contact se cherche par un exists sur la collection, pour ne pas multiplier les
-            // lignes du parent — un parent à trois contacts ne doit pas peser trois fois la page.
+            // Recherche par parent (nom, contact) ET par enfant (nom, matricule) : la barre annonce
+            // « un parent, un contact, un enfant », il faut donc que taper le nom d'un enfant remonte
+            // sa famille. Le contact se cherche par un exists sur la collection, pour ne pas
+            // multiplier les lignes du parent — un parent à trois contacts ne pèse pas trois fois.
             where.and(parent.firstName.containsIgnoreCase(kw)
                     .or(parent.lastName.containsIgnoreCase(kw))
-                    .or(parent.contacts.any().value.containsIgnoreCase(kw)));
+                    .or(parent.contacts.any().value.containsIgnoreCase(kw))
+                    .or(student.firstName.containsIgnoreCase(kw))
+                    .or(student.lastName.containsIgnoreCase(kw))
+                    .or(student.registrationNumber.containsIgnoreCase(kw)));
         }
 
         long total = Objects.requireNonNullElse(this.queryFactory
