@@ -7,6 +7,7 @@ import com.ypyit.neoelima.domain.user.entity.EstablishmentUserEntity;
 import com.ypyit.neoelima.domain.user.entity.UserEntity;
 import com.ypyit.neoelima.domain.user.service.impl.UserDetailsServiceImpl;
 import lombok.RequiredArgsConstructor;
+import org.hibernate.Hibernate;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -44,7 +45,15 @@ public class CurrentUserProvider {
                 || Objects.isNull(authentication.getName())) {
             throw new UnAuthenticatedUserException("No authenticated user in the security context");
         }
-        return this.userDetailsService.loadUserByUsername(authentication.getName());
+        UserEntity user = this.userDetailsService.loadUserByUsername(authentication.getName());
+        // Dé-proxification indispensable. Quand une requête charge un établissement AVANT de résoudre
+        // l'appelant — affecter un élève à une classe charge la classe, donc son établissement, donc
+        // son `principal` en proxy LAZY —, `loadUserByUsername` renvoie ce proxy déjà en session,
+        // typé `UserEntity` de base. Les tests `instanceof EstablishmentUserEntity/AdminUserEntity`
+        // échouent alors, et le directeur de l'école (qui EST le principal) paraît « non rattaché à
+        // un établissement » : 403 sur l'affectation d'élève. On force la sous-classe concrète.
+        // (Le passage de `EstablishmentEntity.principal` en LAZY, contre l'OOM, a révélé le défaut.)
+        return Hibernate.unproxy(user, UserEntity.class);
     }
 
     public boolean isPlatformAdmin() {
