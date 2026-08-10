@@ -4,8 +4,12 @@ import com.ypyit.neoelima.AbstractIntegrationTest;
 import com.ypyit.neoelima.domain.establishment.dto.StudentDto;
 import com.ypyit.neoelima.domain.establishment.entity.EstablishmentEntity;
 import com.ypyit.neoelima.domain.establishment.entity.StudentEntity;
+import com.ypyit.neoelima.domain.establishment.entity.StudentFeeEntity;
 import com.ypyit.neoelima.domain.establishment.form.FeeCreationForm;
+import com.ypyit.neoelima.domain.establishment.form.InstallmentCreationForm;
 import com.ypyit.neoelima.domain.establishment.form.InstallmentSearchForm;
+import com.ypyit.neoelima.domain.establishment.repository.InstallmentRepository;
+import com.ypyit.neoelima.domain.establishment.repository.StudentFeeRepository;
 import com.ypyit.neoelima.domain.establishment.service.InstallmentService;
 import com.ypyit.neoelima.domain.establishment.form.StudentSearchForm;
 import com.ypyit.neoelima.domain.establishment.entity.LevelOfStudyEntity;
@@ -68,6 +72,10 @@ class TenantIsolationTest extends AbstractIntegrationTest {
     private LevelOfStudyRepository levelOfStudyRepository;
     @Autowired
     private InstallmentService installmentService;
+    @Autowired
+    private InstallmentRepository installmentRepository;
+    @Autowired
+    private StudentFeeRepository studentFeeRepository;
 
     private EstablishmentEntity victorLoba;
     private EstablishmentEntity sainteMarie;
@@ -156,6 +164,50 @@ class TenantIsolationTest extends AbstractIntegrationTest {
                 .allSatisfy(fee -> assertThat(fee.getEstablishment().getId())
                         .as("le frais doit appartenir à l'école de l'utilisateur")
                         .isEqualTo(victorLoba.getId()));
+    }
+
+    @Test
+    @DisplayName("on ne peut pas créer une tranche sur l'élève d'une autre école")
+    void installmentCannotBeCreatedOnAnotherSchoolsStudent() {
+        StudentFeeEntity fatouFee = studentFeeRepository.saveAndFlush(StudentFeeEntity.builder()
+                .name("Scolarité 2026").student(fatouAtSainteMarie).build());
+
+        authenticateAs(saveSchoolUser("comptable@victorloba.ci", victorLoba));
+
+        // La faille : `create` chargeait le frais d'élève par identifiant et posait la tranche, sans
+        // aucun contrôle de périmètre — le seul garde-fou étant `hasAuthority('fee:write')`, que
+        // tout comptable détient dans sa propre école. Un identifiant appartenant à une autre école
+        // suffisait donc à y créer une dette. Et cette dette devient de l'argent réel : le tunnel de
+        // paiement accepte toute tranche PENDING, et le reçu sort dans la séquence numérotée de
+        // l'école d'en face.
+        assertThatThrownBy(() -> installmentService.create(InstallmentCreationForm.builder()
+                .amount(new java.math.BigDecimal("50000"))
+                .studentFeeId(fatouFee.getId())
+                .paymentId(UUID.randomUUID())
+                .build()))
+                .isInstanceOf(AccessDeniedException.class);
+
+        assertThat(installmentRepository.findAll())
+                .as("aucune tranche ne doit avoir été créée")
+                .noneSatisfy(installment -> assertThat(installment.getStudentFee().getId())
+                        .isEqualTo(fatouFee.getId()));
+    }
+
+    @Test
+    @DisplayName("la même écriture passe sur un élève de sa propre école")
+    void installmentIsCreatedOnOwnStudent() {
+        StudentFeeEntity aaronFee = studentFeeRepository.saveAndFlush(StudentFeeEntity.builder()
+                .name("Scolarité 2026").student(aaronAtVictorLoba).build());
+
+        authenticateAs(saveSchoolUser("comptable@victorloba.ci", victorLoba));
+
+        // Le pendant du test précédent : une garde qui refuse tout serait passée inaperçue.
+        assertThatCode(() -> installmentService.create(InstallmentCreationForm.builder()
+                .amount(new java.math.BigDecimal("50000"))
+                .studentFeeId(aaronFee.getId())
+                .paymentId(UUID.randomUUID())
+                .build()))
+                .doesNotThrowAnyException();
     }
 
     @Test

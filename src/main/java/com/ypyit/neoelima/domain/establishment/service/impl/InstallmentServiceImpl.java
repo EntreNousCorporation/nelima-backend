@@ -42,21 +42,49 @@ public class InstallmentServiceImpl implements InstallmentService {
     private final StudentRepository studentRepository;
     private final CurrentUserProvider currentUserProvider;
 
+    /**
+     * Découpe un frais d'élève en tranche.
+     *
+     * <p>Le chargement et le contrôle de périmètre sont <strong>hors du {@code try}</strong>, et
+     * délibérément : le {@code catch (Exception)} qui suit réemballe tout en {@code BusinessException},
+     * laquelle se rend en 500. Une garde posée à l'intérieur y perdrait son 403 — le refus
+     * deviendrait une panne serveur, et l'appelant croirait à un incident plutôt qu'à un interdit.
+     */
     @Override
     public InstallmentDto create(InstallmentCreationForm creationForm) throws BusinessException {
+        StudentFeeEntity studentFee = this.studentFeeRepository
+                .findById(creationForm.getStudentFeeId())
+                .orElseThrow(() -> new NotFoundException(String
+                        .format("Student fee with id %s not found", creationForm.getStudentFeeId())));
+
+        this.currentUserProvider.assertCanAdministerEstablishment(establishmentOf(studentFee));
+
         try {
-            StudentFeeEntity studentFee = this.studentFeeRepository
-                    .findById(creationForm.getStudentFeeId())
-                    .orElseThrow(() -> new NotFoundException(String
-                            .format("Student fee with id %s not found", creationForm.getStudentFeeId())));
             InstallmentEntity installment = this.installmentMapper.toEntity(creationForm);
             installment.setStudentFee(studentFee);
             return this.installmentMapper.toDto(this.installmentRepository.save(installment));
-        } catch (NotFoundException e) {
-            throw e;
         } catch (Exception e) {
             throw new BusinessException(e);
         }
+    }
+
+    /**
+     * L'école à laquelle se rattache un frais d'élève, ou un refus.
+     *
+     * <p>{@code student_fee.student_id} et {@code student.establishment_id} sont tous deux nullables
+     * au schéma. Un périmètre indéterminable ne doit pas se traduire par « autorisé » : sans cette
+     * porte fermée, une donnée incomplète rouvrirait exactement le trou que la garde bouche.
+     */
+    private UUID establishmentOf(StudentFeeEntity studentFee) {
+        StudentEntity student = studentFee.getStudent();
+        UUID establishmentId = student == null || student.getEstablishment() == null
+                ? null
+                : student.getEstablishment().getId();
+        if (establishmentId == null) {
+            throw new AccessDeniedException(String.format(
+                    "Student fee %s is not attached to an establishment", studentFee.getId()));
+        }
+        return establishmentId;
     }
 
     @Override
