@@ -50,9 +50,27 @@ public class AuthService {
 
     private SecretKey signingKey;
 
+    /**
+     * La clé de signature, ou un refus de démarrer.
+     *
+     * <p>Le repli d'{@code application.yml} était une valeur <strong>fonctionnelle</strong> de
+     * 33 caractères, publiée dans ce dépôt : la seule assertion portant sur la longueur, un
+     * environnement déployé sans {@code JWT_SECRET} démarrait normalement avec un secret que
+     * quiconque lit le code peut reproduire — et forger un jeton pour n'importe quel compte.
+     *
+     * <p>C'est plus grave qu'une configuration manquante, parce que c'est <em>silencieux</em> : une
+     * configuration manquante fait tomber le démarrage, et on la corrige dans la minute.
+     *
+     * <p>Le repli est donc vide, et le vide refusé ici. La production porte la variable depuis
+     * toujours (vérifié) ; les tests fournissent la leur ; un poste de développement doit la poser,
+     * ce qui est exactement l'intention.
+     */
     @PostConstruct
     void initSigningKey() {
-        byte[] secretBytes = this.securityProperties.getSecret().getBytes(StandardCharsets.UTF_8);
+        String secret = this.securityProperties.getSecret();
+        Assert.hasText(secret,
+                "security.jwt.secret est obligatoire : renseignez la variable d'environnement JWT_SECRET");
+        byte[] secretBytes = secret.getBytes(StandardCharsets.UTF_8);
         Assert.isTrue(secretBytes.length >= MIN_SECRET_BYTES,
                 "security.jwt.secret doit faire au moins " + MIN_SECRET_BYTES + " caractères");
         this.signingKey = Keys.hmacShaKeyFor(secretBytes);

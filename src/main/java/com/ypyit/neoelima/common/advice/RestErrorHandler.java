@@ -26,6 +26,9 @@ import org.springframework.web.HttpMediaTypeNotAcceptableException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -159,6 +162,48 @@ public class RestErrorHandler {
                 .build();
     }
 
+    /**
+     * Une faute de forme du client est un 400, jamais une panne du serveur.
+     *
+     * <p>Ces deux exceptions n'étaient traitées nulle part et tombaient sur le
+     * {@code @ExceptionHandler(Exception.class)}, donc en <strong>500</strong> : un identifiant qui
+     * n'est pas un UUID, une date illisible, un paramètre obligatoire omis. Elles n'héritent ni de
+     * {@code BindException} ni d'{@code IllegalArgumentException} — {@code TypeMismatchException}
+     * descend de {@code BeansException} — d'où le trou, invisible à la lecture des handlers déjà
+     * présents.
+     *
+     * <p>Un 500 n'est pas qu'un mauvais code : il déclenche les alertes, il gonfle les journaux
+     * d'incidents, et il fait chercher une panne là où il n'y a qu'une requête mal formée.
+     */
+    @ExceptionHandler({MethodArgumentTypeMismatchException.class,
+            MissingServletRequestParameterException.class})
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ApiError handleMalformedRequest(Exception exception, HttpServletRequest httpServletRequest) {
+        log.warn("Requête mal formée: {}", exception.getLocalizedMessage());
+        return ApiError.builder()
+                .status(HttpStatus.BAD_REQUEST)
+                .path(httpServletRequest.getRequestURI())
+                .debugMessage("La requête est mal formée.")
+                .build();
+    }
+
+    /**
+     * Une URL inconnue est un 404.
+     *
+     * <p>Elle rendait un 500 : {@code NoResourceFoundException} n'était pas traitée, et
+     * {@code ExceptionHandlerExceptionResolver} passe avant le résolveur par défaut de Spring, qui
+     * l'aurait pourtant correctement rendue.
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ApiError handleUnknownRoute(NoResourceFoundException exception, HttpServletRequest httpServletRequest) {
+        return ApiError.builder()
+                .status(HttpStatus.NOT_FOUND)
+                .path(httpServletRequest.getRequestURI())
+                .debugMessage("La ressource demandée est introuvable.")
+                .build();
+    }
+
     @ExceptionHandler({NotFoundException.class, UsernameNotFoundException.class})
     @ResponseStatus(HttpStatus.NOT_FOUND)
     public ApiError handleNotFoundException(Exception exception, HttpServletRequest httpServletRequest) {
@@ -255,20 +300,22 @@ public class RestErrorHandler {
                 .build();
     }
 
-    @ExceptionHandler(SignatureException.class)
-    @ResponseStatus(HttpStatus.PARTIAL_CONTENT)
-    public ApiError processError(SignatureException exception, HttpServletRequest httpServletRequest) {
-
-        return ApiError.builder()
-                .status(HttpStatus.PARTIAL_CONTENT)
-                .path(httpServletRequest.getRequestURI())
-                .debugMessage("La signature de la requête est invalide.")
-                .build();
-    }
-
     @ExceptionHandler({UnAuthenticatedUserException.class,
             ExpiredJwtException.class,
-            MalformedJwtException.class})
+            MalformedJwtException.class,
+            /*
+             * Une signature invalide est un refus, pas un demi-succès.
+             *
+             * <p>Elle rendait `206 Partial Content` — un code de la famille 2xx. Tout client qui
+             * teste `response.ok` (le défaut de `fetch`, de Dio et de la plupart des enveloppes
+             * HTTP) prenait donc un jeton forgé pour un appel réussi, puis tentait de lire l'objet
+             * attendu dans un corps d'erreur. Côté mobile, cela retombait sur l'écran muet.
+             *
+             * <p>Le chemin s'ouvre sur un jeton bien formé signé d'une AUTRE clé — rotation du
+             * secret, ou jeton d'un environnement de développement pointé sur la production. Il
+             * rejoint donc les autres refus d'authentification : 401.
+             */
+            SignatureException.class})
     @ResponseStatus(HttpStatus.UNAUTHORIZED)
     public ApiError handleUnauthorized(Exception exception, HttpServletRequest httpServletRequest) {
         log.warn("Unauthorized: {}", exception.getLocalizedMessage());

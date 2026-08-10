@@ -70,7 +70,10 @@ spring:
 security:
   jwt:
     # Clé HMAC-SHA256 : 32 caractères minimum, jamais de valeur par défaut en production.
-    secret: ${JWT_SECRET:dev-only-secret-change-me-32-chars-min}
+    # Aucun repli : un secret par défaut fonctionnel, publié dans le dépôt, laisse démarrer
+    # silencieusement un environnement dont les jetons sont forgeables par quiconque lit ce fichier.
+    # L'absence est refusée au démarrage (AuthService.initSigningKey).
+    secret: ${JWT_SECRET:}
     expiration-date: 86400000
     token-prefix: Bearer
     header-value: Authorization

@@ -34,5 +34,10 @@ public abstract class AbstractIntegrationTest {
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
         registry.add("nelima.initialize-data", () -> "false");
+        // Le secret de signature n'a plus de repli dans `application.yml` : un défaut fonctionnel
+        // publié dans le dépôt laissait démarrer en silence un environnement aux jetons forgeables.
+        // La suite fournit donc le sien, propre à elle et sans valeur ailleurs.
+        registry.add("security.jwt.secret",
+                () -> "secret-de-test-uniquement-32-caracteres-minimum");
     }
 }

@@ -218,7 +218,19 @@ public class InitParameter implements CommandLineRunner {
                     }
                 } else {
                     UserEntity user = this.userRepository.findByPrimaryContact(email).get();
-                    user.setPasswordValue(PasswordEntity.builder().value(this.passwordEncoder.encode(defaultAdminPwd)).build());
+                    // Le mot de passe n'est PAS réécrit ici.
+                    //
+                    // Il l'était, et à chaque démarrage : `InitParameter` est un `CommandLineRunner`
+                    // et `initialize-data` vaut `true` en production, donc chaque `deploy.sh`
+                    // rétablissait `DEFAULT_ADMIN_PWD` sur un compte qui atteint la configuration de
+                    // l'agrégateur de paiement, le taux de commission et toutes les écoles.
+                    //
+                    // Deux conséquences : une rotation faite depuis l'application était annulée au
+                    // déploiement suivant — silencieusement, ce qui est le pire des deux —, et le
+                    // mot de passe devait vivre en clair dans le compose du VPS à perpétuité.
+                    //
+                    // L'amorçage garde son rôle : créer le compte s'il manque (branche du dessus).
+                    // Il n'a jamais eu à le reprendre en main s'il existe.
                     user.setFirstName(firstName);
                     user.setLastName(lastName);
                     users.add(user);

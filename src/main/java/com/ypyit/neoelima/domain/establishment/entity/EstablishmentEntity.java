@@ -135,11 +135,25 @@ public class EstablishmentEntity extends BaseEntity {
     )
     private Set<LevelOfStudyEntity> levelOfStudies = new HashSet<>();
 
+    /**
+     * Deux établissements sont le même s'ils portent le même identifiant.
+     *
+     * <p>La version précédente vérifiait le type — {@code Hibernate.getClass(this) != getClass(o)},
+     * donc {@code o} est bien un {@code EstablishmentEntity} — puis castait vers
+     * <strong>{@code PermissionEntity}</strong> à la ligne suivante. Copier-coller. Toute
+     * comparaison entre deux établissements distincts levait un {@code ClassCastException}.
+     *
+     * <p>Latent jusqu'ici : aucun {@code Set<EstablishmentEntity>}, aucun {@code contains}, toutes
+     * les comparaisons du code passent par {@code getId().equals(...)}. Mais {@code hashCode()} rend
+     * une constante pour toutes les instances — au premier établissement déposé dans un
+     * {@code HashSet}, chaque insertion entre en collision, appelle {@code equals}, et l'exception
+     * part loin du changement qui l'aura provoquée.
+     */
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || Hibernate.getClass(this) != Hibernate.getClass(o)) return false;
-        PermissionEntity that = (PermissionEntity) o;
+        EstablishmentEntity that = (EstablishmentEntity) o;
         return getId() != null && Objects.equals(getId(), that.getId());
     }
 
