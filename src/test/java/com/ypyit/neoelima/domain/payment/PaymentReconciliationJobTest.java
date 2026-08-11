@@ -26,7 +26,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.test.context.TestPropertySource;
 
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -46,7 +46,23 @@ import static org.mockito.Mockito.when;
  * <p>Sans ce filet, un parent débité dont la notification s'est perdue verrait sa tranche rester
  * affichée comme due, et l'école n'aurait jamais vu l'encaissement.
  */
-@Transactional
+/**
+ * <p><strong>Cette classe est délibérément sans {@code @Transactional} et sans le filet
+ * {@code enable_lazy_load_no_trans}</strong>, contrairement aux autres tests du paiement.
+ *
+ * <p>Avec eux, elle ne prouvait rien : la transaction de test garde tout attaché, et le filet
+ * rattrape ce qui ne l'est pas. Le travail de réconciliation, lui, s'exécute <em>hors</em> de toute
+ * transaction et manipule donc des entités détachées — c'est sa nature, il appelle l'agrégateur
+ * entre le chargement et le règlement. Les deux masques empilés rendaient ce défaut invisible.
+ *
+ * <p>Sans eux, ce test échoue sur le code d'avant : {@code intent.getInstallment()} lève dans la
+ * branche qui solde. Vérifié dans les deux sens.
+ *
+ * <p>Conséquence assumée : les données de ce test ne sont pas annulées. Chaque cas construit ses
+ * propres identifiants, il n'y a donc rien à partager avec les autres.
+ */
+@TestPropertySource(properties =
+        "spring.jpa.properties.hibernate.enable_lazy_load_no_trans=false")
 class PaymentReconciliationJobTest extends AbstractIntegrationTest {
 
     @Autowired
@@ -80,6 +96,8 @@ class PaymentReconciliationJobTest extends AbstractIntegrationTest {
 
         assertThat(paymentIntentRepository.findById(intent.getId()).orElseThrow().getStatus())
                 .isEqualTo(PaymentIntentStatus.SUCCEEDED);
+        // `getInstallment()` est sûr ici même détaché : la fixture a posé l'instance réelle sur le
+        // constructeur, ce n'est pas un proxy. C'est dans le *service* que le proxy apparaissait.
         assertThat(installmentRepository.findById(intent.getInstallment().getId()).orElseThrow().getStatus())
                 .isEqualTo(InstallmentStatus.PAID);
         assertThat(receiptRepository.findByPaymentIntent_Id(intent.getId()))

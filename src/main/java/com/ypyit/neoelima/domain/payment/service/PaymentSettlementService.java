@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Applique le sort d'une tentative de paiement, quelle qu'en soit la source.
@@ -33,6 +34,48 @@ public class PaymentSettlementService {
     private final PaymentIntentRepository paymentIntentRepository;
     private final InstallmentRepository installmentRepository;
     private final ReceiptIssuer receiptIssuer;
+
+    /**
+     * Solde la tranche désignée par son identifiant — pour les appelants qui n'ont pas de session.
+     *
+     * <p>La réconciliation charge ses tentatives, appelle l'agrégateur, puis règle. Entre le
+     * chargement et le règlement il n'y a <strong>aucune transaction</strong> — c'est délibéré, un
+     * aller-retour HTTP ne doit pas tenir une connexion à la base — mais cela rend les entités
+     * <strong>détachées</strong>. {@code settle(entity, …)} déréférence pourtant
+     * {@code intent.getInstallment()} : sur une entité détachée, ce proxy porte une session close.
+     *
+     * <p>Cela fonctionnait par un effet de bord de la configuration : {@code
+     * hibernate.enable_lazy_load_no_trans} ouvre une session jetable à chaque accès. Le jour où ce
+     * drapeau tombe — et il doit tomber — le rattrapage lève, dans la branche qui solde. C'est-à-dire
+     * que <strong>l'argent serait pris et la tranche jamais soldée</strong>, sur le chemin même qui
+     * existe pour réparer les webhooks perdus.
+     *
+     * <p>Relire ici, dans la transaction du règlement, rend la question sans objet : l'entité est
+     * gérée, et elle l'est parce que la méthode qui la lit est celle qui l'écrit.
+     */
+    @Transactional
+    public Optional<ReceiptEntity> settle(UUID intentId, String origin) {
+        return this.reread(intentId)
+                .map(intent -> this.settle(intent, origin))
+                .orElseGet(() -> {
+                    log.warn("PAYMENT_INTENT_VANISHED: intent {} not found at settlement ({})",
+                            intentId, origin);
+                    return Optional.empty();
+                });
+    }
+
+    /** Même raison que {@link #settle(UUID, String)} : relire avant de clore. */
+    @Transactional
+    public void close(UUID intentId, PaymentIntentStatus outcome, String origin) {
+        this.reread(intentId).ifPresentOrElse(
+                intent -> this.close(intent, outcome, origin),
+                () -> log.warn("PAYMENT_INTENT_VANISHED: intent {} not found at closing ({})",
+                        intentId, origin));
+    }
+
+    private Optional<PaymentIntentEntity> reread(UUID intentId) {
+        return this.paymentIntentRepository.findById(intentId);
+    }
 
     /**
      * Solde la tranche et émet le reçu.

@@ -16,6 +16,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
 
 /**
  * Rattrape les tentatives de paiement restées en attente.
@@ -58,41 +59,59 @@ public class PaymentReconciliationJob {
         log.info("RECONCILIATION_START: {} pending payment(s) older than {} minutes",
                 stale.size(), PENDING_GRACE_PERIOD.toMinutes());
 
-        for (PaymentIntentEntity intent : stale) {
+        // On ne retient de chaque tentative que ce qu'il faut pour interroger l'agrégateur : un
+        // identifiant, une référence, une date. **Pas l'entité.**
+        //
+        // <p>Le dépôt ci-dessus ouvre et referme sa propre transaction : tout ce qu'il rend est
+        // détaché à l'instant où il rend. Promener ces entités jusqu'au règlement, c'est déréférencer
+        // des associations sur une session close — ce qui ne tenait que par
+        // `hibernate.enable_lazy_load_no_trans`. Un identifiant, lui, ne se détache pas.
+        List<StaleAttempt> attempts = stale.stream()
+                .map(intent -> new StaleAttempt(
+                        intent.getId(), intent.getInternalReference(), intent.getCreatedAt()))
+                .toList();
+
+        for (StaleAttempt attempt : attempts) {
             try {
-                this.reconcile(intent);
+                this.reconcile(attempt);
             } catch (RuntimeException e) {
                 // Une tentative illisible ne doit pas empêcher de traiter les suivantes.
                 log.error("RECONCILIATION_FAILED: reference {} could not be reconciled: {}",
-                        intent.getInternalReference(), e.getMessage());
+                        attempt.reference(), e.getMessage());
             }
         }
     }
 
-    private void reconcile(PaymentIntentEntity intent) {
-        if (StringUtils.isBlank(intent.getInternalReference())) {
+    /** Ce qu'on emporte d'une tentative en attente : rien qui dépende d'une session ouverte. */
+    private record StaleAttempt(UUID id, String reference, Instant createdAt) {
+    }
+
+    private void reconcile(StaleAttempt attempt) {
+        if (StringUtils.isBlank(attempt.reference())) {
             log.warn("RECONCILIATION_SKIPPED: payment intent {} has no aggregator reference",
-                    intent.getId());
+                    attempt.id());
             return;
         }
 
-        UnifiedTransaction transaction = this.paymentService.get(intent.getInternalReference());
+        // Hors transaction, et cela reste délibéré : l'agrégateur peut être lent, et tenir une
+        // connexion à la base pendant ce temps épuiserait le pool.
+        UnifiedTransaction transaction = this.paymentService.get(attempt.reference());
         if (Objects.isNull(transaction)) {
             log.warn("RECONCILIATION_UNKNOWN: reference {} is unknown to PaySwitch",
-                    intent.getInternalReference());
+                    attempt.reference());
             return;
         }
 
         switch (transaction.status()) {
-            case COMPLETED -> this.settlementService.settle(intent, ORIGIN);
-            case FAILED -> this.settlementService.close(intent, PaymentIntentStatus.FAILED, ORIGIN);
+            case COMPLETED -> this.settlementService.settle(attempt.id(), ORIGIN);
+            case FAILED -> this.settlementService.close(attempt.id(), PaymentIntentStatus.FAILED, ORIGIN);
             case CANCELLED, EXPIRED ->
-                    this.settlementService.close(intent, PaymentIntentStatus.CANCELLED, ORIGIN);
+                    this.settlementService.close(attempt.id(), PaymentIntentStatus.CANCELLED, ORIGIN);
             // Un remboursement suppose un encaissement antérieur : le voir sur une tentative encore
             // en attente signale une incohérence, à traiter à la main plutôt qu'à deviner.
             case REFUNDED -> log.error("RECONCILIATION_REFUNDED_WHILE_PENDING: reference {} needs manual review",
-                    intent.getInternalReference());
-            case PENDING, PROCESSING -> this.warnIfStuck(intent, transaction.status());
+                    attempt.reference());
+            case PENDING, PROCESSING -> this.warnIfStuck(attempt, transaction.status());
         }
     }
 
@@ -100,8 +119,8 @@ public class PaymentReconciliationJob {
      * Une transaction encore en cours n'est pas anormale, mais elle ne devrait pas le rester. On
      * n'a pas de moyen de la trancher automatiquement : on la signale pour revue.
      */
-    private void warnIfStuck(PaymentIntentEntity intent, PaymentStatus status) {
+    private void warnIfStuck(StaleAttempt attempt, PaymentStatus status) {
         log.warn("RECONCILIATION_STILL_PENDING: reference {} is still {} at the aggregator since {}",
-                intent.getInternalReference(), status, intent.getCreatedAt());
+                attempt.reference(), status, attempt.createdAt());
     }
 }
