@@ -58,7 +58,16 @@ public class StudentEntity extends BaseEntity {
             inverseJoinColumns = @JoinColumn(name = "user_id", referencedColumnName = "id")
     )
     private Set<UserEntity> parentUsers = new HashSet<>();
-    @ManyToOne
+    /*
+     * LAZY. C'est la dernière association eager de la chaîne de l'argent, et la plus délicate : elle
+     * est sur le chemin d'autorisation — `CurrentUserProvider.assertCanAccessStudent` et les gardes
+     * de périmètre la lisent.
+     *
+     * Tous ses lecteurs sont dans des services transactionnels, elle y devient donc un select de
+     * plus, jamais une exception. Livrée séparément des trois pas précédents, exprès : si un
+     * incident survient sur le paiement, on doit pouvoir dire lequel accuser.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
     @ToString.Exclude
     @JoinColumn(name = "establishment_id", referencedColumnName = "id")
     private EstablishmentEntity establishment;

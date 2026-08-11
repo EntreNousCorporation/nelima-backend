@@ -5,6 +5,7 @@ import com.ypyit.neoelima.common.entity.BaseEntity;
 import com.ypyit.neoelima.domain.establishment.enums.InstallmentStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.JoinColumn;
@@ -77,7 +78,12 @@ public class InstallmentEntity extends BaseEntity {
      * métamodèle et toute requête filtrant sur l'établissement de l'élève échoue en
      * NullPointerException — à l'exécution seulement, la compilation ne signale rien.
      */
-    @ManyToOne
+    /*
+     * LAZY. La racine de la volée : c'est par elle que le chargement d'une tranche atteignait
+     * l'élève, sa classe, son école et le frais. Quatorze lecteurs, tous dans des services
+     * transactionnels — dont `ReceiptIssuer`, qui émet le reçu.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
     @ToString.Exclude
     @QueryInit("student.establishment")
     @JoinColumn(name = "student_fee_id", referencedColumnName = "id")
