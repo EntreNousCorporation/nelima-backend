@@ -8,6 +8,7 @@ import com.ypyit.neoelima.domain.payment.entity.ReceiptEntity;
 import com.ypyit.neoelima.domain.payment.repository.ReceiptRepository;
 import com.ypyit.neoelima.domain.user.entity.EstablishmentUserEntity;
 import com.ypyit.neoelima.domain.user.entity.UserEntity;
+import org.hibernate.Hibernate;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
 import lombok.extern.slf4j.Slf4j;
@@ -100,9 +101,11 @@ public class ReceiptIssuer {
         if (StringUtils.isNotBlank(paymentIntent.getPayerName())) {
             return paymentIntent.getPayerName().trim();
         }
-        return paymentIntent.getPayer() instanceof EstablishmentUserEntity
-                ? null
-                : fullNameOf(paymentIntent.getPayer());
+        // Même raison que dans `ReceiptAudience` : sur une intention relue, `getPayer()` rend un
+        // proxy typé `UserEntity`, et l'agent d'école passait pour un parent — son nom s'inscrivait
+        // alors sur le reçu, là où la pièce doit rester muette sur le guichetier.
+        UserEntity payer = Hibernate.unproxy(paymentIntent.getPayer(), UserEntity.class);
+        return payer instanceof EstablishmentUserEntity ? null : fullNameOf(payer);
     }
 
     private static String fullNameOf(StudentEntity student) {

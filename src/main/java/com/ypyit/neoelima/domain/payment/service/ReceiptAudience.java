@@ -4,6 +4,7 @@ import com.ypyit.neoelima.domain.establishment.entity.StudentEntity;
 import com.ypyit.neoelima.domain.payment.entity.PaymentIntentEntity;
 import com.ypyit.neoelima.domain.user.entity.EstablishmentUserEntity;
 import com.ypyit.neoelima.domain.user.entity.UserEntity;
+import org.hibernate.Hibernate;
 
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -45,8 +46,14 @@ final class ReceiptAudience {
         StudentEntity student = intent.getInstallment().getStudentFee().getStudent();
         student.getParentUsers().forEach(parent -> put(accounts, parent));
 
-        if (!(intent.getPayer() instanceof EstablishmentUserEntity)) {
-            put(accounts, intent.getPayer());
+        // Dé-proxification avant le test de type. `payer` est paresseux : relue — par le webhook,
+        // par la réconciliation, par une émission différée — l'intention rend un proxy typé
+        // `UserEntity` de base, et `instanceof EstablishmentUserEntity` répond faux pour un agent
+        // d'école. Il se retrouvait alors ajouté aux destinataires, c'est-à-dire qu'il recevait le
+        // reçu d'une famille qui n'est pas la sienne.
+        UserEntity payer = Hibernate.unproxy(intent.getPayer(), UserEntity.class);
+        if (!(payer instanceof EstablishmentUserEntity)) {
+            put(accounts, payer);
         }
         return accounts.values();
     }
