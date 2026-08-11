@@ -4,6 +4,7 @@ import com.ypyit.neoelima.common.entity.BaseEntity;
 import com.ypyit.neoelima.domain.user.entity.UserEntity;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinTable;
 import jakarta.persistence.ManyToMany;
@@ -66,7 +67,13 @@ public class StudentEntity extends BaseEntity {
      * Classe d'affectation, facultative : un élève inscrit en cours d'année attend souvent d'être
      * réparti, et le laisser sans classe vaut mieux que de le placer au hasard.
      */
-    @ManyToOne
+    /*
+     * LAZY : `schoolClass` amenait le second `level_of_study` (avec sa traduction) et le second
+     * `establishment` (avec son adresse et son image). Six jointures de plus sur le chargement
+     * d'une tranche, pour une donnée que seul `ReceiptIssuer` lit — une fois, à l'émission du
+     * reçu, et dans une transaction.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
     @ToString.Exclude
     @JoinColumn(name = "school_class_id", referencedColumnName = "id")
     private SchoolClassEntity schoolClass;

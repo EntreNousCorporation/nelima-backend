@@ -2,6 +2,7 @@ package com.ypyit.neoelima.domain.establishment.entity;
 
 import com.ypyit.neoelima.common.entity.BaseEntity;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
@@ -35,7 +36,14 @@ public class StudentFeeEntity extends BaseEntity {
     @ToString.Exclude
     @JoinColumn(name = "student_id", referencedColumnName = "id")
     private StudentEntity student;
-    @ManyToOne
+    /*
+     * LAZY : `fee` était atteint deux fois dans le chargement d'une tranche — par le frais de
+     * l'élève et par l'échéancier — et chaque occurrence traînait tout son établissement, avec son
+     * adresse et son image de couverture. Huit des vingt-deux jointures pour deux lignes changées.
+     *
+     * Le règlement ne le lit pas : `ReceiptIssuer` prend le libellé sur la tranche elle-même.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
     @ToString.Exclude
     @JoinColumn(name = "fee_id", referencedColumnName = "id")
     private FeeEntity fee;

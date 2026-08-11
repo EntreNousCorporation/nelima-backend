@@ -33,6 +33,11 @@ spring:
   # Spring Boot, que le bean Flyway de PaySwitch désactive. Voir FlywayConfiguration.
   jpa:
     show-sql: false
+    # Écrit noir sur blanc, alors que c'est déjà le défaut de Spring Boot. Sans cette ligne, le jour
+    # où quelqu'un le passera à `false` — ce qui est le bon geste à terme — le diff ne montrera qu'un
+    # ajout anodin, et non le changement de comportement que c'est : les associations paresseuses
+    # ne se chargent plus pendant le rendu de la réponse.
+    open-in-view: true
     properties:
       hibernate:
         format_sql: true

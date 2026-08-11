@@ -84,7 +84,12 @@ public class EstablishmentEntity extends BaseEntity {
     private boolean isPrimary;
     private boolean active;
     @ToString.Exclude
-    @OneToOne(cascade = CascadeType.ALL)
+    /*
+     * LAZY : l'adresse suivait chaque établissement, et l'établissement était atteint plusieurs
+     * fois par chargement. Elle n'est lue que par la fiche d'école et la carte de contact, toutes
+     * deux dans une transaction.
+     */
+    @OneToOne(cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @JoinColumn(name = "address_id", referencedColumnName = "id")
     private AddressEntity address;
 
@@ -110,8 +115,10 @@ public class EstablishmentEntity extends BaseEntity {
     @JoinColumn(name = "parent_id", referencedColumnName = "id")
     private EstablishmentEntity parent;
     @ToString.Exclude
+    /* LAZY : même raison que l'adresse — une image de couverture n'a rien à faire dans le
+     * chargement d'une tranche de scolarité. */
     @JoinColumn(name = "file_id", referencedColumnName = "id")
-    @OneToOne(cascade = {CascadeType.ALL})
+    @OneToOne(cascade = {CascadeType.ALL}, fetch = FetchType.LAZY)
     private FileMediaEntity coverImage;
     @Builder.Default
     @ToString.Exclude

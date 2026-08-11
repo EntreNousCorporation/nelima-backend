@@ -39,6 +39,18 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Table(name = "installment")
+/*
+ * Mesure du 11/08/2026, avant tout passage en LAZY — pour qu'on puisse constater le gain plutôt que
+ * l'annoncer. Un simple `installmentRepository.findById(...)` produit :
+ *
+ *   22 LEFT JOIN, 24 alias, 10 tables distinctes
+ *   establishment ×4, address ×4, file_media ×4, fee ×2, level_of_study ×2, translate ×2,
+ *   student_fee, student, school_class, fee_schedule
+ *
+ * `establishment` est atteint par quatre chemins indépendants — via l'élève, via sa classe, via le
+ * frais, via l'échéancier du frais — et chacun traîne son adresse et son image de couverture.
+ * Refaire la mesure après chaque étape : `-Dspring.jpa.show-sql=true` sur une sonde jetable.
+ */
 public class InstallmentEntity extends BaseEntity {
 
     @Serial
