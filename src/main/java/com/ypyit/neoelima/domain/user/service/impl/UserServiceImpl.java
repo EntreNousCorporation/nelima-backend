@@ -65,6 +65,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.http.client.utils.URIBuilder;
+import org.hibernate.Hibernate;
 import org.springframework.context.MessageSource;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -159,6 +160,40 @@ public class UserServiceImpl implements UserService {
                     .user(user).build(), EmailTemplateType.WELCOME_USER);
             return this.userMapper.toDto(savedUser);
         } catch (DuplicateResourceException | BadRequestException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new BusinessException(e);
+        }
+    }
+
+    @Override
+    public UserDto resendActivationLink(UUID establishmentId, UUID userId) throws BusinessException {
+        try {
+            UserEntity user = this.userRepository.findById(userId)
+                    .orElseThrow(() -> new NotFoundException(
+                            String.format("Cannot find user with id %s", userId)));
+
+            // L'appartenance se vérifie, elle ne se suppose pas : l'appelant a prouvé qu'il
+            // administre `establishmentId`, rien d'autre. Sans ce contrôle, l'identifiant d'un
+            // compte d'une autre école suffirait à lui faire expédier un lien de mot de passe.
+            UUID own = Optional.of(Hibernate.unproxy(user, UserEntity.class))
+                    .filter(EstablishmentUserEntity.class::isInstance)
+                    .map(EstablishmentUserEntity.class::cast)
+                    .map(EstablishmentUserEntity::getEstablishment)
+                    .map(EstablishmentEntity::getId)
+                    .orElseThrow(() -> new BadRequestException(
+                            "This account is not attached to an establishment"));
+            if (!own.equals(establishmentId)) {
+                throw new BadRequestException(
+                        String.format("User %s does not belong to establishment %s", userId, establishmentId));
+            }
+
+            this.sendResetPasswordEmail(InitResetPasswordRequest.builder()
+                    .username(user.getUsername())
+                    .target(RoleTarget.PARTNER)
+                    .user(user).build(), EmailTemplateType.WELCOME_USER);
+            return this.userMapper.toDto(user);
+        } catch (NotFoundException | BadRequestException e) {
             throw e;
         } catch (Exception e) {
             throw new BusinessException(e);
@@ -278,6 +313,7 @@ public class UserServiceImpl implements UserService {
                                     resetPasswordForm.getUsername())));
             this.sendResetPasswordEmail(InitResetPasswordRequest.builder()
                     .username(resetPasswordForm.getUsername())
+                    .target(targetOf(user))
                     .user(user).build(), EmailTemplateType.RESET_PASSWORD);
             return this.userMapper.toDto(user);
         } catch (NotFoundException e) {
@@ -553,7 +589,7 @@ public class UserServiceImpl implements UserService {
             String token = this.authService.generateResetPasswordToken(
                     ResetPwdRequest.builder()
                             .user(user)
-                            .numberOfMilliSeconds(timeout)
+                            .validityInMinutes(timeout)
                             .build());
             this.cacheService.saveValueWithExpiration(String.format(PARTNER_ROOT_USER_EMAIL_KEY, email), token, timeout);
             Context context = this.emailDefaultProperties.getDefaultContext();
@@ -596,6 +632,25 @@ public class UserServiceImpl implements UserService {
                         SmsTemplateType.INVITE_STUDENT_PARENT_SMS.getValue(),
                         new Object[]{this.emailConfigProperties.getPlatformName()}, CurrentLocale.getValue()),
                 username);
+    }
+
+    /**
+     * Le portail où renvoyer ce compte.
+     *
+     * <p>{@code initResetPassword} — le « mot de passe oublié » des portails — ne posait pas de
+     * cible du tout. {@code RoleTarget.ADMIN.equals(null)} valant faux, un administrateur YPYit
+     * recevait un lien vers le portail des écoles, où son compte n'a rien à faire.
+     *
+     * <p>Le dé-proxyfiage n'est pas décoratif : les comptes héritent d'une table unique, et un
+     * {@code instanceof} sur un proxy de la super-classe répond faux — c'est le défaut que
+     * {@code CurrentUserProvider} et {@code ReceiptAudience} corrigent déjà de la même façon.
+     *
+     * <p>Une famille tombe du côté partenaire : elle n'a pas de portail web, son parcours de mot de
+     * passe passe par l'application et un code à usage unique.
+     */
+    private static RoleTarget targetOf(UserEntity user) {
+        return Hibernate.unproxy(user, UserEntity.class) instanceof AdminUserEntity
+                ? RoleTarget.ADMIN : RoleTarget.PARTNER;
     }
 
     private String buildTokenLink(String email, String token, RoleTarget target) throws URISyntaxException {

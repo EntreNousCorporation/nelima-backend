@@ -25,6 +25,7 @@ import org.springframework.util.Assert;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -192,7 +193,8 @@ public class AuthService {
         claims.put(CustomClaims.USERNAME, resetPwdRequest.getUser().getUsername());
 
         long startDate = System.currentTimeMillis();
-        long tokenDuration = Long.sum(startDate, resetPwdRequest.getNumberOfMilliSeconds());
+        long tokenDuration = Long.sum(startDate,
+                Duration.ofMinutes(resetPwdRequest.getValidityInMinutes()).toMillis());
 
         return Jwts
                 .builder()

@@ -73,6 +73,23 @@ public class EstablishmentController {
         return ResponseEntity.created(uri).body(response);
     }
 
+    /**
+     * Renvoie le courriel de bienvenue et son lien de définition de mot de passe.
+     *
+     * <p>Ouvert à l'équipe YPYit <em>et</em> à l'école pour son propre personnel : c'est le seul
+     * recours quand le premier courriel s'est perdu ou que le jeton a expiré. La permission n'est
+     * pas posée par annotation — le rôle YPYit ne porte aucune permission d'établissement, comme
+     * pour la modification de fiche juste au-dessus.
+     */
+    @PostMapping(value = "/{id}/users/{userId}/resend-activation", produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Renvoie le lien de définition de mot de passe",
+            description = "Un nouveau jeton est émis et l'ancien cesse de valoir : le lien reçu en "
+                    + "dernier est le seul qui fonctionne.")
+    public ResponseEntity<UserDto> resendActivation(@PathVariable UUID id, @PathVariable UUID userId) {
+        this.currentUserProvider.assertCanAdministerEstablishment(id);
+        return ResponseEntity.ok(this.userService.resendActivationLink(id, userId));
+    }
+
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<Page<EstablishmentLiteDto>> findAll(@PageableDefault(100) @ParameterObject Pageable page
             , @ModelAttribute @ParameterObject EstablishmentSearchForm searchForm) {

@@ -26,6 +26,18 @@ public interface UserService {
 
     UserDto createMobileUser(MobileUserSignupForm signupForm) throws BusinessException;
 
+    /**
+     * Renvoie à un compte d'école le courriel de bienvenue et son lien de définition de mot de passe.
+     *
+     * <p>Le premier courriel se perd — filtre anti-pourriel, adresse mal saisie, jeton laissé
+     * expirer. Sans ce renvoi, la seule issue était de supprimer le compte et de le recréer.
+     *
+     * <p>L'établissement est passé en clair et l'appartenance du compte est <strong>vérifiée</strong>,
+     * jamais supposée : sinon l'identifiant d'un compte d'une autre école suffirait à lui expédier
+     * un lien de mot de passe valide.
+     */
+    UserDto resendActivationLink(UUID establishmentId, UUID userId) throws BusinessException;
+
     UserDto update(UUID id, UserUpdateForm signupForm) throws BusinessException;
 
     UserDto changePassword(ChangePasswordForm changePasswordForm) throws BusinessException;

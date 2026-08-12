@@ -136,8 +136,16 @@ email-config:
   platform-address: https://${main-domain}
   email-from: info@ypy-it.com
   reset-password-uri: connexion/reset
-  reset-password-admin-url: https://oauthdebugger.com/
-  reset-password-partner-url: https://oauthdebugger.com/
+  # Où atterrit le lien de définition de mot de passe, selon le portail du destinataire.
+  #
+  # Ces deux valeurs pointaient sur `https://oauthdebugger.com/`, un site tiers de débogage, et
+  # sans espace réservé : aucune variable d'environnement ne pouvait les rattraper. Chaque courriel
+  # de bienvenue et de mot de passe oublié partait donc en production avec l'identifiant du
+  # destinataire et un jeton valide en paramètres d'URL, vers un domaine que nous ne tenons pas.
+  #
+  # Le chemin `reset-password-uri` ci-dessus les complète : il doit exister dans les deux portails.
+  reset-password-admin-url: ${ADMIN_PORTAL_URL:https://admin.nelima.ci}
+  reset-password-partner-url: ${PARTNER_PORTAL_URL:https://partenaire.nelima.ci}
 
 storage:
   bucket-name: bucketName
