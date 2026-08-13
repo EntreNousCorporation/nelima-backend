@@ -9,6 +9,8 @@ import com.ypyit.neoelima.domain.establishment.dto.SchoolClassDto;
 import com.ypyit.neoelima.domain.establishment.entity.EstablishmentEntity;
 import com.ypyit.neoelima.domain.establishment.entity.LevelOfStudyEntity;
 import com.ypyit.neoelima.domain.establishment.entity.QInstallmentEntity;
+import com.ypyit.neoelima.domain.establishment.entity.QSchoolClassEntity;
+import com.ypyit.neoelima.domain.establishment.entity.QStaffEntity;
 import com.ypyit.neoelima.domain.establishment.entity.QStudentEntity;
 import com.ypyit.neoelima.domain.establishment.entity.QStudentFeeEntity;
 import com.ypyit.neoelima.domain.establishment.entity.SchoolClassEntity;
@@ -68,10 +70,13 @@ public class SchoolClassService {
         Map<UUID, BigDecimal> outstanding = this.outstandingByClass(scope);
         Map<UUID, BigDecimal> collected = this.collectedByClass(scope);
 
+        Map<UUID, List<String>> teachers = this.teachersByClass(scope);
+
         return classes.stream().map(entity -> toDto(entity,
                 headcounts.getOrDefault(entity.getId(), 0L),
                 outstanding.getOrDefault(entity.getId(), BigDecimal.ZERO),
-                collected.getOrDefault(entity.getId(), BigDecimal.ZERO))).toList();
+                collected.getOrDefault(entity.getId(), BigDecimal.ZERO),
+                teachers.getOrDefault(entity.getId(), List.of()))).toList();
     }
 
     public SchoolClassDto findById(UUID id) {
@@ -79,7 +84,8 @@ public class SchoolClassService {
         return toDto(entity,
                 this.headcounts(this.scope()).getOrDefault(id, 0L),
                 this.outstandingByClass(this.scope()).getOrDefault(id, BigDecimal.ZERO),
-                this.collectedByClass(this.scope()).getOrDefault(id, BigDecimal.ZERO));
+                this.collectedByClass(this.scope()).getOrDefault(id, BigDecimal.ZERO),
+                this.teachersByClass(this.scope()).getOrDefault(id, List.of()));
     }
 
     @Transactional
@@ -99,8 +105,9 @@ public class SchoolClassService {
                 .build();
 
         SchoolClassEntity saved = this.schoolClassRepository.saveAndFlush(entity);
+        this.attachMainTeacherToClass(saved);
         log.info("SCHOOL_CLASS_CREATED: {} in establishment {}", saved.getName(), scope);
-        return toDto(saved, 0L, BigDecimal.ZERO, BigDecimal.ZERO);
+        return toDto(saved, 0L, BigDecimal.ZERO, BigDecimal.ZERO, this.namesOf(saved.getMainTeacher()));
     }
 
     @Transactional
@@ -113,6 +120,7 @@ public class SchoolClassService {
         entity.setMainTeacherName(trimToNull(form.getMainTeacherName()));
         entity.setLevelOfStudy(this.resolveLevel(form.getLevelOfStudyCode(), entity.getEstablishment()));
         this.schoolClassRepository.saveAndFlush(entity);
+        this.attachMainTeacherToClass(entity);
         return this.findById(id);
     }
 
@@ -283,8 +291,56 @@ public class SchoolClassService {
         return amounts;
     }
 
+    /**
+     * Les enseignants rattachés à chaque classe, en une requête pour tout l'établissement.
+     *
+     * <p>Le rattachement est porté par le personnel ({@code staff_class}) et n'a pas de côté
+     * inverse sur la classe : le déduire classe par classe coûterait une requête chacune.
+     */
+    private Map<UUID, List<String>> teachersByClass(UUID scope) {
+        QStaffEntity staff = QStaffEntity.staffEntity;
+        QSchoolClassEntity schoolClass = QSchoolClassEntity.schoolClassEntity;
+
+        List<Tuple> rows = this.queryFactory
+                .select(schoolClass.id, staff.lastName, staff.firstName)
+                .from(staff)
+                .join(staff.classes, schoolClass)
+                .where(scope == null ? null : staff.establishment.id.eq(scope))
+                .orderBy(staff.lastName.asc(), staff.firstName.asc())
+                .fetch();
+
+        Map<UUID, List<String>> byClass = new HashMap<>();
+        for (Tuple row : rows) {
+            byClass.computeIfAbsent(row.get(schoolClass.id), key -> new java.util.ArrayList<>())
+                    .add(String.format("%s %s", row.get(staff.lastName), row.get(staff.firstName)));
+        }
+        return byClass;
+    }
+
+    /**
+     * Le titulaire enseigne la classe dont il est titulaire : le rattachement en découle.
+     *
+     * <p>La réciproque n'a pas lieu d'être — plusieurs enseignants peuvent intervenir dans une
+     * classe, et faire du dernier rattaché son titulaire écraserait un choix de la direction. La
+     * synchronisation ne va donc que dans ce sens-là, le seul qui soit sans ambiguïté.
+     */
+    private void attachMainTeacherToClass(SchoolClassEntity schoolClass) {
+        StaffEntity mainTeacher = schoolClass.getMainTeacher();
+        if (Objects.isNull(mainTeacher) || mainTeacher.getClasses().contains(schoolClass)) {
+            return;
+        }
+        mainTeacher.getClasses().add(schoolClass);
+        this.staffRepository.saveAndFlush(mainTeacher);
+    }
+
+    private List<String> namesOf(StaffEntity staff) {
+        return Objects.isNull(staff) ? List.of()
+                : List.of(String.format("%s %s", staff.getLastName(), staff.getFirstName()));
+    }
+
     private static SchoolClassDto toDto(SchoolClassEntity entity, long studentCount,
-                                        BigDecimal outstanding, BigDecimal collected) {
+                                        BigDecimal outstanding, BigDecimal collected,
+                                        List<String> teacherNames) {
         LevelOfStudyEntity level = entity.getLevelOfStudy();
         StaffEntity mainTeacher = entity.getMainTeacher();
         return SchoolClassDto.builder()
@@ -301,6 +357,7 @@ public class SchoolClassService {
                 .levelCode(Objects.isNull(level) ? null : level.getCode())
                 .levelLabel(Objects.isNull(level) ? null : labelOf(level))
                 .cycle(Objects.isNull(level) ? null : level.getCycle())
+                .teacherNames(teacherNames)
                 .studentCount(studentCount)
                 .outstandingAmount(outstanding)
                 .collectedAmount(collected)

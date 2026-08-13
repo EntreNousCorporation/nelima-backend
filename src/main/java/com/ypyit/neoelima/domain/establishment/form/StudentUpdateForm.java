@@ -1,5 +1,6 @@
 package com.ypyit.neoelima.domain.establishment.form;
 
+import com.ypyit.neoelima.domain.establishment.enums.Gender;
 import com.ypyit.neoelima.common.validator.NoXssContent;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -24,6 +25,9 @@ public class StudentUpdateForm {
     private String registrationNumber;
     @NoXssContent
     private String placeOfBirth;
+
+    /** Facultatif : c'est par ici qu'une école complète les élèves déjà inscrits. */
+    private Gender gender;
     private LocalDate birthDay;
     @NoXssContent
     private String levelOfStudyCode;

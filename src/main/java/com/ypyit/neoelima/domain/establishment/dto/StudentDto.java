@@ -1,5 +1,6 @@
 package com.ypyit.neoelima.domain.establishment.dto;
 
+import com.ypyit.neoelima.domain.establishment.enums.Gender;
 import com.ypyit.neoelima.common.dto.BaseDto;
 import com.ypyit.neoelima.domain.user.dto.UserDto;
 import lombok.AllArgsConstructor;
@@ -25,6 +26,7 @@ public class StudentDto extends BaseDto {
     private LocalDate birthDay;
     private LevelOfStudyDto levelOfStudy;
     private String placeOfBirth;
+    private Gender gender;
     private Set<UserDto> parentUsers;
     private EstablishmentLiteDto establishment;
     private SchoolClassLiteDto schoolClass;

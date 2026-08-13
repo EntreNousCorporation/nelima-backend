@@ -37,6 +37,19 @@ public class DashboardSummaryDto {
      */
     private long levelCount;
 
+    /**
+     * Répartition filles/garçons, et ce qui reste à renseigner.
+     *
+     * <p>Les trois se donnent ensemble : sans {@code genderUnknownCount}, une école lirait « 12
+     * filles, 9 garçons » sur un effectif de trente et croirait à un total, alors que neuf fiches
+     * n'ont simplement pas l'information.
+     */
+    private long girlCount;
+
+    private long boyCount;
+
+    private long genderUnknownCount;
+
     /** Somme encaissée depuis le premier jour du mois courant, tous canaux confondus. */
     private BigDecimal collectedThisMonth;
 

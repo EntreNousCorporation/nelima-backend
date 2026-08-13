@@ -1,5 +1,6 @@
 package com.ypyit.neoelima.domain.establishment.form;
 
+import com.ypyit.neoelima.domain.establishment.enums.Gender;
 import com.ypyit.neoelima.common.validator.NoXssContent;
 import com.ypyit.neoelima.domain.user.form.MobileUserSignupForm;
 import jakarta.validation.Valid;
@@ -30,6 +31,9 @@ public class StudentCreationForm {
     @NotBlank
     @NoXssContent
     private String placeOfBirth;
+
+    /** Facultatif : une école peut compléter l'état civil plus tard. */
+    private Gender gender;
     @NotBlank
     @NoXssContent
     private String registrationNumber;

@@ -11,6 +11,7 @@ import com.ypyit.neoelima.domain.establishment.entity.QReminderDeliveryEntity;
 import com.ypyit.neoelima.domain.establishment.entity.QStudentEntity;
 import com.ypyit.neoelima.domain.establishment.entity.QSchoolClassEntity;
 import com.ypyit.neoelima.domain.establishment.entity.QStudentFeeEntity;
+import com.ypyit.neoelima.domain.establishment.enums.Gender;
 import com.ypyit.neoelima.domain.establishment.enums.InstallmentStatus;
 import com.ypyit.neoelima.domain.payment.entity.QReceiptEntity;
 import lombok.RequiredArgsConstructor;
@@ -66,6 +67,9 @@ public class DashboardService {
         return DashboardSummaryDto.builder()
                 .studentCount(this.countStudents(scope))
                 .levelCount(this.countLevels(scope))
+                .girlCount(this.countByGender(scope, Gender.FEMALE))
+                .boyCount(this.countByGender(scope, Gender.MALE))
+                .genderUnknownCount(this.countByGender(scope, null))
                 .collectedThisMonth(this.collectedBetween(scope, startOfMonth, null))
                 .receiptsThisMonth(this.countReceiptsSince(scope, startOfMonth))
                 .collectedToday(this.collectedBetween(scope, startOfDay, null))
@@ -260,6 +264,18 @@ public class DashboardService {
                 .where(establishment.id.eq(scope))
                 .fetchOne();
         return Objects.requireNonNullElse(count, 0).longValue();
+    }
+
+    /**
+     * Effectif d'un sexe donné, ou effectif dont le sexe n'est pas renseigné si {@code gender} est nul.
+     */
+    private long countByGender(UUID scope, Gender gender) {
+        QStudentEntity student = QStudentEntity.studentEntity;
+        Long count = this.queryFactory.select(student.count()).from(student)
+                .where(scope == null ? null : student.establishment.id.eq(scope),
+                        gender == null ? student.gender.isNull() : student.gender.eq(gender))
+                .fetchOne();
+        return Objects.requireNonNullElse(count, 0L);
     }
 
     private long countStudents(UUID scope) {

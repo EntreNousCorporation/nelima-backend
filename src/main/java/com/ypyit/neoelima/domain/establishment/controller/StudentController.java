@@ -5,6 +5,7 @@ import com.ypyit.neoelima.domain.establishment.dto.StudentFeeDto;
 import com.ypyit.neoelima.domain.establishment.form.EstablishmentStudentSearchForm;
 import com.ypyit.neoelima.domain.establishment.form.StudentCreationForm;
 import com.ypyit.neoelima.domain.establishment.form.StudentSearchForm;
+import com.ypyit.neoelima.domain.establishment.form.StudentUpdateForm;
 import com.ypyit.neoelima.domain.establishment.service.StudentFeeService;
 import com.ypyit.neoelima.domain.establishment.service.StudentService;
 import com.ypyit.neoelima.domain.storage.form.StorageCreationForm;
@@ -28,6 +29,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -77,6 +79,25 @@ public class StudentController {
         var response = this.studentService.create(creationForm);
         URI uri = ControllerUtils.buildMvcPathComponent(response.getId(), StudentController.class);
         return ResponseEntity.created(uri).body(response);
+    }
+
+    /**
+     * Modifie la fiche d'un élève.
+     *
+     * <p>Le service existait et n'était <strong>exposé nulle part</strong> : une fiche d'élève ne
+     * se corrigeait donc pas une fois créée — ni un prénom mal orthographié, ni un matricule, ni
+     * le sexe que l'école n'avait pas renseigné à l'inscription. Le périmètre est vérifié par le
+     * service ({@code assertCanAccessStudent}), qui refuse l'élève d'une autre école.
+     */
+    @PutMapping(value = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Modifie la fiche d'un élève",
+            description = "Seuls les champs fournis sont écrits. Le matricule reste unique dans "
+                    + "l'établissement.")
+    @PreAuthorize("hasAuthority('student:write')")
+    public ResponseEntity<StudentDto> update(@PathVariable UUID id,
+                                             @RequestBody @Valid StudentUpdateForm updateForm) {
+        return ResponseEntity.ok(this.studentService.update(id, updateForm));
     }
 
     @PostMapping(value = "/claim", consumes = MediaType.APPLICATION_JSON_VALUE,

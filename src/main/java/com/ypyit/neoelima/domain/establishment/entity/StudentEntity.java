@@ -2,7 +2,11 @@ package com.ypyit.neoelima.domain.establishment.entity;
 
 import com.ypyit.neoelima.common.entity.BaseEntity;
 import com.ypyit.neoelima.domain.user.entity.UserEntity;
+import com.ypyit.neoelima.domain.establishment.enums.Gender;
 import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
@@ -44,6 +48,16 @@ public class StudentEntity extends BaseEntity {
     private String registrationNumber;
     private LocalDate birthDay;
     private String placeOfBirth;
+
+    /**
+     * Nul tant que l'école ne l'a pas renseigné.
+     *
+     * <p>Des élèves étaient déjà inscrits quand la colonne est apparue : l'exiger rétroactivement
+     * aurait supposé de deviner, et une donnée d'état civil devinée vaut moins que son absence.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "gender", length = 16)
+    private Gender gender;
     @ManyToOne
     @ToString.Exclude
     @JoinColumn(name = "level_of_study_id", referencedColumnName = "id")

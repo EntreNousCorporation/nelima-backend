@@ -6,6 +6,7 @@ import com.ypyit.neoelima.domain.establishment.entity.EstablishmentEntity;
 import com.ypyit.neoelima.domain.establishment.entity.LevelOfStudyEntity;
 import com.ypyit.neoelima.domain.establishment.entity.SchoolClassEntity;
 import com.ypyit.neoelima.domain.establishment.entity.StudentEntity;
+import com.ypyit.neoelima.domain.establishment.enums.Gender;
 import com.ypyit.neoelima.domain.establishment.repository.EstablishmentRepository;
 import com.ypyit.neoelima.domain.establishment.repository.SchoolClassRepository;
 import com.ypyit.neoelima.domain.establishment.repository.StudentRepository;
@@ -71,15 +72,44 @@ public class StudentCsvImporter {
      */
     private static final String CLASS_HEADER = "classe";
 
+    /**
+     * La huitième colonne, facultative elle aussi : le sexe de l'élève.
+     *
+     * <p>Les écoles doivent déclarer leur répartition filles/garçons ; la saisir élève par élève
+     * après un import de quatre cents lignes n'est pas une option. « F » ou « M », en toutes
+     * lettres ou non — c'est ce qu'on trouve dans les fichiers existants.
+     */
+    private static final String GENDER_HEADER = "sexe";
+
+    /** Ce qu'une colonne au-delà de l'état civil peut être. */
+    private static final List<String> OPTIONAL_HEADERS = List.of(GENDER_HEADER, CLASS_HEADER);
+
     /** L'en-tête complet, celui du modèle téléchargeable. */
     public static final List<String> TEMPLATE_HEADERS = Stream
-            .concat(REQUIRED_HEADERS.stream(), Stream.of(CLASS_HEADER))
+            .concat(REQUIRED_HEADERS.stream(), Stream.of(GENDER_HEADER, CLASS_HEADER))
             .toList();
+
+    /**
+     * Ce qu'une cellule « sexe » peut contenir.
+     *
+     * <p>Aucun tableur ne s'accorde sur la graphie : on accepte l'initiale comme le mot entier,
+     * dans les deux langues qu'une école ivoirienne est susceptible d'employer. Refuser « Fille »
+     * parce qu'on attendait « F » ferait retomber tout l'import.
+     */
+    private static final Map<String, Gender> GENDERS = Map.of(
+            "f", Gender.FEMALE, "fille", Gender.FEMALE, "feminin", Gender.FEMALE, "féminin", Gender.FEMALE,
+            "m", Gender.MALE, "garcon", Gender.MALE, "garçon", Gender.MALE, "masculin", Gender.MALE);
 
     private final StudentRepository studentRepository;
     private final EstablishmentRepository establishmentRepository;
     private final SchoolClassRepository schoolClassRepository;
     private final CurrentUserProvider currentUserProvider;
+
+    /** La cellule d'une colonne facultative, vide si le fichier ne la porte pas. */
+    private static String cellAt(String[] cells, Map<String, Integer> positions, String header) {
+        Integer index = positions.get(header);
+        return Objects.isNull(index) ? "" : cells[index].trim();
+    }
 
     /** Casse et espaces de bord ignorés : c'est un nom saisi à la main dans un tableur. */
     private static String normalized(String name) {
@@ -96,7 +126,7 @@ public class StudentCsvImporter {
     public static String template() {
         return String.join(SEPARATOR, TEMPLATE_HEADERS) + "\n"
                 + String.join(SEPARATOR,
-                "2026-0001", "KOUASSI", "Aya", "2015-09-14", "Abidjan", "CP1", "CP1 A") + "\n";
+                "2026-0001", "KOUASSI", "Aya", "2015-09-14", "Abidjan", "CP1", "F", "CP1 A") + "\n";
     }
 
     @Getter
@@ -145,7 +175,7 @@ public class StudentCsvImporter {
             if (Objects.isNull(headerLine)) {
                 throw new BadRequestException("Le fichier ne contient aucune ligne");
             }
-            boolean withClass = this.assertHeader(headerLine);
+            Map<String, Integer> optional = this.assertHeader(headerLine);
 
             String line;
             int lineNumber = 1;
@@ -158,7 +188,7 @@ public class StudentCsvImporter {
                     throw new BadRequestException(String.format(
                             "Le fichier dépasse %d élèves : découpez-le en plusieurs imports", MAX_ROWS));
                 }
-                this.parseRow(line, lineNumber, establishment, levelsByCode, classesByName, withClass,
+                this.parseRow(line, lineNumber, establishment, levelsByCode, classesByName, optional,
                         students, errors);
             }
         } catch (IOException e) {
@@ -180,30 +210,47 @@ public class StudentCsvImporter {
     }
 
     /**
-     * @return {@code true} si le fichier porte la colonne de classe
+     * Où se trouve chaque colonne facultative, ou rien si le fichier ne la porte pas.
+     *
+     * <p>Les six colonnes d'état civil restent exigées, dans l'ordre : c'est le contrat d'origine
+     * et tous les fichiers existants le respectent. Les facultatives, elles, sont repérées
+     * <strong>par leur nom et non par leur rang</strong>. Se fier au rang ferait lire la classe
+     * d'un fichier {@code …;niveau;classe} — le format servi hier — comme un sexe le jour où l'on
+     * insère une colonne avant elle : l'import échouerait sur des lignes valides, ou pire,
+     * écrirait une donnée dans le mauvais champ.
      */
-    private boolean assertHeader(String headerLine) {
+    private Map<String, Integer> assertHeader(String headerLine) {
         List<String> actual = new ArrayList<>();
         for (String column : headerLine.split(SEPARATOR, -1)) {
             actual.add(column.trim().toLowerCase().replace("﻿", ""));
         }
-        if (actual.equals(TEMPLATE_HEADERS)) {
-            return true;
+        if (actual.size() < REQUIRED_HEADERS.size()
+                || !actual.subList(0, REQUIRED_HEADERS.size()).equals(REQUIRED_HEADERS)) {
+            throw new BadRequestException(String.format(
+                    "En-tête attendu : %s — les deux dernières colonnes sont facultatives",
+                    String.join(SEPARATOR, TEMPLATE_HEADERS)));
         }
-        if (actual.equals(REQUIRED_HEADERS)) {
-            return false;
+
+        Map<String, Integer> positions = new LinkedHashMap<>();
+        for (int index = REQUIRED_HEADERS.size(); index < actual.size(); index++) {
+            String column = actual.get(index);
+            if (!OPTIONAL_HEADERS.contains(column) || positions.containsKey(column)) {
+                throw new BadRequestException(String.format(
+                        "Colonne « %s » inattendue : après %s, seules %s sont acceptées, une fois chacune",
+                        column, String.join(SEPARATOR, REQUIRED_HEADERS),
+                        String.join(" et ", OPTIONAL_HEADERS)));
+            }
+            positions.put(column, index);
         }
-        throw new BadRequestException(String.format(
-                "En-tête attendu : %s — la dernière colonne est facultative",
-                String.join(SEPARATOR, TEMPLATE_HEADERS)));
+        return positions;
     }
 
     private void parseRow(String line, int lineNumber, EstablishmentEntity establishment,
                           Map<String, LevelOfStudyEntity> levelsByCode,
-                          Map<String, SchoolClassEntity> classesByName, boolean withClass,
+                          Map<String, SchoolClassEntity> classesByName, Map<String, Integer> optional,
                           List<StudentEntity> students, List<String> errors) {
         String[] cells = line.split(SEPARATOR, -1);
-        int expected = withClass ? TEMPLATE_HEADERS.size() : REQUIRED_HEADERS.size();
+        int expected = REQUIRED_HEADERS.size() + optional.size();
         if (cells.length < expected) {
             errors.add(String.format("ligne %d : %d colonnes au lieu de %d",
                     lineNumber, cells.length, expected));
@@ -254,9 +301,21 @@ public class StudentCsvImporter {
             return;
         }
 
+        // Le sexe : vide, il reste à renseigner depuis la fiche de l'élève.
+        Gender gender = null;
+        String genderRaw = cellAt(cells, optional, GENDER_HEADER);
+        if (StringUtils.isNotBlank(genderRaw)) {
+            gender = GENDERS.get(normalized(genderRaw));
+            if (Objects.isNull(gender)) {
+                errors.add(String.format("ligne %d : sexe « %s » non reconnu — attendu F ou M",
+                        lineNumber, genderRaw));
+                return;
+            }
+        }
+
         // La classe : vide, l'élève est importé sans, et l'école le répartira depuis l'écran Élèves.
         SchoolClassEntity schoolClass = null;
-        String className = withClass ? cells[6].trim() : "";
+        String className = cellAt(cells, optional, CLASS_HEADER);
         if (StringUtils.isNotBlank(className)) {
             schoolClass = classesByName.get(normalized(className));
             if (Objects.isNull(schoolClass)) {
@@ -280,6 +339,7 @@ public class StudentCsvImporter {
                 .firstName(firstName)
                 .birthDay(birthDay)
                 .placeOfBirth(placeOfBirth)
+                .gender(gender)
                 .levelOfStudy(level)
                 .schoolClass(schoolClass)
                 .establishment(establishment)

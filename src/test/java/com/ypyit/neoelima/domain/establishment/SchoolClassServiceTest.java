@@ -222,6 +222,39 @@ class SchoolClassServiceTest extends AbstractIntegrationTest {
                 .isInstanceOf(BadRequestException.class);
     }
 
+    @Test
+    @DisplayName("l'enseignant rattaché depuis Personnel apparaît sur la classe")
+    void listsTheTeachersAttachedFromTheStaffScreen() {
+        // Le retour de test : « j'effectue le rattachement des enseignants, par contre dans la
+        // partie classe ça n'a pas le même effet ». Le rattachement existait bel et bien, mais
+        // rien ne le montrait côté Classes — seul le titulaire y figurait.
+        SchoolClassDto created = this.schoolClassService.create(this.form("CE1 A", 30));
+        StaffDto teacher = this.staff(this.school, "DOUMBIA", "Moussa");
+        this.staffService.assignClasses(UUID.fromString(teacher.getId()),
+                List.of(UUID.fromString(created.getId())));
+
+        SchoolClassDto reread = this.schoolClassService.findById(UUID.fromString(created.getId()));
+
+        assertThat(reread.getTeacherNames()).containsExactly("DOUMBIA Moussa");
+    }
+
+    @Test
+    @DisplayName("désigner un titulaire le rattache à la classe, sans réciproque")
+    void designatingAMainTeacherAttachesThem() {
+        StaffDto teacher = this.staff(this.school, "LOSSI", "Akissi");
+        SchoolClassForm form = this.form("CE2 A", 30);
+        form.setMainTeacherId(UUID.fromString(teacher.getId()));
+
+        SchoolClassDto created = this.schoolClassService.create(form);
+
+        // Le titulaire enseigne la classe dont il est titulaire : le rattachement en découle, et
+        // les deux écrans cessent de se contredire. L'inverse n'a pas lieu d'être — plusieurs
+        // enseignants interviennent dans une classe, et faire du dernier rattaché son titulaire
+        // écraserait un choix de la direction.
+        assertThat(this.schoolClassService.findById(UUID.fromString(created.getId())).getTeacherNames())
+                .containsExactly("LOSSI Akissi");
+    }
+
     private StaffDto staff(EstablishmentEntity establishment, String lastName, String firstName) {
         StaffForm form = new StaffForm();
         form.setFirstName(firstName);

@@ -195,7 +195,7 @@ class StudentCsvImporterTest extends AbstractIntegrationTest {
         aClass("CP1 A");
 
         var report = importer.importFrom(new MockMultipartFile("file", "eleves.csv", "text/csv",
-                (header + "\n2022001;Koffi;Aaron;2012-04-03;Abidjan;" + levelCode + ";CP1 A\n")
+                (header + "\n2022001;Koffi;Aaron;2012-04-03;Abidjan;" + levelCode + ";F;CP1 A\n")
                         .getBytes(StandardCharsets.UTF_8)));
 
         assertThat(report.getImported()).isEqualTo(1);
@@ -211,6 +211,38 @@ class StudentCsvImporterTest extends AbstractIntegrationTest {
     private MockMultipartFile csv(String rows) {
         return new MockMultipartFile("file", "eleves.csv", "text/csv",
                 (HEADER + rows).getBytes(StandardCharsets.UTF_8));
+    }
+
+    @Test
+    @DisplayName("les colonnes facultatives sont repérées par leur nom, non par leur rang")
+    void readsOptionalColumnsByName() {
+        // Un fichier constitué sur un en-tête antérieur — l'état civil puis la classe — doit
+        // continuer de passer le jour où une colonne s'insère avant elle. Se fier au rang ferait
+        // lire « CP1 A » comme un sexe.
+        SchoolClassEntity cp1a = aClass("CP1 A");
+
+        var report = importer.importFrom(new MockMultipartFile("file", "eleves.csv", "text/csv",
+                (HEADER.strip() + ";classe;sexe\n"
+                        + "2022001;Koffi;Aaron;2012-04-03;Abidjan;" + levelCode + ";CP1 A;M\n")
+                        .getBytes(StandardCharsets.UTF_8)));
+
+        assertThat(report.getImported()).isEqualTo(1);
+        assertThat(studentRepository.findAllByEstablishment_Id(school.getId(),
+                org.springframework.data.domain.Pageable.unpaged()).getContent())
+                .singleElement()
+                .satisfies(student -> assertThat(student.getSchoolClass().getId()).isEqualTo(cp1a.getId()));
+    }
+
+    @Test
+    @DisplayName("une colonne surnuméraire est nommée dans le refus")
+    void rejectsAnUnexpectedColumn() {
+        assertThatThrownBy(() -> importer.importFrom(new MockMultipartFile(
+                "file", "eleves.csv", "text/csv",
+                (HEADER.strip() + ";nationalite\n"
+                        + "2022001;Koffi;Aaron;2012-04-03;Abidjan;" + levelCode + ";ivoirienne\n")
+                        .getBytes(StandardCharsets.UTF_8))))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("nationalite");
     }
 
     private MockMultipartFile csvWithClass(String rows) {

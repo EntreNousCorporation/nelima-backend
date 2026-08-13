@@ -6,6 +6,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 /**
  * Classe telle que le portail l'affiche : ses attributs, son effectif réel, et où en sont les
@@ -36,6 +37,16 @@ public class SchoolClassDto {
     private String levelCode;
     private String levelLabel;
     private EducationCycle cycle;
+
+    /**
+     * Les enseignants rattachés à cette classe depuis l'écran Personnel.
+     *
+     * <p>Distinct du titulaire : une classe n'a qu'un titulaire et peut compter plusieurs
+     * intervenants. Rien ne les montrait, si bien qu'une école qui rattachait ses enseignants
+     * depuis Personnel ne voyait rien changer côté Classes — et concluait, à raison, que « ça n'a
+     * pas le même effet ».
+     */
+    private List<String> teacherNames;
 
     private long studentCount;
 
