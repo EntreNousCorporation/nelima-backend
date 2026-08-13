@@ -15,6 +15,14 @@ public enum AuditAction {
     /** Échéancier d'un frais redéfini : ce que les familles doivent a changé. */
     FEE_SCHEDULE_DEFINED,
 
+    /**
+     * Un niveau a été retiré d'un frais, et les dettes des élèves de ce niveau avec lui.
+     *
+     * <p>Cet acte détruit des lignes d'échéancier. Il n'est permis que tant que rien n'a été
+     * encaissé, mais il doit se relire : c'est ce qui explique qu'une famille ne doive plus rien.
+     */
+    FEE_LEVEL_DETACHED,
+
     /** Journal comptable exporté : des données nominatives sont sorties de la plateforme. */
     ACCOUNTING_EXPORTED,
 

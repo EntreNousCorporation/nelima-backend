@@ -11,10 +11,13 @@ import com.ypyit.neoelima.config.security.CurrentUserProvider;
 import com.ypyit.neoelima.domain.establishment.dto.FeeDto;
 import com.ypyit.neoelima.domain.establishment.entity.EstablishmentEntity;
 import com.ypyit.neoelima.domain.establishment.entity.FeeEntity;
+import com.ypyit.neoelima.domain.establishment.entity.InstallmentEntity;
 import com.ypyit.neoelima.domain.establishment.entity.LevelOfStudyEntity;
 import com.ypyit.neoelima.domain.establishment.entity.QFeeEntity;
 import com.ypyit.neoelima.domain.establishment.entity.StudentEntity;
 import com.ypyit.neoelima.domain.establishment.entity.StudentFeeEntity;
+import com.ypyit.neoelima.domain.establishment.enums.AuditAction;
+import com.ypyit.neoelima.domain.establishment.enums.InstallmentStatus;
 import com.ypyit.neoelima.domain.establishment.form.FeeCreationForm;
 import com.ypyit.neoelima.domain.establishment.form.FeeSearchForm;
 import com.ypyit.neoelima.domain.establishment.form.FeeUpdateForm;
@@ -25,6 +28,7 @@ import com.ypyit.neoelima.domain.establishment.repository.FeeRepository;
 import com.ypyit.neoelima.domain.establishment.repository.InstallmentRepository;
 import com.ypyit.neoelima.domain.establishment.repository.StudentFeeRepository;
 import com.ypyit.neoelima.domain.establishment.repository.StudentRepository;
+import com.ypyit.neoelima.domain.establishment.service.AuditService;
 import com.ypyit.neoelima.domain.establishment.service.FeeService;
 import com.ypyit.neoelima.domain.establishment.service.LevelOfStudyService;
 import lombok.RequiredArgsConstructor;
@@ -60,6 +64,7 @@ public class FeeServiceImpl implements FeeService {
     private final InstallmentRepository installmentRepository;
     private final LevelOfStudyService levelOfStudyService;
     private final CurrentUserProvider currentUserProvider;
+    private final AuditService auditService;
 
     @Override
     public FeeDto create(FeeCreationForm creationForm) throws BusinessException {
@@ -239,7 +244,17 @@ public class FeeServiceImpl implements FeeService {
     }
 
     /**
-     * Retire un frais aux élèves des niveaux abandonnés, ou refuse si de l'argent y est engagé.
+     * Retire un frais aux élèves des niveaux abandonnés, ou refuse si de l'argent est déjà rentré.
+     *
+     * <p>La règle est celle qui vaut déjà pour la refonte d'un échéancier : <strong>tant que rien
+     * n'a été encaissé</strong>, l'école peut défaire ; dès qu'une tranche a quitté l'état en
+     * attente, non. Une première version refusait dès qu'un échéancier existait et invitait à « le
+     * vider d'abord » — or un échéancier ne se vide pas, {@code defineSchedules} exigeant au moins
+     * une tranche. Le message désignait donc une issue qui n'existe pas, et le niveau restait
+     * attaché pour toujours.
+     *
+     * <p>Les tranches en attente partent avec les lignes de frais : les laisser ferait subsister
+     * une dette rattachée à un frais que l'élève ne porte plus.
      */
     private void detachLevels(FeeEntity fee, UUID establishmentId, Set<String> removed) {
         List<StudentEntity> concerned = this.studentRepository
@@ -249,17 +264,32 @@ public class FeeServiceImpl implements FeeService {
         List<StudentFeeEntity> attached = this.studentFeeRepository.findByFee_Id(fee.getId()).stream()
                 .filter(studentFee -> concernedIds.contains(studentFee.getStudent().getId()))
                 .toList();
-
-        List<StudentFeeEntity> withInstallments = attached.stream()
-                .filter(studentFee -> !this.installmentRepository
-                        .findByStudentFee_Id(studentFee.getId()).isEmpty())
-                .toList();
-        if (!withInstallments.isEmpty()) {
-            throw new BadRequestException(String.format(
-                    "%d élève(s) de ces niveaux ont déjà un échéancier sur « %s » : videz-le avant "
-                            + "de retirer le niveau.", withInstallments.size(), fee.getName()));
+        if (attached.isEmpty()) {
+            return;
         }
+
+        List<InstallmentEntity> installments = attached.stream()
+                .flatMap(studentFee -> this.installmentRepository
+                        .findByStudentFee_Id(studentFee.getId()).stream())
+                .toList();
+
+        long collected = installments.stream()
+                .filter(installment -> installment.getStatus() != InstallmentStatus.PENDING)
+                .count();
+        if (collected > 0) {
+            throw new BadRequestException(String.format(
+                    "%d règlement(s) ont déjà été encaissés sur « %s » pour ces niveaux : le niveau "
+                            + "ne peut plus en être retiré.", collected, fee.getName()));
+        }
+
+        this.installmentRepository.deleteAll(installments);
         this.studentFeeRepository.deleteAll(attached);
+
+        // L'acte détruit des dettes : il doit se relire, notamment quand une famille demande
+        // pourquoi elle ne doit plus rien.
+        this.auditService.record(establishmentId, AuditAction.FEE_LEVEL_DETACHED, fee.getName(),
+                String.format("%s retiré(s) — %d élève(s), %d tranche(s) supprimée(s)",
+                        String.join(", ", removed), attached.size(), installments.size()));
     }
 
     private void createStudentFees(FeeEntity fee, UUID establishmentId, Set<String> levelOfStudyCodes) {

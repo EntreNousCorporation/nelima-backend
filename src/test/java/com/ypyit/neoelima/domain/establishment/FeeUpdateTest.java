@@ -4,12 +4,15 @@ import com.ypyit.neoelima.AbstractIntegrationTest;
 import com.ypyit.neoelima.common.exception.BadRequestException;
 import com.ypyit.neoelima.domain.establishment.dto.FeeDto;
 import com.ypyit.neoelima.domain.establishment.entity.EstablishmentEntity;
+import com.ypyit.neoelima.domain.establishment.entity.InstallmentEntity;
 import com.ypyit.neoelima.domain.establishment.entity.LevelOfStudyEntity;
 import com.ypyit.neoelima.domain.establishment.entity.StudentEntity;
+import com.ypyit.neoelima.domain.establishment.enums.InstallmentStatus;
 import com.ypyit.neoelima.domain.establishment.form.FeeCreationForm;
 import com.ypyit.neoelima.domain.establishment.form.FeeScheduleForm;
 import com.ypyit.neoelima.domain.establishment.form.FeeUpdateForm;
 import com.ypyit.neoelima.domain.establishment.repository.EstablishmentRepository;
+import com.ypyit.neoelima.domain.establishment.repository.InstallmentRepository;
 import com.ypyit.neoelima.domain.establishment.repository.LevelOfStudyRepository;
 import com.ypyit.neoelima.domain.establishment.repository.StudentFeeRepository;
 import com.ypyit.neoelima.domain.establishment.repository.StudentRepository;
@@ -64,6 +67,8 @@ class FeeUpdateTest extends AbstractIntegrationTest {
     private StudentRepository studentRepository;
     @Autowired
     private StudentFeeRepository studentFeeRepository;
+    @Autowired
+    private InstallmentRepository installmentRepository;
     @Autowired
     private UserRepository userRepository;
 
@@ -128,20 +133,44 @@ class FeeUpdateTest extends AbstractIntegrationTest {
     }
 
     @Test
-    @DisplayName("retirer un niveau est refusé dès qu'un échéancier existe")
-    void refusesToRemoveALevelThatCarriesASchedule() throws Exception {
+    @DisplayName("retirer un niveau emporte les tranches en attente de ses élèves")
+    void removingALevelAlsoRemovesItsPendingInstallments() throws Exception {
         UUID feeId = this.fee("Fournitures", new BigDecimal("40000"),
                 Set.of(this.cp1.getCode(), this.cp2.getCode()));
         this.feeScheduleService.defineSchedules(feeId, List.of(FeeScheduleForm.builder()
                 .label("versement unique").amount(new BigDecimal("40000"))
                 .dueDate(LocalDate.of(2026, 10, 15)).build()));
+        assertThat(this.installmentsOf(this.inCp2)).hasSize(1);
 
-        // L'échéancier porte des montants, des dates, parfois un règlement déjà encaissé : le
-        // supprimer effacerait de l'argent qu'une famille a versé.
+        this.feeService.update(feeId, FeeUpdateForm.builder()
+                .levelOfStudiesCodes(Set.of(this.cp1.getCode())).build());
+
+        // Les laisser ferait subsister une dette rattachée à un frais que l'élève ne porte plus.
+        assertThat(this.studentsOwing(feeId)).containsExactly(this.inCp1.getId());
+        assertThat(this.installmentsOf(this.inCp2)).isEmpty();
+        assertThat(this.installmentsOf(this.inCp1))
+                .as("les élèves qui restent gardent leur échéancier intact")
+                .hasSize(1);
+    }
+
+    @Test
+    @DisplayName("retirer un niveau est refusé dès qu'un règlement a été encaissé")
+    void refusesToRemoveALevelOnceMoneyCameIn() throws Exception {
+        UUID feeId = this.fee("Cotisation", new BigDecimal("40000"),
+                Set.of(this.cp1.getCode(), this.cp2.getCode()));
+        this.feeScheduleService.defineSchedules(feeId, List.of(FeeScheduleForm.builder()
+                .label("versement unique").amount(new BigDecimal("40000"))
+                .dueDate(LocalDate.of(2026, 10, 15)).build()));
+        InstallmentEntity paid = this.installmentsOf(this.inCp2).getFirst();
+        paid.setStatus(InstallmentStatus.PAID);
+        this.installmentRepository.saveAndFlush(paid);
+
+        // C'est la même frontière que pour la refonte d'un échéancier : tant que rien n'est rentré
+        // l'école peut défaire, après quoi la comptabilité fait foi.
         assertThatThrownBy(() -> this.feeService.update(feeId, FeeUpdateForm.builder()
                 .levelOfStudiesCodes(Set.of(this.cp1.getCode())).build()))
                 .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("échéancier");
+                .hasMessageContaining("encaissés");
 
         assertThat(this.studentsOwing(feeId))
                 .as("le refus doit être total : rien ne doit avoir été détaché au passage")
@@ -160,6 +189,12 @@ class FeeUpdateTest extends AbstractIntegrationTest {
 
         assertThat(this.studentsOwing(feeId))
                 .containsExactlyInAnyOrder(this.inCp1.getId(), this.inCp2.getId());
+    }
+
+    private List<InstallmentEntity> installmentsOf(StudentEntity student) {
+        return this.installmentRepository.findAll().stream()
+                .filter(line -> line.getStudentFee().getStudent().getId().equals(student.getId()))
+                .toList();
     }
 
     private List<UUID> studentsOwing(UUID feeId) {
