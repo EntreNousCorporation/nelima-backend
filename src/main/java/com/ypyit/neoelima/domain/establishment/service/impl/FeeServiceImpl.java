@@ -22,6 +22,7 @@ import com.ypyit.neoelima.domain.establishment.form.LevelOfStudySelectForm;
 import com.ypyit.neoelima.domain.establishment.mapper.FeeMapper;
 import com.ypyit.neoelima.domain.establishment.repository.EstablishmentRepository;
 import com.ypyit.neoelima.domain.establishment.repository.FeeRepository;
+import com.ypyit.neoelima.domain.establishment.repository.InstallmentRepository;
 import com.ypyit.neoelima.domain.establishment.repository.StudentFeeRepository;
 import com.ypyit.neoelima.domain.establishment.repository.StudentRepository;
 import com.ypyit.neoelima.domain.establishment.service.FeeService;
@@ -56,6 +57,7 @@ public class FeeServiceImpl implements FeeService {
     private final EstablishmentRepository establishmentRepository;
     private final StudentRepository studentRepository;
     private final StudentFeeRepository studentFeeRepository;
+    private final InstallmentRepository installmentRepository;
     private final LevelOfStudyService levelOfStudyService;
     private final CurrentUserProvider currentUserProvider;
 
@@ -119,8 +121,12 @@ public class FeeServiceImpl implements FeeService {
                 }
             }
             this.feeMapper.toUpdate(updateForm, fee);
+            this.applyLevels(fee, updateForm.getLevelOfStudiesCodes());
             return this.feeMapper.toDto(this.feeRepository.save(fee));
-        } catch (NotFoundException | DuplicateResourceException e) {
+            // `BadRequestException` relayée telle quelle : c'est le refus de retirer un niveau dont
+            // les élèves ont déjà un échéancier, et son message dit quoi faire. Enveloppée, elle
+            // serait rendue en 500 et l'école lirait « une erreur est survenue ».
+        } catch (NotFoundException | DuplicateResourceException | BadRequestException e) {
             throw e;
         } catch (Exception e) {
             throw new BusinessException(e);
@@ -183,6 +189,77 @@ public class FeeServiceImpl implements FeeService {
         } catch (Exception e) {
             throw new BusinessException(e);
         }
+    }
+
+    /**
+     * Réaligne les niveaux d'un frais, et les frais d'élèves qui en découlent.
+     *
+     * <p>Changer les niveaux ne change pas qu'un champ : un frais engendre une ligne par élève du
+     * niveau. Deux sens, deux traitements.
+     *
+     * <p><strong>Ajouter</strong> un niveau crée les lignes manquantes, exactement comme à la
+     * création. Sans cela, une école qui rattrape un oubli verrait le niveau apparaître sur le
+     * frais sans qu'aucun élève ne le doive.
+     *
+     * <p><strong>Retirer</strong> un niveau ne supprime que les lignes <em>sans aucune tranche</em>.
+     * Dès qu'une tranche existe, elle porte un montant, une échéance, parfois un règlement : la
+     * supprimer effacerait de l'argent qu'une famille a versé, et c'est le genre de perte qu'on ne
+     * remarque qu'à la clôture. Le retrait est alors refusé en entier, avec le nombre d'élèves
+     * concernés — à l'école de vider l'échéancier d'abord si c'est bien ce qu'elle veut.
+     *
+     * @param wanted les codes voulus après modification ; nul pour ne pas toucher aux niveaux
+     */
+    private void applyLevels(FeeEntity fee, Set<String> wanted) {
+        if (Objects.isNull(wanted)) {
+            return;
+        }
+        UUID establishmentId = fee.getEstablishment().getId();
+        Set<String> current = fee.getLevelOfStudies().stream()
+                .map(LevelOfStudyEntity::getCode).collect(Collectors.toSet());
+
+        Set<String> removed = new HashSet<>(current);
+        removed.removeAll(wanted);
+        if (!removed.isEmpty()) {
+            this.detachLevels(fee, establishmentId, removed);
+        }
+
+        Set<String> added = new HashSet<>(wanted);
+        added.removeAll(current);
+
+        // L'ensemble voulu fait foi : on repart des niveaux résolus plutôt que d'ajouter et
+        // retirer à la main, pour que le frais reflète exactement ce que l'école a coché.
+        Pair<Set<LevelOfStudyEntity>, Set<String>> selected = this.levelOfStudyService.selectValues(
+                LevelOfStudySelectForm.builder().levelOfStudiesCodes(wanted).build());
+        fee.getLevelOfStudies().clear();
+        fee.getLevelOfStudies().addAll(selected.getFirst());
+
+        if (!added.isEmpty()) {
+            this.createStudentFees(fee, establishmentId, added);
+        }
+    }
+
+    /**
+     * Retire un frais aux élèves des niveaux abandonnés, ou refuse si de l'argent y est engagé.
+     */
+    private void detachLevels(FeeEntity fee, UUID establishmentId, Set<String> removed) {
+        List<StudentEntity> concerned = this.studentRepository
+                .findByEstablishment_IdAndLevelOfStudy_CodeIn(establishmentId, removed);
+        Set<UUID> concernedIds = concerned.stream().map(StudentEntity::getId).collect(Collectors.toSet());
+
+        List<StudentFeeEntity> attached = this.studentFeeRepository.findByFee_Id(fee.getId()).stream()
+                .filter(studentFee -> concernedIds.contains(studentFee.getStudent().getId()))
+                .toList();
+
+        List<StudentFeeEntity> withInstallments = attached.stream()
+                .filter(studentFee -> !this.installmentRepository
+                        .findByStudentFee_Id(studentFee.getId()).isEmpty())
+                .toList();
+        if (!withInstallments.isEmpty()) {
+            throw new BadRequestException(String.format(
+                    "%d élève(s) de ces niveaux ont déjà un échéancier sur « %s » : videz-le avant "
+                            + "de retirer le niveau.", withInstallments.size(), fee.getName()));
+        }
+        this.studentFeeRepository.deleteAll(attached);
     }
 
     private void createStudentFees(FeeEntity fee, UUID establishmentId, Set<String> levelOfStudyCodes) {
