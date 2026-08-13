@@ -23,6 +23,7 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.http.HttpHeaders;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -33,6 +34,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
 
@@ -93,11 +95,34 @@ public class StudentController {
         return ResponseEntity.ok(this.studentClaimService.myChildrenView());
     }
 
+    /**
+     * Le modèle de fichier à remplir.
+     *
+     * <p>Servi par le serveur et non écrit dans le portail : l'en-tête vient des mêmes constantes
+     * que le contrôle à l'import, si bien qu'un modèle téléchargé chez nous ne peut pas être
+     * refusé par nous.
+     *
+     * <p>La marque d'ordre d'octets ouvre le fichier : sans elle, Excel lit l'UTF-8 comme du
+     * latin-1 et « prénom » arrive en « prÃ©nom ».
+     */
+    @GetMapping(value = "/import-csv/template", produces = "text/csv; charset=UTF-8")
+    @Operation(summary = "Modèle de fichier d'import",
+            description = "En-tête et une ligne d'exemple. La colonne « classe » est facultative.")
+    @PreAuthorize("hasAuthority('student:write')")
+    public ResponseEntity<byte[]> importTemplate() {
+        byte[] body = ("﻿" + StudentCsvImporter.template()).getBytes(StandardCharsets.UTF_8);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"nelima-modele-eleves.csv\"")
+                .body(body);
+    }
+
     @PostMapping(value = "/import-csv", consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
             produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "Importe une liste d'élèves au format CSV",
             description = "Colonnes attendues, séparées par des points-virgules : "
-                    + "matricule;nom;prenom;date_naissance;lieu_naissance;niveau. "
+                    + "matricule;nom;prenom;date_naissance;lieu_naissance;niveau;classe — la "
+                    + "dernière est facultative, et un fichier à six colonnes reste accepté. "
                     + "L'import est tout ou rien : à la moindre ligne invalide, rien n'est écrit "
                     + "et le message désigne les lignes fautives.")
     @PreAuthorize("hasAuthority('student:write')")

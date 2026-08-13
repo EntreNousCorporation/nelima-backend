@@ -4,8 +4,10 @@ import com.ypyit.neoelima.common.exception.BadRequestException;
 import com.ypyit.neoelima.config.security.CurrentUserProvider;
 import com.ypyit.neoelima.domain.establishment.entity.EstablishmentEntity;
 import com.ypyit.neoelima.domain.establishment.entity.LevelOfStudyEntity;
+import com.ypyit.neoelima.domain.establishment.entity.SchoolClassEntity;
 import com.ypyit.neoelima.domain.establishment.entity.StudentEntity;
 import com.ypyit.neoelima.domain.establishment.repository.EstablishmentRepository;
+import com.ypyit.neoelima.domain.establishment.repository.SchoolClassRepository;
 import com.ypyit.neoelima.domain.establishment.repository.StudentRepository;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +30,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Stream;
 
 /**
  * Import d'une liste d'élèves au format CSV.
@@ -48,12 +51,53 @@ public class StudentCsvImporter {
 
     private static final String SEPARATOR = ";";
     private static final int MAX_ROWS = 2000;
-    private static final List<String> HEADERS =
+
+    /**
+     * Les six colonnes de l'état civil, exigées de tout fichier.
+     */
+    private static final List<String> REQUIRED_HEADERS =
             List.of("matricule", "nom", "prenom", "date_naissance", "lieu_naissance", "niveau");
+
+    /**
+     * La septième colonne, facultative : le nom de la classe.
+     *
+     * <p>Sans elle, un import de vingt élèves laissait vingt élèves sans classe, et rien dans le
+     * portail ne permettait de les y affecter ensuite — c'est le défaut que ce champ referme du
+     * côté du fichier. Le nom suffit à désigner la classe : il est unique par établissement.
+     *
+     * <p>Facultative, et non ajoutée d'office aux six autres : les fichiers déjà constitués sur
+     * l'ancien en-tête continuent de passer. Une école qui n'a pas encore créé ses classes peut
+     * aussi importer d'abord et répartir ensuite.
+     */
+    private static final String CLASS_HEADER = "classe";
+
+    /** L'en-tête complet, celui du modèle téléchargeable. */
+    public static final List<String> TEMPLATE_HEADERS = Stream
+            .concat(REQUIRED_HEADERS.stream(), Stream.of(CLASS_HEADER))
+            .toList();
 
     private final StudentRepository studentRepository;
     private final EstablishmentRepository establishmentRepository;
+    private final SchoolClassRepository schoolClassRepository;
     private final CurrentUserProvider currentUserProvider;
+
+    /** Casse et espaces de bord ignorés : c'est un nom saisi à la main dans un tableur. */
+    private static String normalized(String name) {
+        return Objects.isNull(name) ? "" : name.trim().toLowerCase();
+    }
+
+    /**
+     * Le modèle à télécharger : l'en-tête complet et une ligne d'exemple.
+     *
+     * <p>Produit ici, à partir des mêmes constantes que le contrôle d'en-tête. Un modèle écrit à
+     * part dans le portail aurait dérivé au premier changement de format, et l'école se serait vu
+     * refuser un fichier téléchargé chez nous.
+     */
+    public static String template() {
+        return String.join(SEPARATOR, TEMPLATE_HEADERS) + "\n"
+                + String.join(SEPARATOR,
+                "2026-0001", "KOUASSI", "Aya", "2015-09-14", "Abidjan", "CP1", "CP1 A") + "\n";
+    }
 
     @Getter
     public static class ImportReport {
@@ -85,6 +129,12 @@ public class StudentCsvImporter {
                     "Aucun niveau n'est déclaré pour l'établissement : renseignez-les avant d'importer");
         }
 
+        // Indexées sans égard à la casse ni aux espaces de bord : « CP1 A » et « cp1 a » désignent
+        // la même classe, et personne ne saisit un fichier au caractère près.
+        Map<String, SchoolClassEntity> classesByName = new LinkedHashMap<>();
+        this.schoolClassRepository.findByEstablishment_IdOrderByNameAsc(establishmentId)
+                .forEach(schoolClass -> classesByName.put(normalized(schoolClass.getName()), schoolClass));
+
         List<String> errors = new ArrayList<>();
         List<StudentEntity> students = new ArrayList<>();
 
@@ -95,7 +145,7 @@ public class StudentCsvImporter {
             if (Objects.isNull(headerLine)) {
                 throw new BadRequestException("Le fichier ne contient aucune ligne");
             }
-            this.assertHeader(headerLine);
+            boolean withClass = this.assertHeader(headerLine);
 
             String line;
             int lineNumber = 1;
@@ -108,7 +158,8 @@ public class StudentCsvImporter {
                     throw new BadRequestException(String.format(
                             "Le fichier dépasse %d élèves : découpez-le en plusieurs imports", MAX_ROWS));
                 }
-                this.parseRow(line, lineNumber, establishment, levelsByCode, students, errors);
+                this.parseRow(line, lineNumber, establishment, levelsByCode, classesByName, withClass,
+                        students, errors);
             }
         } catch (IOException e) {
             throw new BadRequestException("Le fichier n'a pas pu être lu", e);
@@ -128,24 +179,34 @@ public class StudentCsvImporter {
         return new ImportReport(students.size(), List.of());
     }
 
-    private void assertHeader(String headerLine) {
+    /**
+     * @return {@code true} si le fichier porte la colonne de classe
+     */
+    private boolean assertHeader(String headerLine) {
         List<String> actual = new ArrayList<>();
         for (String column : headerLine.split(SEPARATOR, -1)) {
             actual.add(column.trim().toLowerCase().replace("﻿", ""));
         }
-        if (!actual.equals(HEADERS)) {
-            throw new BadRequestException(String.format(
-                    "En-tête attendu : %s", String.join(SEPARATOR, HEADERS)));
+        if (actual.equals(TEMPLATE_HEADERS)) {
+            return true;
         }
+        if (actual.equals(REQUIRED_HEADERS)) {
+            return false;
+        }
+        throw new BadRequestException(String.format(
+                "En-tête attendu : %s — la dernière colonne est facultative",
+                String.join(SEPARATOR, TEMPLATE_HEADERS)));
     }
 
     private void parseRow(String line, int lineNumber, EstablishmentEntity establishment,
                           Map<String, LevelOfStudyEntity> levelsByCode,
+                          Map<String, SchoolClassEntity> classesByName, boolean withClass,
                           List<StudentEntity> students, List<String> errors) {
         String[] cells = line.split(SEPARATOR, -1);
-        if (cells.length < HEADERS.size()) {
+        int expected = withClass ? TEMPLATE_HEADERS.size() : REQUIRED_HEADERS.size();
+        if (cells.length < expected) {
             errors.add(String.format("ligne %d : %d colonnes au lieu de %d",
-                    lineNumber, cells.length, HEADERS.size()));
+                    lineNumber, cells.length, expected));
             return;
         }
 
@@ -193,6 +254,26 @@ public class StudentCsvImporter {
             return;
         }
 
+        // La classe : vide, l'élève est importé sans, et l'école le répartira depuis l'écran Élèves.
+        SchoolClassEntity schoolClass = null;
+        String className = withClass ? cells[6].trim() : "";
+        if (StringUtils.isNotBlank(className)) {
+            schoolClass = classesByName.get(normalized(className));
+            if (Objects.isNull(schoolClass)) {
+                errors.add(String.format("ligne %d : la classe « %s » n'existe pas dans l'établissement",
+                        lineNumber, className));
+                return;
+            }
+            // Un élève de CP1 dans une classe de CP2 : l'incohérence passerait inaperçue à
+            // l'import et ne se verrait qu'à la première liste d'appel.
+            if (Objects.nonNull(schoolClass.getLevelOfStudy())
+                    && !schoolClass.getLevelOfStudy().getId().equals(level.getId())) {
+                errors.add(String.format("ligne %d : la classe « %s » n'est pas du niveau %s",
+                        lineNumber, className, levelCode));
+                return;
+            }
+        }
+
         students.add(StudentEntity.builder()
                 .registrationNumber(registrationNumber)
                 .lastName(lastName)
@@ -200,6 +281,7 @@ public class StudentCsvImporter {
                 .birthDay(birthDay)
                 .placeOfBirth(placeOfBirth)
                 .levelOfStudy(level)
+                .schoolClass(schoolClass)
                 .establishment(establishment)
                 .build());
     }

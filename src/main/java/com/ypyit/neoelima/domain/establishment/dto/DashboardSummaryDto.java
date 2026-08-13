@@ -27,6 +27,16 @@ public class DashboardSummaryDto {
     /** Effectif inscrit dans l'établissement. */
     private long studentCount;
 
+    /**
+     * Nombre de niveaux déclarés par l'établissement.
+     *
+     * <p>Sert à la mise en route du tableau de bord, dont l'étape « Déclarer les niveaux
+     * enseignés » se cochait jusqu'ici sur l'effectif — le même critère que l'étape suivante. Une
+     * école pouvait donc déclarer ses niveaux sans que la liste en prenne acte, et l'étape ne
+     * s'achevait qu'au premier élève inscrit.
+     */
+    private long levelCount;
+
     /** Somme encaissée depuis le premier jour du mois courant, tous canaux confondus. */
     private BigDecimal collectedThisMonth;
 

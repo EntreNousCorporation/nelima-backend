@@ -4,6 +4,7 @@ import com.querydsl.core.Tuple;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.ypyit.neoelima.config.security.CurrentUserProvider;
 import com.ypyit.neoelima.domain.establishment.dto.DashboardSummaryDto;
+import com.ypyit.neoelima.domain.establishment.entity.QEstablishmentEntity;
 import com.ypyit.neoelima.domain.establishment.entity.QInstallmentEntity;
 import com.ypyit.neoelima.domain.establishment.entity.QLevelOfStudyEntity;
 import com.ypyit.neoelima.domain.establishment.entity.QReminderDeliveryEntity;
@@ -64,6 +65,7 @@ public class DashboardService {
 
         return DashboardSummaryDto.builder()
                 .studentCount(this.countStudents(scope))
+                .levelCount(this.countLevels(scope))
                 .collectedThisMonth(this.collectedBetween(scope, startOfMonth, null))
                 .receiptsThisMonth(this.countReceiptsSince(scope, startOfMonth))
                 .collectedToday(this.collectedBetween(scope, startOfDay, null))
@@ -236,6 +238,28 @@ public class DashboardService {
                         .studentCount(Objects.requireNonNullElse(row.get(student.count()), 0L))
                         .build())
                 .toList();
+    }
+
+    /**
+     * Combien de niveaux l'établissement déclare enseigner.
+     *
+     * <p>Sans périmètre — l'équipe YPYit —, la question n'a pas de sens : la somme des niveaux de
+     * toutes les écoles ne dirait rien. On rend alors zéro, et la mise en route ne s'affiche de
+     * toute façon que dans un portail d'école.
+     */
+    private long countLevels(UUID scope) {
+        if (Objects.isNull(scope)) {
+            return 0L;
+        }
+        // Compté en base plutôt qu'en chargeant l'établissement : c'est justement le graphe dont
+        // le lot précédent a réduit la volée, et le rappeler ici pour une taille de collection
+        // serait le rouvrir.
+        QEstablishmentEntity establishment = QEstablishmentEntity.establishmentEntity;
+        Integer count = this.queryFactory.select(establishment.levelOfStudies.size())
+                .from(establishment)
+                .where(establishment.id.eq(scope))
+                .fetchOne();
+        return Objects.requireNonNullElse(count, 0).longValue();
     }
 
     private long countStudents(UUID scope) {
