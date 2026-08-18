@@ -144,6 +144,7 @@ public class StudentController {
             description = "Colonnes attendues, séparées par des points-virgules : "
                     + "matricule;nom;prenom;date_naissance;lieu_naissance;niveau;classe — la "
                     + "dernière est facultative, et un fichier à six colonnes reste accepté. "
+                    + "Les dates de naissance s'écrivent JJ-MM-AAAA. "
                     + "L'import est tout ou rien : à la moindre ligne invalide, rien n'est écrit "
                     + "et le message désigne les lignes fautives.")
     @PreAuthorize("hasAuthority('student:write')")

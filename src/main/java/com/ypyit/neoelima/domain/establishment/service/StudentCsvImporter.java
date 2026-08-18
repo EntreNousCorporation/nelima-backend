@@ -24,7 +24,9 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.time.format.ResolverStyle;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -52,6 +54,19 @@ public class StudentCsvImporter {
 
     private static final String SEPARATOR = ";";
     private static final int MAX_ROWS = 2000;
+
+    /**
+     * Le format des dates de naissance : jour, mois, année.
+     *
+     * <p>C'est ainsi qu'une date s'écrit ici, et ainsi qu'un tableur la rend quand la colonne est
+     * en date. L'ISO exigé jusqu'à présent obligeait chaque école à reformater sa liste avant de
+     * l'envoyer, et le message d'erreur n'arrivait qu'après.
+     *
+     * <p>{@code STRICT} et non le résolveur par défaut : en indulgent, {@code 32-01-2015} devient
+     * le 1er février sans rien dire, et l'élève naît un jour qui n'existe pas dans son fichier.
+     */
+    private static final DateTimeFormatter BIRTH_DAY_FORMAT =
+            DateTimeFormatter.ofPattern("dd-MM-uuuu").withResolverStyle(ResolverStyle.STRICT);
 
     /**
      * Les six colonnes de l'état civil, exigées de tout fichier.
@@ -126,7 +141,27 @@ public class StudentCsvImporter {
     public static String template() {
         return String.join(SEPARATOR, TEMPLATE_HEADERS) + "\n"
                 + String.join(SEPARATOR,
-                "2026-0001", "KOUASSI", "Aya", "2015-09-14", "Abidjan", "CP1", "F", "CP1 A") + "\n";
+                "2026-0001", "KOUASSI", "Aya", "14-09-2015", "Abidjan", "CP1", "F", "CP1 A") + "\n";
+    }
+
+    /**
+     * Date de naissance d'une ligne, nulle si elle n'est pas lisible.
+     *
+     * <p>Le format annoncé est {@code JJ-MM-AAAA}, et c'est celui du modèle. L'ISO reste accepté
+     * en second essai, sans être proposé : les fichiers préparés sous l'ancienne consigne ne
+     * doivent pas se voir refuser du jour au lendemain, et les deux écritures ne peuvent pas se
+     * confondre — l'année tient quatre chiffres, en tête ou en queue, jamais les deux.
+     */
+    private static LocalDate parsedBirthDay(String raw) {
+        try {
+            return LocalDate.parse(raw, BIRTH_DAY_FORMAT);
+        } catch (DateTimeParseException expected) {
+            try {
+                return LocalDate.parse(raw);
+            } catch (DateTimeParseException unreadable) {
+                return null;
+            }
+        }
     }
 
     @Getter
@@ -270,11 +305,9 @@ public class StudentCsvImporter {
             return;
         }
 
-        LocalDate birthDay;
-        try {
-            birthDay = LocalDate.parse(birthDayRaw);
-        } catch (DateTimeParseException e) {
-            errors.add(String.format("ligne %d : date de naissance « %s » attendue au format AAAA-MM-JJ",
+        LocalDate birthDay = parsedBirthDay(birthDayRaw);
+        if (Objects.isNull(birthDay)) {
+            errors.add(String.format("ligne %d : date de naissance « %s » attendue au format JJ-MM-AAAA",
                     lineNumber, birthDayRaw));
             return;
         }

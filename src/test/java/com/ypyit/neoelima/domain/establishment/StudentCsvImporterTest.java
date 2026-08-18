@@ -5,6 +5,7 @@ import com.ypyit.neoelima.common.exception.BadRequestException;
 import com.ypyit.neoelima.domain.establishment.entity.EstablishmentEntity;
 import com.ypyit.neoelima.domain.establishment.entity.LevelOfStudyEntity;
 import com.ypyit.neoelima.domain.establishment.entity.SchoolClassEntity;
+import com.ypyit.neoelima.domain.establishment.entity.StudentEntity;
 import com.ypyit.neoelima.domain.establishment.repository.EstablishmentRepository;
 import com.ypyit.neoelima.domain.establishment.repository.LevelOfStudyRepository;
 import com.ypyit.neoelima.domain.establishment.repository.SchoolClassRepository;
@@ -24,6 +25,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -82,7 +84,7 @@ class StudentCsvImporterTest extends AbstractIntegrationTest {
     @DisplayName("un fichier valide crée tous les élèves")
     void importsEveryRow() {
         var report = importer.importFrom(csv(
-                "2022001;Koffi;Aaron;2012-04-03;Abidjan;" + levelCode + "\n"
+                "2022001;Koffi;Aaron;03-04-2012;Abidjan;" + levelCode + "\n"
                         + "2022002;Diallo;Fatou;2011-09-21;Bouaké;" + levelCode + "\n"));
 
         assertThat(report.getImported()).isEqualTo(2);
@@ -94,7 +96,7 @@ class StudentCsvImporterTest extends AbstractIntegrationTest {
     @DisplayName("une seule ligne invalide annule tout l'import")
     void rejectsWholeFileOnSingleInvalidRow() {
         assertThatThrownBy(() -> importer.importFrom(csv(
-                "2022001;Koffi;Aaron;2012-04-03;Abidjan;" + levelCode + "\n"
+                "2022001;Koffi;Aaron;03-04-2012;Abidjan;" + levelCode + "\n"
                         + "2022002;Diallo;Fatou;21/09/2011;Bouaké;" + levelCode + "\n")))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("ligne 3");
@@ -106,10 +108,32 @@ class StudentCsvImporterTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("la date de naissance se lit jour-mois-année, sans inverser les deux premiers")
+    void readsTheBirthDayAsDayMonthYear() {
+        importer.importFrom(csv("2022001;Koffi;Aaron;03-04-2012;Abidjan;" + levelCode + "\n"));
+
+        assertThat(studentRepository.findAllByEstablishment_Id(school.getId(),
+                org.springframework.data.domain.Pageable.unpaged()).getContent())
+                .singleElement()
+                .extracting(StudentEntity::getBirthDay)
+                .as("le 3 avril, et non le 4 mars : c'est toute la différence entre les deux formats")
+                .isEqualTo(LocalDate.of(2012, 4, 3));
+    }
+
+    @Test
+    @DisplayName("une date impossible est refusée plutôt que ramenée au mois suivant")
+    void rejectsADayThatDoesNotExist() {
+        assertThatThrownBy(() -> importer.importFrom(csv(
+                "2022001;Koffi;Aaron;31-02-2012;Abidjan;" + levelCode + "\n")))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("JJ-MM-AAAA");
+    }
+
+    @Test
     @DisplayName("un niveau non enseigné est refusé, avec le numéro de ligne")
     void rejectsUnknownLevel() {
         assertThatThrownBy(() -> importer.importFrom(csv(
-                "2022001;Koffi;Aaron;2012-04-03;Abidjan;TERMINALE\n")))
+                "2022001;Koffi;Aaron;03-04-2012;Abidjan;TERMINALE\n")))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("ligne 2")
                 .hasMessageContaining("TERMINALE");
@@ -119,7 +143,7 @@ class StudentCsvImporterTest extends AbstractIntegrationTest {
     @DisplayName("un matricule répété dans le fichier est détecté avant l'écriture")
     void rejectsDuplicateWithinFile() {
         assertThatThrownBy(() -> importer.importFrom(csv(
-                "2022001;Koffi;Aaron;2012-04-03;Abidjan;" + levelCode + "\n"
+                "2022001;Koffi;Aaron;03-04-2012;Abidjan;" + levelCode + "\n"
                         + "2022001;Diallo;Fatou;2011-09-21;Bouaké;" + levelCode + "\n")))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("deux fois");
@@ -141,7 +165,7 @@ class StudentCsvImporterTest extends AbstractIntegrationTest {
         SchoolClassEntity cp1a = aClass("CP1 A");
 
         var report = importer.importFrom(csvWithClass(
-                "2022001;Koffi;Aaron;2012-04-03;Abidjan;" + levelCode + ";cp1 a\n"
+                "2022001;Koffi;Aaron;03-04-2012;Abidjan;" + levelCode + ";cp1 a\n"
                         + "2022002;Diallo;Fatou;2011-09-21;Bouaké;" + levelCode + ";\n"));
 
         assertThat(report.getImported()).isEqualTo(2);
@@ -164,7 +188,7 @@ class StudentCsvImporterTest extends AbstractIntegrationTest {
         aClass("CP1 A");
 
         assertThatThrownBy(() -> importer.importFrom(csvWithClass(
-                "2022001;Koffi;Aaron;2012-04-03;Abidjan;" + levelCode + ";CM2 B\n")))
+                "2022001;Koffi;Aaron;03-04-2012;Abidjan;" + levelCode + ";CM2 B\n")))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("ligne 2")
                 .hasMessageContaining("CM2 B");
@@ -181,7 +205,7 @@ class StudentCsvImporterTest extends AbstractIntegrationTest {
                 .name("CM2 B").capacity(30).levelOfStudy(other).establishment(school).build());
 
         assertThatThrownBy(() -> importer.importFrom(csvWithClass(
-                "2022001;Koffi;Aaron;2012-04-03;Abidjan;" + levelCode + ";CM2 B\n")))
+                "2022001;Koffi;Aaron;03-04-2012;Abidjan;" + levelCode + ";CM2 B\n")))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("n'est pas du niveau");
     }
@@ -195,7 +219,7 @@ class StudentCsvImporterTest extends AbstractIntegrationTest {
         aClass("CP1 A");
 
         var report = importer.importFrom(new MockMultipartFile("file", "eleves.csv", "text/csv",
-                (header + "\n2022001;Koffi;Aaron;2012-04-03;Abidjan;" + levelCode + ";F;CP1 A\n")
+                (header + "\n2022001;Koffi;Aaron;03-04-2012;Abidjan;" + levelCode + ";F;CP1 A\n")
                         .getBytes(StandardCharsets.UTF_8)));
 
         assertThat(report.getImported()).isEqualTo(1);
@@ -223,7 +247,7 @@ class StudentCsvImporterTest extends AbstractIntegrationTest {
 
         var report = importer.importFrom(new MockMultipartFile("file", "eleves.csv", "text/csv",
                 (HEADER.strip() + ";classe;sexe\n"
-                        + "2022001;Koffi;Aaron;2012-04-03;Abidjan;" + levelCode + ";CP1 A;M\n")
+                        + "2022001;Koffi;Aaron;03-04-2012;Abidjan;" + levelCode + ";CP1 A;M\n")
                         .getBytes(StandardCharsets.UTF_8)));
 
         assertThat(report.getImported()).isEqualTo(1);
@@ -239,7 +263,7 @@ class StudentCsvImporterTest extends AbstractIntegrationTest {
         assertThatThrownBy(() -> importer.importFrom(new MockMultipartFile(
                 "file", "eleves.csv", "text/csv",
                 (HEADER.strip() + ";nationalite\n"
-                        + "2022001;Koffi;Aaron;2012-04-03;Abidjan;" + levelCode + ";ivoirienne\n")
+                        + "2022001;Koffi;Aaron;03-04-2012;Abidjan;" + levelCode + ";ivoirienne\n")
                         .getBytes(StandardCharsets.UTF_8))))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("nationalite");

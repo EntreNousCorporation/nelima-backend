@@ -88,7 +88,7 @@ class StudentGenderTest extends AbstractIntegrationTest {
         // Aucun tableur ne s'accorde sur la graphie ; refuser « Fille » ferait retomber tout
         // l'import, alors que l'intention est limpide.
         var report = this.importer.importFrom(csv(
-                "G-001;Koffi;Aaron;2012-04-03;Abidjan;" + levelCode + ";M;\n"
+                "G-001;Koffi;Aaron;03-04-2012;Abidjan;" + levelCode + ";M;\n"
                         + "G-002;Diallo;Fatou;2011-09-21;Bouaké;" + levelCode + ";Fille;\n"
                         + "G-003;Kone;Sekou;2013-01-05;Daloa;" + levelCode + ";;\n"));
 
@@ -104,7 +104,7 @@ class StudentGenderTest extends AbstractIntegrationTest {
     @DisplayName("une valeur incompréhensible est refusée avec son numéro de ligne")
     void rejectsUnreadableGender() {
         assertThatThrownBy(() -> this.importer.importFrom(csv(
-                "G-001;Koffi;Aaron;2012-04-03;Abidjan;" + levelCode + ";autre;\n")))
+                "G-001;Koffi;Aaron;03-04-2012;Abidjan;" + levelCode + ";autre;\n")))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("ligne 2")
                 .hasMessageContaining("autre");
@@ -116,7 +116,7 @@ class StudentGenderTest extends AbstractIntegrationTest {
         // Le cas réel : vingt-et-un élèves inscrits avant que la colonne n'existe. Sans route de
         // modification — elle n'était exposée nulle part —, il aurait fallu les recréer.
         this.importer.importFrom(csv(
-                "G-010;Yao;Mariam;2012-04-03;Abidjan;" + levelCode + ";;\n"));
+                "G-010;Yao;Mariam;03-04-2012;Abidjan;" + levelCode + ";;\n"));
         StudentEntity student = student("G-010");
         assertThat(student.getGender()).isNull();
 
