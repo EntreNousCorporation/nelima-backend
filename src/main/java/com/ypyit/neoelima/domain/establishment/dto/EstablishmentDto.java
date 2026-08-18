@@ -28,6 +28,16 @@ public class EstablishmentDto extends BaseDto {
     private String accreditationNumber;
     private String webSite;
     private String logo;
+
+    /**
+     * Ville de l'établissement.
+     *
+     * <p>La fiche l'affiche et la modifie ; elle la lisait pourtant dans le tableau de bord du
+     * parc, faute d'être servie ici. Une console d'école, qui n'a pas accès à ce tableau, ne
+     * pouvait donc pas la voir du tout.
+     */
+    private String city;
+
     private boolean isPrimary;
     private boolean active;
     private AddressDto address;

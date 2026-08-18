@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -32,6 +33,20 @@ public class EstablishmentRootCreationForm {
     private String webSite;
     @Valid
     private AddressCreationForm address;
+
+    /**
+     * Ville de l'établissement.
+     *
+     * <p>Absente de ce formulaire jusqu'ici, alors que la console la demande dès la création et
+     * l'envoyait : elle était donc reçue puis jetée en silence, et toute école créée depuis la
+     * console naissait sans ville. Seule la fiche, qui passe par
+     * {@link EstablishmentUpdateForm}, savait l'écrire.
+     *
+     * <p>Doit être un libellé du référentiel des villes — le service le vérifie.
+     */
+    @Size(max = 120)
+    private String city;
+
     @Builder.Default
     private Boolean isPrimary = false;
     @NotEmpty

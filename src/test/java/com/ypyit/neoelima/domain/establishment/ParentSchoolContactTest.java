@@ -103,7 +103,10 @@ class ParentSchoolContactTest extends AbstractIntegrationTest {
         EstablishmentEntity school = EstablishmentEntity.builder()
                 .name(name + " " + UUID.randomUUID())
                 .webSite("https://exemple.ci")
-                .city("Abidjan")
+                // Un libellé du référentiel : la colonne y est désormais rattachée par clé
+                // étrangère, et « Abidjan » seul n'en fait pas partie — le district est éclaté en
+                // communes, sans quoi la ville ne situerait plus rien dans une liste.
+                .city("Abidjan — Cocody")
                 .active(true)
                 .contacts(new HashSet<>(List.of(
                         ContactEntity.builder().type(ContactType.PHONE_NUMBER)

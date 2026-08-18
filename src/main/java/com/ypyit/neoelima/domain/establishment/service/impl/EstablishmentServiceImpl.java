@@ -21,6 +21,7 @@ import com.ypyit.neoelima.domain.establishment.form.LevelOfStudySelectForm;
 import com.ypyit.neoelima.domain.establishment.mapper.EstablishmentMapper;
 import com.ypyit.neoelima.domain.establishment.repository.EstablishmentRepository;
 import com.ypyit.neoelima.domain.establishment.service.EstablishmentService;
+import com.ypyit.neoelima.domain.establishment.service.CityService;
 import com.ypyit.neoelima.domain.establishment.service.LevelOfStudyService;
 import com.ypyit.neoelima.domain.storage.dto.StorageDto;
 import com.ypyit.neoelima.domain.storage.service.StorageService;
@@ -68,6 +69,8 @@ public class EstablishmentServiceImpl implements EstablishmentService {
     private final EstablishmentMapper establishmentMapper;
 
     private final ContactService contactService;
+
+    private final CityService cityService;
 
     private final StorageService storageService;
 
@@ -153,11 +156,12 @@ public class EstablishmentServiceImpl implements EstablishmentService {
                             String.format("Establishment with name %s already exists", updateForm.getName()));
                 }
             }
+            this.cityService.assertKnown(updateForm.getCity());
             this.establishmentMapper.toUpdate(updateForm, establishment);
             this.applyAddress(updateForm.getAddressName(), establishment);
             this.updateCoverImage(updateForm.getCoverImage(), establishment);
             return this.establishmentMapper.toDto(this.establishmentRepository.save(establishment));
-        } catch (NotFoundException | ValidationException | DuplicateResourceException e) {
+        } catch (NotFoundException | ValidationException | DuplicateResourceException | BadRequestException e) {
             throw e;
         } catch (Exception e) {
             throw new BusinessException(e);
@@ -169,6 +173,7 @@ public class EstablishmentServiceImpl implements EstablishmentService {
         try {
             this.validateEstablishment(creationForm.getName(), creationForm.getContacts());
             FunctionalUtils.checkDuplicatedOnCreation(creationForm.getContacts());
+            this.cityService.assertKnown(creationForm.getCity());
             EstablishmentEntity establishment = this.establishmentMapper.toEntity(creationForm);
             establishment.setBucketName(StorageUtils.generateFileName());
             // Un établissement créé par YPYit est opérationnel dès sa création : le drapeau
@@ -193,6 +198,7 @@ public class EstablishmentServiceImpl implements EstablishmentService {
                             NotFoundException(String
                             .format("Company with id %s not found", creationForm.getParentId())));
             this.validateEstablishment(creationForm.getName(), creationForm.getContacts());
+            this.cityService.assertKnown(creationForm.getCity());
             EstablishmentEntity establishment = this.establishmentMapper.toEntity(creationForm);
             establishment.setBucketName(StorageUtils.generateFileName());
             establishment.setActive(true);
@@ -208,7 +214,7 @@ public class EstablishmentServiceImpl implements EstablishmentService {
             this.establishmentRepository.saveAndFlush(savedEstablishment);
             this.userRepository.saveAndFlush(establishmentPrincipal);
             return this.establishmentMapper.toDto(savedEstablishment);
-        } catch (ValidationException | DuplicateResourceException | NotFoundException e) {
+        } catch (ValidationException | DuplicateResourceException | NotFoundException | BadRequestException e) {
             throw e;
         } catch (Exception e) {
             throw new BusinessException(e);
