@@ -128,7 +128,8 @@ public class StudentController {
      */
     @GetMapping(value = "/import-csv/template", produces = "text/csv; charset=UTF-8")
     @Operation(summary = "Modèle de fichier d'import",
-            description = "En-tête et une ligne d'exemple. La colonne « classe » est facultative.")
+            description = "En-tête et une ligne d'exemple. Les colonnes « sexe » et « classe » "
+                    + "sont facultatives.")
     @PreAuthorize("hasAuthority('student:write')")
     public ResponseEntity<byte[]> importTemplate() {
         byte[] body = ("﻿" + StudentCsvImporter.template()).getBytes(StandardCharsets.UTF_8);
@@ -142,9 +143,9 @@ public class StudentController {
             produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "Importe une liste d'élèves au format CSV",
             description = "Colonnes attendues, séparées par des points-virgules : "
-                    + "matricule;nom;prenom;date_naissance;lieu_naissance;niveau;classe — la "
-                    + "dernière est facultative, et un fichier à six colonnes reste accepté. "
-                    + "Les dates de naissance s'écrivent JJ-MM-AAAA. "
+                    + "matricule;nom;prenom;date_naissance;lieu_naissance;niveau;sexe;classe — les "
+                    + "deux dernières sont facultatives, et un fichier à six colonnes reste "
+                    + "accepté. Les dates de naissance s'écrivent JJ-MM-AAAA, le sexe M ou F. "
                     + "L'import est tout ou rien : à la moindre ligne invalide, rien n'est écrit "
                     + "et le message désigne les lignes fautives.")
     @PreAuthorize("hasAuthority('student:write')")
