@@ -102,8 +102,8 @@
     "code": "SIXIEME",
     "cycle": "MIDDLE_SCHOOL",
     "name": {
-      "fr": "6 em",
-      "en": "6 em"
+      "fr": "6ème",
+      "en": "6ème"
     },
     "previous": "CM2",
     "next": "CINQUIEME",
@@ -113,8 +113,8 @@
     "code": "CINQUIEME",
     "cycle": "MIDDLE_SCHOOL",
     "name": {
-      "fr": "5 em",
-      "en": "5 em"
+      "fr": "5ème",
+      "en": "5ème"
     },
     "previous": "SIXIEME",
     "next": "QUATRIEME",
@@ -124,8 +124,8 @@
     "code": "QUATRIEME",
     "cycle": "MIDDLE_SCHOOL",
     "name": {
-      "fr": "4 em",
-      "en": "4 em"
+      "fr": "4ème",
+      "en": "4ème"
     },
     "previous": "CINQUIEME",
     "next": "TROISIEME",
@@ -135,8 +135,8 @@
     "code": "TROISIEME",
     "cycle": "MIDDLE_SCHOOL",
     "name": {
-      "fr": "3 em",
-      "en": "3 em"
+      "fr": "3ème",
+      "en": "3ème"
     },
     "previous": "QUATRIEME",
     "next": "SECONDE",
