@@ -46,6 +46,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -298,6 +299,56 @@ class ActivityEnrollmentServiceTest extends AbstractIntegrationTest {
                 .singleElement()
                 .extracting(ActivityDto::getName)
                 .isEqualTo("Judo");
+    }
+
+    @Test
+    @DisplayName("le créneau se remplit entièrement ou pas du tout")
+    void refusesAHalfFilledSlot() {
+        ActivityForm form = this.form("Judo", 10, null);
+        form.setStartTime(LocalTime.of(16, 0));
+
+        assertThatThrownBy(() -> this.activityService.create(form))
+                .isInstanceOf(BadRequestException.class);
+
+        form.setStartTime(null);
+        form.setEndTime(LocalTime.of(17, 30));
+        assertThatThrownBy(() -> this.activityService.create(form))
+                .isInstanceOf(BadRequestException.class);
+    }
+
+    @Test
+    @DisplayName("la fin du créneau ne peut pas précéder le début")
+    void refusesAnInvertedSlot() {
+        ActivityForm form = this.form("Judo", 10, null);
+        form.setStartTime(LocalTime.of(16, 0));
+        form.setEndTime(LocalTime.of(9, 0));
+
+        assertThatThrownBy(() -> this.activityService.create(form))
+                .isInstanceOf(BadRequestException.class);
+
+        form.setEndTime(LocalTime.of(16, 0));
+        assertThatThrownBy(() -> this.activityService.create(form))
+                .isInstanceOf(BadRequestException.class);
+    }
+
+    @Test
+    @DisplayName("la modification est tenue au même créneau que la création")
+    void refusesAnInvertedSlotOnUpdate() {
+        ActivityForm form = this.form("Judo", 10, null);
+        form.setStartTime(LocalTime.of(16, 0));
+        form.setEndTime(LocalTime.of(17, 30));
+        ActivityDto judo = this.activityService.create(form);
+        assertThat(judo.getStartTime()).isEqualTo(LocalTime.of(16, 0));
+
+        form.setEndTime(LocalTime.of(15, 0));
+        assertThatThrownBy(() -> this.activityService.update(UUID.fromString(judo.getId()), form))
+                .isInstanceOf(BadRequestException.class);
+    }
+
+    @Test
+    @DisplayName("une activité sans créneau reste permise : l'horaire se fixe plus tard")
+    void allowsAnActivityWithoutASlot() {
+        assertThat(this.activity("Judo", 10, null).getStartTime()).isNull();
     }
 
     /* ---------- fabriques ---------- */

@@ -27,6 +27,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalTime;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
@@ -73,6 +74,8 @@ public class ActivityService {
             throw new BadRequestException(String.format("Une activité nommée %s existe déjà.", name));
         }
 
+        checkSlot(form);
+
         ActivityEntity entity = ActivityEntity.builder()
                 .name(name)
                 .kind(form.getKind())
@@ -102,6 +105,8 @@ public class ActivityService {
                         entity.getEstablishment().getId(), name)) {
             throw new BadRequestException(String.format("Une activité nommée %s existe déjà.", name));
         }
+
+        checkSlot(form);
 
         entity.setName(name);
         entity.setKind(form.getKind());
@@ -261,6 +266,28 @@ public class ActivityService {
                     "La capacité ne peut pas descendre sous les %d inscrit(s).", enrolled));
         }
         entity.setCapacity(capacity);
+    }
+
+    /**
+     * Refuse un créneau qui ne tient pas debout.
+     *
+     * <p>Le créneau est facultatif — une activité peut naître sans horaire, à fixer plus tard.
+     * Mais à moitié rempli il ment : le catalogue affiche « 16:00 – » sans fin. Et une fin qui
+     * précède le début est une inversion de saisie, pas une activité qui court après minuit :
+     * l'horaire d'une activité extra-scolaire tient dans la journée d'école.
+     */
+    private static void checkSlot(ActivityForm form) {
+        LocalTime start = form.getStartTime();
+        LocalTime end = form.getEndTime();
+        if (Objects.isNull(start) && Objects.isNull(end)) {
+            return;
+        }
+        if (Objects.isNull(start) || Objects.isNull(end)) {
+            throw new BadRequestException("Le créneau demande un début et une fin, ou aucun des deux.");
+        }
+        if (!end.isAfter(start)) {
+            throw new BadRequestException("La fin du créneau doit venir après le début.");
+        }
     }
 
     private StaffEntity resolveCoach(UUID coachId, EstablishmentEntity establishment) {
