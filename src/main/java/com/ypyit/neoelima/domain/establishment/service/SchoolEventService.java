@@ -22,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.LocalTime;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -60,6 +61,7 @@ public class SchoolEventService {
                 .date(form.getDate())
                 .establishment(establishment)
                 .build();
+        checkSlot(form);
         this.apply(entity, form);
 
         SchoolEventEntity saved = this.schoolEventRepository.saveAndFlush(entity);
@@ -72,6 +74,7 @@ public class SchoolEventService {
     @Transactional
     public CalendarEntryDto update(UUID id, SchoolEventForm form) {
         SchoolEventEntity entity = this.load(id);
+        checkSlot(form);
         entity.setTitle(form.getTitle().trim());
         entity.setKind(form.getKind());
         entity.setDate(form.getDate());
@@ -138,6 +141,38 @@ public class SchoolEventService {
                 ? "toute la journée"
                 : String.format("à %s", entity.getStartTime());
         return String.format("Le %s, %s.", entity.getDate(), when);
+    }
+
+    /**
+     * Refuse un horaire qui ne tient pas debout.
+     *
+     * <p>La règle n'est pas celle des activités, et c'est voulu. Un événement n'a pas besoin de
+     * fin : « réunion des parents à 18 h » se dit et s'affiche — la liste ne montre que l'heure de
+     * début, et l'export lui donne une heure par défaut. Une activité, elle, occupe un créneau
+     * qu'on affiche des deux bouts.
+     *
+     * <p>Restent les deux formes qui mentent. La fin seule d'abord : l'écran n'affiche rien,
+     * l'export retombe sur la journée entière et le message aux familles annonce « toute la
+     * journée » alors que l'école a décoché la case. La fin avant le début ensuite, qui produit un
+     * VEVENT dont le DTEND précède le DTSTART — un agenda le refuse ou l'affiche n'importe où.
+     *
+     * <p>La journée entière ne se contrôle pas : {@link #apply} jette les horaires de toute façon.
+     */
+    private static void checkSlot(SchoolEventForm form) {
+        if (form.isAllDay()) {
+            return;
+        }
+        LocalTime start = form.getStartTime();
+        LocalTime end = form.getEndTime();
+        if (Objects.isNull(end)) {
+            return;
+        }
+        if (Objects.isNull(start)) {
+            throw new BadRequestException("Une heure de fin sans heure de début ne dit rien : donnez le début.");
+        }
+        if (!end.isAfter(start)) {
+            throw new BadRequestException("La fin de l'événement doit venir après le début.");
+        }
     }
 
     private void apply(SchoolEventEntity entity, SchoolEventForm form) {

@@ -46,6 +46,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
@@ -255,6 +256,68 @@ class CalendarServiceTest extends AbstractIntegrationTest {
                 .isInstanceOf(BadRequestException.class);
     }
 
+    @Test
+    @DisplayName("l'événement se passe d'heure de fin : « à 18 h » se dit")
+    void allowsAnEventWithoutAnEndTime() {
+        SchoolEventForm form = this.timedEvent();
+        form.setStartTime(LocalTime.of(18, 0));
+
+        CalendarEntryDto saved = this.schoolEventService.create(form);
+        assertThat(saved.getStartTime()).isEqualTo(LocalTime.of(18, 0));
+        assertThat(saved.getEndTime()).isNull();
+    }
+
+    @Test
+    @DisplayName("une heure de fin sans début est refusée")
+    void refusesAnEndTimeWithoutAStart() {
+        SchoolEventForm form = this.timedEvent();
+        form.setEndTime(LocalTime.of(18, 0));
+
+        assertThatThrownBy(() -> this.schoolEventService.create(form))
+                .isInstanceOf(BadRequestException.class);
+    }
+
+    @Test
+    @DisplayName("la fin de l'événement ne peut pas précéder le début")
+    void refusesAnInvertedEvent() {
+        SchoolEventForm form = this.timedEvent();
+        form.setStartTime(LocalTime.of(18, 0));
+        form.setEndTime(LocalTime.of(9, 0));
+
+        assertThatThrownBy(() -> this.schoolEventService.create(form))
+                .isInstanceOf(BadRequestException.class);
+
+        form.setEndTime(LocalTime.of(18, 0));
+        assertThatThrownBy(() -> this.schoolEventService.create(form))
+                .isInstanceOf(BadRequestException.class);
+    }
+
+    @Test
+    @DisplayName("la modification est tenue au même horaire que la création")
+    void refusesAnInvertedEventOnUpdate() {
+        SchoolEventForm form = this.timedEvent();
+        form.setStartTime(LocalTime.of(18, 0));
+        form.setEndTime(LocalTime.of(20, 0));
+        CalendarEntryDto saved = this.schoolEventService.create(form);
+
+        form.setEndTime(LocalTime.of(17, 0));
+        assertThatThrownBy(() -> this.schoolEventService.update(UUID.fromString(saved.getId()), form))
+                .isInstanceOf(BadRequestException.class);
+    }
+
+    @Test
+    @DisplayName("la journée entière ignore les horaires au lieu de les refuser")
+    void ignoresTheTimesOfAnAllDayEvent() {
+        SchoolEventForm form = this.timedEvent();
+        form.setAllDay(true);
+        form.setStartTime(LocalTime.of(18, 0));
+        form.setEndTime(LocalTime.of(9, 0));
+
+        CalendarEntryDto saved = this.schoolEventService.create(form);
+        assertThat(saved.getStartTime()).isNull();
+        assertThat(saved.getEndTime()).isNull();
+    }
+
     /* ---------- fabriques ---------- */
 
     private List<CalendarEntryDto> entries() {
@@ -274,6 +337,17 @@ class CalendarServiceTest extends AbstractIntegrationTest {
             form.setClassIds(List.of(this.cm2.getId()));
         }
         return this.schoolEventService.create(form);
+    }
+
+    /** Un événement à l'heure, sans horaire encore posé : les tests le complètent. */
+    private SchoolEventForm timedEvent() {
+        SchoolEventForm form = new SchoolEventForm();
+        form.setTitle("Réunion des parents");
+        form.setKind(SchoolEventKind.SCHOOL_LIFE);
+        form.setDate(LocalDate.now().plusDays(5));
+        form.setAllDay(false);
+        form.setWholeSchool(true);
+        return form;
     }
 
     private FeeEntity fee(String name, String price) {
