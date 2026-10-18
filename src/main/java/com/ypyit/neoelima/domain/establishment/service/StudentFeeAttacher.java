@@ -26,6 +26,7 @@ public class StudentFeeAttacher {
     private final FeeRepository feeRepository;
     private final StudentFeeRepository studentFeeRepository;
     private final InstallmentGenerator installmentGenerator;
+    private final AcademicYearContext academicYearContext;
 
     @Transactional
     public void attachFees(StudentEntity student, UUID establishmentId, String levelOfStudyCode) {
@@ -33,6 +34,10 @@ public class StudentFeeAttacher {
             return;
         }
         for (FeeEntity fee : this.feeRepository.findAllByEstablishment_Id(establishmentId)) {
+            // Les frais de l'année où l'élève est inscrit, pas ceux de l'an passé au même niveau.
+            if (!this.academicYearContext.inConsultedYear(fee.getAcademicYear())) {
+                continue;
+            }
             boolean targetsLevel = fee.getLevelOfStudies().stream()
                     .anyMatch(level -> levelOfStudyCode.equals(level.getCode()));
             if (targetsLevel) {

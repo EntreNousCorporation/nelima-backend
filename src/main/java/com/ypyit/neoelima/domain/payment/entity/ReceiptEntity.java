@@ -153,7 +153,7 @@ public class ReceiptEntity extends BaseEntity {
      */
     @OneToOne(optional = false, fetch = FetchType.LAZY)
     @ToString.Exclude
-    @QueryInit({"installment.studentFee.student", "payer"})
+    @QueryInit({"installment.studentFee.student", "installment.studentFee.fee.academicYear", "payer"})
     @JoinColumn(name = "payment_intent_id", referencedColumnName = "id")
     private PaymentIntentEntity paymentIntent;
 

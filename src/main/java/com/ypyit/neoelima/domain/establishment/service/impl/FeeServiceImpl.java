@@ -31,6 +31,9 @@ import com.ypyit.neoelima.domain.establishment.repository.StudentRepository;
 import com.ypyit.neoelima.domain.establishment.service.AuditService;
 import com.ypyit.neoelima.domain.establishment.service.FeeService;
 import com.ypyit.neoelima.domain.establishment.service.InstallmentGenerator;
+import com.ypyit.neoelima.domain.establishment.repository.StudentEnrollmentRepository;
+import com.ypyit.neoelima.domain.establishment.entity.AcademicYearEntity;
+import com.ypyit.neoelima.domain.establishment.service.AcademicYearContext;
 import com.ypyit.neoelima.domain.establishment.service.LevelOfStudyService;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.collections4.CollectionUtils;
@@ -67,6 +70,8 @@ public class FeeServiceImpl implements FeeService {
     private final LevelOfStudyService levelOfStudyService;
     private final CurrentUserProvider currentUserProvider;
     private final AuditService auditService;
+    private final AcademicYearContext academicYearContext;
+    private final StudentEnrollmentRepository studentEnrollmentRepository;
 
     @Override
     public FeeDto create(FeeCreationForm creationForm) throws BusinessException {
@@ -78,7 +83,13 @@ public class FeeServiceImpl implements FeeService {
             if (Objects.isNull(establishmentId)) {
                 throw new AccessDeniedException("An explicit establishment is required to create a fee");
             }
-            if (this.feeRepository.existsByEstablishment_IdAndNameIgnoreCase(establishmentId, creationForm.getName())) {
+            // Unique dans l'année : « Scolarité Maternelle » revient chaque année.
+            AcademicYearEntity year = this.academicYearContext.consulted().orElse(null);
+            boolean taken = this.feeRepository.findAllByEstablishment_Id(establishmentId).stream()
+                    .anyMatch(other -> other.getName().equalsIgnoreCase(creationForm.getName().trim())
+                            && Objects.equals(Objects.isNull(other.getAcademicYear()) ? null : other.getAcademicYear().getId(),
+                            Objects.isNull(year) ? null : year.getId()));
+            if (taken) {
                 throw new DuplicateResourceException(String.format("Un frais portant ce nom existe déjà.", creationForm.getName()));
             }
             if (CollectionUtils.isEmpty(creationForm.getLevelOfStudiesCodes()) &&
@@ -89,6 +100,10 @@ public class FeeServiceImpl implements FeeService {
                     .orElseThrow(() -> new NotFoundException(String.format("Establishment with id %s not found", establishmentId)));
             FeeEntity fee = this.feeMapper.toEntity(creationForm);
             fee.setEstablishment(establishment);
+            fee.setAcademicYear(year);
+            if (Objects.nonNull(year)) {
+                this.academicYearContext.schoolYear(establishmentId, year);
+            }
             Pair<Set<LevelOfStudyEntity>, Set<String>> selectedValues = this.levelOfStudyService.selectValues(LevelOfStudySelectForm.builder()
                     .endLevelOfStudy(creationForm.getEndLevelOfStudy())
                     .levelOfStudiesCodes(creationForm.getLevelOfStudiesCodes())
@@ -157,6 +172,10 @@ public class FeeServiceImpl implements FeeService {
                     .resolveEstablishmentScope(searchForm.getEstablishmentId());
             if (Objects.nonNull(establishmentScope)) {
                 builder.and(fee.establishment.id.eq(establishmentScope));
+                UUID year = this.academicYearContext.consultedId();
+                if (Objects.nonNull(year)) {
+                    builder.and(fee.academicYear.id.eq(year));
+                }
             }
             List<Predicate> levelOfStudies = new ArrayList<>();
             if (CollectionUtils.isNotEmpty(searchForm.getLevelOfStudies())) {
@@ -296,6 +315,15 @@ public class FeeServiceImpl implements FeeService {
 
     private void createStudentFees(FeeEntity fee, UUID establishmentId, Set<String> levelOfStudyCodes) {
         List<StudentEntity> studyCodeIn = this.studentRepository.findByEstablishment_IdAndLevelOfStudy_CodeIn(establishmentId, levelOfStudyCodes);
+        // Seuls les élèves inscrits pour l'année du frais le doivent : un élève parti l'an dernier
+        // ne paie pas la scolarité de cette année.
+        if (Objects.nonNull(fee.getAcademicYear())) {
+            UUID yearId = fee.getAcademicYear().getId();
+            studyCodeIn = studyCodeIn.stream()
+                    .filter(student -> this.studentEnrollmentRepository
+                            .findByStudent_IdAndAcademicYear_Id(student.getId(), yearId).isPresent())
+                    .toList();
+        }
         if (CollectionUtils.isNotEmpty(studyCodeIn)) {
             for (StudentEntity entity : studyCodeIn) {
                 // Tranches générées tout de suite, comme à l'inscription d'un élève : sans elles, la

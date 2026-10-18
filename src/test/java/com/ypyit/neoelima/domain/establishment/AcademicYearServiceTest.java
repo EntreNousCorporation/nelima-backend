@@ -2,28 +2,31 @@ package com.ypyit.neoelima.domain.establishment;
 
 import com.ypyit.neoelima.AbstractIntegrationTest;
 import com.ypyit.neoelima.common.exception.BadRequestException;
-import com.ypyit.neoelima.common.exception.NotFoundException;
 import com.ypyit.neoelima.domain.establishment.dto.AcademicYearDto;
-import com.ypyit.neoelima.domain.establishment.dto.CalendarEntryDto;
 import com.ypyit.neoelima.domain.establishment.entity.EstablishmentEntity;
-import com.ypyit.neoelima.domain.establishment.enums.CalendarEntryKind;
+import com.ypyit.neoelima.domain.establishment.entity.StudentEntity;
 import com.ypyit.neoelima.domain.establishment.form.AcademicYearForm;
+import com.ypyit.neoelima.domain.establishment.form.StudentCreationForm;
+import com.ypyit.neoelima.domain.establishment.repository.AcademicYearRepository;
 import com.ypyit.neoelima.domain.establishment.repository.EstablishmentRepository;
+import com.ypyit.neoelima.domain.establishment.repository.LevelOfStudyRepository;
+import com.ypyit.neoelima.domain.establishment.entity.LevelOfStudyEntity;
+import com.ypyit.neoelima.domain.establishment.service.AcademicYearContext;
 import com.ypyit.neoelima.domain.establishment.service.AcademicYearService;
-import com.ypyit.neoelima.domain.establishment.service.CalendarService;
+import com.ypyit.neoelima.domain.establishment.service.StudentService;
+import com.ypyit.neoelima.domain.establishment.form.StudentSearchForm;
+import com.ypyit.neoelima.domain.user.entity.AdminUserEntity;
 import com.ypyit.neoelima.domain.user.entity.ContactEntity;
 import com.ypyit.neoelima.domain.user.entity.EstablishmentUserEntity;
-import com.ypyit.neoelima.domain.user.entity.PermissionEntity;
-import com.ypyit.neoelima.domain.user.entity.RoleEntity;
 import com.ypyit.neoelima.domain.user.entity.TranslateEntity;
 import com.ypyit.neoelima.domain.user.enums.ContactType;
-import com.ypyit.neoelima.domain.user.repository.PermissionRepository;
-import com.ypyit.neoelima.domain.user.repository.RoleRepository;
 import com.ypyit.neoelima.domain.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,155 +41,169 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Année scolaire et périodes.
+ * Années scolaires de la plateforme.
  *
- * <p>Deux fautes seraient silencieuses : deux années actives — l'écran en montrerait une et le
- * calendrier l'autre — et un réglage qui ne règle rien, c'est-à-dire des trimestres saisis qui ne
- * paraissent nulle part.
+ * <p>La plateforme définit les années pour toutes les écoles ; chaque école y pose ses trimestres
+ * sans toucher aux autres ; chaque utilisateur choisit l'année qu'il consulte sans faire basculer
+ * ses collègues.
  */
 @Transactional
 class AcademicYearServiceTest extends AbstractIntegrationTest {
 
-    private static final LocalDate START = LocalDate.of(2025, 9, 15);
-    private static final LocalDate END = LocalDate.of(2026, 7, 10);
-
     @Autowired
     private AcademicYearService academicYearService;
     @Autowired
-    private CalendarService calendarService;
+    private AcademicYearContext academicYearContext;
+    @Autowired
+    private StudentService studentService;
+    @Autowired
+    private AcademicYearRepository academicYearRepository;
     @Autowired
     private EstablishmentRepository establishmentRepository;
     @Autowired
+    private LevelOfStudyRepository levelOfStudyRepository;
+    @Autowired
     private UserRepository userRepository;
-    @Autowired
-    private RoleRepository roleRepository;
-    @Autowired
-    private PermissionRepository permissionRepository;
 
+    private String adminEmail;
     private EstablishmentEntity school;
+    private String directorEmail;
 
     @BeforeEach
     void setUp() {
         SecurityContextHolder.clearContext();
+        this.adminEmail = "admin-" + UUID.randomUUID() + "@ypyit.com";
+        this.userRepository.saveAndFlush(AdminUserEntity.builder().firstName("Plate").lastName("Forme")
+                .contacts(this.email(this.adminEmail)).build());
         this.school = this.school();
-        this.authenticateOn(this.school, "settings:read", "settings:write", "calendar:read");
+        this.directorEmail = this.director(this.school);
     }
 
     @Test
-    @DisplayName("activer une année désactive la précédente")
-    void onlyOneActiveYear() {
-        this.academicYearService.create(this.form("2024-2025",
-                LocalDate.of(2024, 9, 16), LocalDate.of(2025, 7, 11), true));
-        this.academicYearService.create(this.form("2025-2026", START, END, true));
+    @DisplayName("une école ne déclare pas d'année : c'est la plateforme qui les définit")
+    void schoolsCannotDeclareYears() {
+        this.login(this.directorEmail);
 
-        List<AcademicYearDto> years = this.academicYearService.findAll();
-
-        // Deux années actives feraient répondre deux jeux de bornes à la même question.
-        assertThat(years).filteredOn(AcademicYearDto::isActive)
-                .extracting(AcademicYearDto::getLabel).containsExactly("2025-2026");
-        // La précédente est conservée : ses reçus et ses échéances y sont datés.
-        assertThat(years).extracting(AcademicYearDto::getLabel)
-                .containsExactly("2025-2026", "2024-2025");
+        assertThatThrownBy(() -> this.academicYearService.create(this.form("2026-2027", 2026, true)))
+                .isInstanceOf(AccessDeniedException.class);
     }
 
     @Test
-    @DisplayName("les bornes des périodes paraissent au calendrier, sur la fenêtre demandée")
-    void periodsSurfaceOnTheCalendar() {
-        AcademicYearForm form = this.form("2025-2026", START, END, true);
-        form.setPeriods(List.of(
-                period("1er trimestre", START, LocalDate.of(2025, 12, 19)),
-                period("2e trimestre", LocalDate.of(2026, 1, 5), LocalDate.of(2026, 4, 3))));
-        this.academicYearService.create(form);
+    @DisplayName("désigner une année en cours retire ce statut à la précédente")
+    void onlyOneCurrentYear() {
+        this.login(this.adminEmail);
+        AcademicYearDto first = this.academicYearService.create(this.form("2025-2026", 2025, true));
+        AcademicYearDto second = this.academicYearService.create(this.form("2026-2027", 2026, true));
 
-        // Décembre : la fin du premier trimestre, et rien du deuxième.
-        List<CalendarEntryDto> december = this.calendarService.findAll(
-                LocalDate.of(2025, 12, 1), LocalDate.of(2025, 12, 31));
-
-        assertThat(december).extracting(CalendarEntryDto::getTitle)
-                .containsExactly("Fin — 1er trimestre");
-        assertThat(december).allMatch(entry ->
-                CalendarEntryKind.ACADEMIC_PERIOD.equals(entry.getKind()) && entry.isAllDay());
-
-        // Septembre : le début du premier, pas sa fin. Ce sont les bornes qui sont posées, non la
-        // durée — un trimestre étalé sur trois mois occuperait la grille sans rien apprendre.
-        assertThat(this.calendarService.findAll(
-                LocalDate.of(2025, 9, 1), LocalDate.of(2025, 9, 30)))
-                .extracting(CalendarEntryDto::getTitle)
-                .containsExactly("Début — 1er trimestre");
+        assertThat(this.academicYearRepository.findById(UUID.fromString(first.getId())).orElseThrow().isActive()).isFalse();
+        assertThat(this.academicYearContext.currentId()).isEqualTo(UUID.fromString(second.getId()));
     }
 
     @Test
-    @DisplayName("sans période déclarée, ce sont les bornes de l'année qui paraissent")
-    void yearBoundsWhenNoPeriodDeclared() {
-        this.academicYearService.create(this.form("2025-2026", START, END, true));
+    @DisplayName("chaque école pose ses trimestres, sans toucher à ceux des autres")
+    void periodsBelongToEachSchool() {
+        this.login(this.adminEmail);
+        UUID year = UUID.fromString(this.academicYearService.create(this.form("2026-2027", 2026, true)).getId());
+        EstablishmentEntity other = this.school();
+        String otherDirector = this.director(other);
 
-        assertThat(this.calendarService.findAll(
-                LocalDate.of(2025, 9, 1), LocalDate.of(2025, 9, 30)))
-                .extracting(CalendarEntryDto::getTitle)
-                .containsExactly("Rentrée scolaire — 2025-2026");
+        this.login(this.directorEmail);
+        this.academicYearService.definePeriods(year, List.of(
+                this.period("1er trimestre", LocalDate.of(2026, 9, 1), LocalDate.of(2026, 12, 18))));
+        this.login(otherDirector);
+        this.academicYearService.definePeriods(year, List.of(
+                this.period("1er trimestre", LocalDate.of(2026, 9, 14), LocalDate.of(2026, 11, 30)),
+                this.period("2e trimestre", LocalDate.of(2026, 12, 1), LocalDate.of(2027, 2, 26))));
+
+        this.login(this.directorEmail);
+        assertThat(this.yearAsSeen(year).getPeriods()).hasSize(1);
+        this.login(otherDirector);
+        assertThat(this.yearAsSeen(year).getPeriods()).hasSize(2);
     }
 
     @Test
-    @DisplayName("une année inactive ne pose aucun repère au calendrier")
-    void inactiveYearSurfacesNothing() {
-        this.academicYearService.create(this.form("2025-2026", START, END, false));
+    @DisplayName("un trimestre hors des bornes de l'année est refusé")
+    void periodsStayWithinTheYear() {
+        this.login(this.adminEmail);
+        UUID year = UUID.fromString(this.academicYearService.create(this.form("2026-2027", 2026, true)).getId());
+        this.login(this.directorEmail);
 
-        assertThat(this.calendarService.findAll(
-                LocalDate.of(2025, 9, 1), LocalDate.of(2025, 9, 30))).isEmpty();
-    }
-
-    @Test
-    @DisplayName("une période hors des bornes de l'année est refusée")
-    void refusesAPeriodOutsideTheYear() {
-        AcademicYearForm form = this.form("2025-2026", START, END, true);
-        form.setPeriods(List.of(
-                period("Trimestre fantôme", LocalDate.of(2025, 8, 1), LocalDate.of(2025, 12, 19))));
-
-        // Sinon le calendrier placerait un trimestre que l'année ne couvre pas.
-        assertThatThrownBy(() -> this.academicYearService.create(form))
+        assertThatThrownBy(() -> this.academicYearService.definePeriods(year, List.of(
+                this.period("Été", LocalDate.of(2027, 7, 1), LocalDate.of(2027, 8, 31)))))
                 .isInstanceOf(BadRequestException.class);
     }
 
     @Test
-    @DisplayName("l'année en cours ne se supprime pas")
-    void refusesToDeleteTheActiveYear() {
-        AcademicYearDto year = this.academicYearService.create(this.form("2025-2026", START, END, true));
+    @DisplayName("une année où une école travaille ne se supprime plus, ni ne se resserre sur ses trimestres")
+    void yearsInUseAreProtected() {
+        this.login(this.adminEmail);
+        UUID previous = UUID.fromString(this.academicYearService.create(this.form("2025-2026", 2025, true)).getId());
+        this.academicYearService.create(this.form("2026-2027", 2026, true));
+        this.login(this.directorEmail);
+        this.academicYearService.definePeriods(previous, List.of(
+                this.period("3e trimestre", LocalDate.of(2026, 4, 1), LocalDate.of(2026, 7, 10))));
 
-        // L'école resterait sans repère jusqu'à ce qu'elle en active une autre, sans rien qui le
-        // lui dise.
-        assertThatThrownBy(() -> this.academicYearService.delete(UUID.fromString(year.getId())))
-                .isInstanceOf(BadRequestException.class);
+        this.login(this.adminEmail);
+        assertThatThrownBy(() -> this.academicYearService.delete(previous)).isInstanceOf(BadRequestException.class);
+        AcademicYearForm shrunk = this.form("2025-2026", 2025, false);
+        shrunk.setEndDate(LocalDate.of(2026, 6, 30));
+        assertThatThrownBy(() -> this.academicYearService.update(previous, shrunk)).isInstanceOf(BadRequestException.class);
     }
 
     @Test
-    @DisplayName("l'année d'une autre école est introuvable")
-    void doesNotLeakOtherSchools() {
-        AcademicYearDto year = this.academicYearService.create(this.form("2025-2026", START, END, true));
+    @DisplayName("l'année consultée est propre à chaque utilisateur, et ses écrans la suivent")
+    void consultedYearIsPersonal() {
+        this.login(this.adminEmail);
+        UUID previous = UUID.fromString(this.academicYearService.create(this.form("2025-2026", 2025, true)).getId());
+        UUID current = UUID.fromString(this.academicYearService.create(this.form("2026-2027", 2026, true)).getId());
+        String secretary = this.director(this.school);
 
-        this.authenticateOn(this.school(), "settings:read", "settings:write", "calendar:read");
+        // Un élève inscrit cette année.
+        this.login(this.directorEmail);
+        LevelOfStudyEntity level = this.levelOfStudyRepository.saveAndFlush(LevelOfStudyEntity.builder()
+                .code("CP1-" + UUID.randomUUID().toString().substring(0, 6)).position(1)
+                .name(TranslateEntity.builder().fr("CP1").en("CP1").build()).build());
+        this.school.getLevelOfStudies().add(level);
+        this.establishmentRepository.saveAndFlush(this.school);
+        StudentCreationForm form = new StudentCreationForm();
+        form.setFirstName("Yao");
+        form.setLastName("KOUAME");
+        form.setRegistrationNumber("2026001");
+        form.setBirthDay(LocalDate.of(2019, 5, 2));
+        form.setPlaceOfBirth("Abidjan");
+        form.setLevelOfStudyCode(level.getCode());
+        this.studentService.create(form);
 
-        assertThat(this.academicYearService.findAll()).isEmpty();
-        assertThatThrownBy(() -> this.academicYearService.update(
-                UUID.fromString(year.getId()), this.form("Détournée", START, END, true)))
-                .isInstanceOf(NotFoundException.class);
+        // La direction revoit l'année passée : elle n'y trouve pas cet élève.
+        this.academicYearService.consult(previous);
+        assertThat(this.academicYearContext.consultedId()).isEqualTo(previous);
+        assertThat(this.studentService.search(new StudentSearchForm(), PageRequest.of(0, 20)).getContent()).isEmpty();
+
+        // Le secrétariat, lui, est resté sur l'année en cours.
+        this.login(secretary);
+        assertThat(this.academicYearContext.consultedId()).isEqualTo(current);
+        assertThat(this.studentService.search(new StudentSearchForm(), PageRequest.of(0, 20)).getContent()).hasSize(1);
     }
 
-    /* ---------- fabriques ---------- */
+    private AcademicYearDto yearAsSeen(UUID id) {
+        return this.academicYearService.findAll().stream()
+                .filter(year -> year.getId().equals(id.toString())).findFirst().orElseThrow();
+    }
 
-    private AcademicYearForm form(String label, LocalDate start, LocalDate end, boolean active) {
+    private AcademicYearForm form(String label, int startYear, boolean active) {
         AcademicYearForm form = new AcademicYearForm();
         form.setLabel(label);
-        form.setStartDate(start);
-        form.setEndDate(end);
+        form.setStartDate(LocalDate.of(startYear, 9, 1));
+        form.setEndDate(LocalDate.of(startYear + 1, 7, 31));
         form.setActive(active);
         return form;
     }
 
-    private static AcademicYearForm.AcademicPeriodForm period(String label, LocalDate start, LocalDate end) {
+    private AcademicYearForm.AcademicPeriodForm period(String label, LocalDate from, LocalDate to) {
         AcademicYearForm.AcademicPeriodForm period = new AcademicYearForm.AcademicPeriodForm();
         period.setLabel(label);
-        period.setStartDate(start);
-        period.setEndDate(end);
+        period.setStartDate(from);
+        period.setEndDate(to);
         return period;
     }
 
@@ -195,25 +212,20 @@ class AcademicYearServiceTest extends AbstractIntegrationTest {
                 .name("École " + UUID.randomUUID()).active(true).isPrimary(true).build());
     }
 
-    private void authenticateOn(EstablishmentEntity establishment, String... permissions) {
-        Set<PermissionEntity> granted = new HashSet<>();
-        for (String code : permissions) {
-            granted.add(this.permissionRepository.findByCode(code)
-                    .orElseGet(() -> this.permissionRepository.saveAndFlush(PermissionEntity.builder()
-                            .code(code)
-                            .name(TranslateEntity.builder().fr(code).en(code).build()).build())));
-        }
-        RoleEntity role = this.roleRepository.saveAndFlush(RoleEntity.builder()
-                .code("ROLE-" + UUID.randomUUID())
-                .name(TranslateEntity.builder().fr("Rôle de test").en("Test role").build())
-                .permissions(granted).build());
-
-        String email = "user-" + UUID.randomUUID() + "@ecole.ci";
+    private String director(EstablishmentEntity establishment) {
+        String email = "direction-" + UUID.randomUUID() + "@ecole.ci";
         this.userRepository.saveAndFlush(EstablishmentUserEntity.builder()
-                .firstName("Awa").lastName("Traoré").establishment(establishment).role(role)
-                .contacts(new HashSet<>(Set.of(ContactEntity.builder()
-                        .type(ContactType.EMAIL).value(email).isPrimary(true).build())))
-                .build());
+                .firstName("Awa").lastName("Traoré").establishment(establishment)
+                .contacts(this.email(email)).build());
+        return email;
+    }
+
+    private Set<ContactEntity> email(String email) {
+        return new HashSet<>(Set.of(ContactEntity.builder()
+                .type(ContactType.EMAIL).value(email).isPrimary(true).build()));
+    }
+
+    private void login(String email) {
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(email, "n/a", List.of()));
     }

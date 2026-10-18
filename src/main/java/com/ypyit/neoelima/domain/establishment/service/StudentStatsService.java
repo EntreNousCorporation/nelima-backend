@@ -48,6 +48,7 @@ public class StudentStatsService {
 
     private final JPAQueryFactory queryFactory;
     private final AcademicYearRepository academicYearRepository;
+    private final AcademicYearContext academicYearContext;
     private final StudentEnrollmentRepository studentEnrollmentRepository;
     private final CurrentUserProvider currentUserProvider;
 
@@ -60,9 +61,10 @@ public class StudentStatsService {
         if (Objects.isNull(scope)) {
             throw new BadRequestException("Cette opération suppose un compte d'établissement.");
         }
-        List<AcademicYearEntity> years = this.academicYearRepository.findByEstablishment_IdOrderByStartDateDesc(scope);
+        List<AcademicYearEntity> years = this.academicYearRepository.findAllByOrderByStartDateDesc();
+        UUID defaultYear = this.academicYearContext.consultedId();
         AcademicYearEntity year = Objects.isNull(academicYearId)
-                ? years.stream().filter(AcademicYearEntity::isActive).findFirst().orElse(null)
+                ? years.stream().filter(candidate -> candidate.getId().equals(defaultYear)).findFirst().orElse(null)
                 : years.stream().filter(candidate -> candidate.getId().equals(academicYearId)).findFirst()
                         .orElseThrow(() -> new NotFoundException("Cette année scolaire n'existe pas."));
 
@@ -130,7 +132,8 @@ public class StudentStatsService {
                     .filter(candidate -> candidate.getStartDate().isBefore(year.getStartDate()))
                     .findFirst().orElse(null);
             if (Objects.nonNull(previous)) {
-                long count = this.studentEnrollmentRepository.countByAcademicYear_Id(previous.getId());
+                long count = this.studentEnrollmentRepository
+                        .countByAcademicYear_IdAndStudent_Establishment_Id(previous.getId(), scope);
                 if (count > 0) {
                     previousTotal = count;
                     delta = Math.round((total - count) * 1000.0 / count) / 10.0;

@@ -27,6 +27,7 @@ import com.ypyit.neoelima.domain.establishment.repository.EstablishmentRepositor
 import com.ypyit.neoelima.domain.establishment.repository.LevelOfStudyRepository;
 import com.ypyit.neoelima.domain.establishment.repository.StudentRepository;
 import com.ypyit.neoelima.domain.establishment.service.StudentEnrollmentService;
+import com.ypyit.neoelima.domain.establishment.service.AcademicYearContext;
 import com.ypyit.neoelima.domain.establishment.service.StudentFeeAttacher;
 import com.ypyit.neoelima.domain.establishment.service.StudentService;
 import com.ypyit.neoelima.domain.establishment.service.TutorContactPrivacy;
@@ -101,6 +102,7 @@ public class StudentServiceImpl implements StudentService {
     private final UserRepository userRepository;
     private final StudentFeeAttacher studentFeeAttacher;
     private final StudentEnrollmentService studentEnrollmentService;
+    private final AcademicYearContext academicYearContext;
     private final CurrentUserProvider currentUserProvider;
     private final JPAQueryFactory queryFactory;
 
@@ -186,8 +188,12 @@ public class StudentServiceImpl implements StudentService {
             if (Objects.nonNull(searchForm.getGender())) {
                 builder.and(student.gender.eq(searchForm.getGender()));
             }
-            if (Objects.nonNull(searchForm.getAcademicYearId())) {
-                builder.and(StudentFilters.enrolledIn(student, searchForm.getAcademicYearId()));
+            // L'année demandée, sinon celle que l'utilisateur consulte : l'école voit les élèves de
+            // l'année où elle travaille, pas ceux de toutes les années confondues.
+            UUID year = Objects.nonNull(searchForm.getAcademicYearId()) ? searchForm.getAcademicYearId()
+                    : Objects.nonNull(establishmentScope) ? this.academicYearContext.consultedId() : null;
+            if (Objects.nonNull(year)) {
+                builder.and(StudentFilters.enrolledIn(student, year));
             }
             List<Predicate> levelOfStudies = new ArrayList<>();
             if (CollectionUtils.isNotEmpty(searchForm.getLevelOfStudies())) {

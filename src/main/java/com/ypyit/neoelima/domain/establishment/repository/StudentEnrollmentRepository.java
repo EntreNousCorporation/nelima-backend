@@ -10,7 +10,7 @@ public interface StudentEnrollmentRepository extends JpaRepository<StudentEnroll
 
     Optional<StudentEnrollmentEntity> findByStudent_IdAndAcademicYear_Id(UUID studentId, UUID academicYearId);
 
-    long countByAcademicYear_Id(UUID academicYearId);
+    long countByAcademicYear_IdAndStudent_Establishment_Id(UUID academicYearId, UUID establishmentId);
 
     boolean existsByAcademicYear_Id(UUID academicYearId);
 }

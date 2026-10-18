@@ -28,7 +28,11 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Année scolaire déclarée par l'établissement.
+ * Année scolaire de la plateforme, commune à toutes les écoles : son libellé, ses bornes, et si
+ * c'est l'année en cours.
+ *
+ * <p>Chaque école en a sa vision — ses trimestres, son état ouvert ou clôturé — dans une
+ * {@link SchoolYearEntity}. Clôturer une année dans une école ne touche pas les autres.
  *
  * <p>Une seule est active à la fois, et c'est le service qui le garantit : deux années actives
  * feraient répondre deux dates différentes à la question « où en est-on ? ».
@@ -43,15 +47,14 @@ import java.util.Objects;
 @NoArgsConstructor
 @AllArgsConstructor
 @Table(name = "academic_year", uniqueConstraints = {
-        @UniqueConstraint(name = "uk_academic_year_establishment_label",
-                columnNames = {"establishment_id", "label"})
+        @UniqueConstraint(name = "uk_academic_year_label", columnNames = {"label"})
 })
 public class AcademicYearEntity extends BaseEntity {
 
     @Serial
     private static final long serialVersionUID = 1L;
 
-    /** Libellé tel que l'école le nomme : « 2025-2026 ». */
+    /** Libellé : « 2025-2026 ». */
     @Column(nullable = false, length = 32)
     private String label;
 
@@ -65,17 +68,7 @@ public class AcademicYearEntity extends BaseEntity {
     @Column(nullable = false)
     private boolean active = false;
 
-    @Builder.Default
-    @ToString.Exclude
-    @EqualsAndHashCode.Exclude
-    @OneToMany(mappedBy = "academicYear", cascade = CascadeType.ALL, orphanRemoval = true)
-    @OrderBy("position asc")
-    private List<AcademicPeriodEntity> periods = new ArrayList<>();
 
-    @ManyToOne(optional = false, fetch = FetchType.LAZY)
-    @ToString.Exclude
-    @JoinColumn(name = "establishment_id", referencedColumnName = "id")
-    private EstablishmentEntity establishment;
 
     @Override
     public boolean equals(Object o) {

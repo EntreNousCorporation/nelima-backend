@@ -54,12 +54,15 @@ public class ActivityEnrollmentService {
     private final InstallmentGenerator installmentGenerator;
     private final ActivityService activityService;
     private final CurrentUserProvider currentUserProvider;
+    private final AcademicYearContext academicYearContext;
 
     /** Inscriptions de l'établissement, la plus récente en tête. */
     public List<ActivityEnrollmentDto> findAll() {
         return this.enrollmentRepository
                 .findByActivity_Establishment_IdOrderByRequestedAtDesc(this.activityService.scope())
-                .stream().map(this::toDto).toList();
+                .stream()
+                .filter(line -> this.academicYearContext.inConsultedYear(line.getActivity().getAcademicYear()))
+                .map(this::toDto).toList();
     }
 
     /**

@@ -1,5 +1,6 @@
 package com.ypyit.neoelima.domain.establishment.service.impl;
 
+import com.ypyit.neoelima.domain.establishment.service.AcademicYearContext;
 import com.querydsl.core.BooleanBuilder;
 import com.ypyit.neoelima.common.exception.BusinessException;
 import com.ypyit.neoelima.common.exception.NotFoundException;
@@ -41,6 +42,7 @@ public class InstallmentServiceImpl implements InstallmentService {
     private final StudentFeeRepository studentFeeRepository;
     private final StudentRepository studentRepository;
     private final CurrentUserProvider currentUserProvider;
+    private final AcademicYearContext academicYearContext;
 
     /**
      * Découpe un frais d'élève en tranche.
@@ -114,6 +116,13 @@ public class InstallmentServiceImpl implements InstallmentService {
                         .resolveEstablishmentScope(searchForm.getEstablishmentId());
                 if (Objects.nonNull(establishmentScope)) {
                     builder.and(installment.studentFee.student.establishment.id.eq(establishmentScope));
+                    // Les échéances de l'année consultée. Ciblé sur un élève, en revanche, on voit
+                    // tout ce qu'il doit, années précédentes comprises : c'est là qu'on encaisse un
+                    // impayé de l'an passé.
+                    UUID year = this.academicYearContext.consultedId();
+                    if (Objects.nonNull(year)) {
+                        builder.and(installment.studentFee.fee.academicYear.id.eq(year));
+                    }
                 }
             } else {
                 // Un parent sans élève désigné consulte l'échéancier de tous ses enfants — c'est ce

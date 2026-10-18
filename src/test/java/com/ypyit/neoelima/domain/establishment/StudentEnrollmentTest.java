@@ -1,7 +1,6 @@
 package com.ypyit.neoelima.domain.establishment;
 
 import com.ypyit.neoelima.AbstractIntegrationTest;
-import com.ypyit.neoelima.common.exception.BadRequestException;
 import com.ypyit.neoelima.domain.establishment.dto.StudentDto;
 import com.ypyit.neoelima.domain.establishment.dto.StudentStatsDto;
 import com.ypyit.neoelima.domain.establishment.entity.AcademicYearEntity;
@@ -20,7 +19,6 @@ import com.ypyit.neoelima.domain.establishment.repository.InstallmentRepository;
 import com.ypyit.neoelima.domain.establishment.repository.LevelOfStudyRepository;
 import com.ypyit.neoelima.domain.establishment.repository.StudentEnrollmentRepository;
 import com.ypyit.neoelima.domain.establishment.repository.StudentRepository;
-import com.ypyit.neoelima.domain.establishment.service.AcademicYearService;
 import com.ypyit.neoelima.domain.establishment.service.StudentCsvImporter;
 import com.ypyit.neoelima.domain.establishment.service.StudentService;
 import com.ypyit.neoelima.domain.establishment.service.StudentStatsService;
@@ -48,7 +46,6 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Inscription annuelle des élèves.
@@ -65,8 +62,6 @@ class StudentEnrollmentTest extends AbstractIntegrationTest {
     private StudentCsvImporter importer;
     @Autowired
     private StudentStatsService studentStatsService;
-    @Autowired
-    private AcademicYearService academicYearService;
     @Autowired
     private EstablishmentRepository establishmentRepository;
     @Autowired
@@ -120,7 +115,7 @@ class StudentEnrollmentTest extends AbstractIntegrationTest {
         // Le retour : l'import ne rattachait aucun frais, les élèves importés ne devaient rien.
         FeeEntity fee = this.feeRepository.saveAndFlush(FeeEntity.builder()
                 .name("Scolarité " + UUID.randomUUID()).price(new BigDecimal("120000"))
-                .academical(true).establishment(this.school).build());
+                .academical(true).establishment(this.school).academicYear(this.currentYear).build());
         fee.getLevelOfStudies().add(this.level);
         this.feeRepository.saveAndFlush(fee);
 
@@ -168,15 +163,6 @@ class StudentEnrollmentTest extends AbstractIntegrationTest {
                 .containsExactlyInAnyOrder("2025001", "2025002");
     }
 
-    @Test
-    @DisplayName("une année qui a des inscrits ne se supprime pas")
-    void aYearWithEnrollmentsCannotBeDeleted() {
-        this.enroll(this.student("2025003"), this.previousYear);
-
-        assertThatThrownBy(() -> this.academicYearService.delete(this.previousYear.getId()))
-                .isInstanceOf(BadRequestException.class);
-    }
-
     private StudentCreationForm form(String registrationNumber) {
         StudentCreationForm form = new StudentCreationForm();
         form.setFirstName("Yao");
@@ -202,8 +188,7 @@ class StudentEnrollmentTest extends AbstractIntegrationTest {
     private AcademicYearEntity year(String label, int startYear, boolean active) {
         return this.academicYearRepository.saveAndFlush(AcademicYearEntity.builder()
                 .label(label).startDate(LocalDate.of(startYear, 9, 1))
-                .endDate(LocalDate.of(startYear + 1, 7, 31)).active(active)
-                .establishment(this.school).build());
+                .endDate(LocalDate.of(startYear + 1, 7, 31)).active(active).build());
     }
 
     private void authenticateOn(EstablishmentEntity establishment) {

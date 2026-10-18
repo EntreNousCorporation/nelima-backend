@@ -6,6 +6,7 @@ import com.ypyit.neoelima.config.security.CurrentUserProvider;
 import com.ypyit.neoelima.domain.establishment.dto.ActivityDto;
 import com.ypyit.neoelima.domain.establishment.dto.SchoolClassLiteDto;
 import com.ypyit.neoelima.domain.establishment.entity.ActivityEntity;
+import com.ypyit.neoelima.domain.establishment.entity.AcademicYearEntity;
 import com.ypyit.neoelima.domain.establishment.entity.EstablishmentEntity;
 import com.ypyit.neoelima.domain.establishment.entity.FeeEntity;
 import com.ypyit.neoelima.domain.establishment.entity.SchoolClassEntity;
@@ -53,9 +54,11 @@ public class ActivityService {
     private final FeeRepository feeRepository;
     private final EstablishmentRepository establishmentRepository;
     private final CurrentUserProvider currentUserProvider;
+    private final AcademicYearContext academicYearContext;
 
     public List<ActivityDto> findAll() {
         return this.activityRepository.findByEstablishment_IdOrderByNameAsc(this.scope()).stream()
+                .filter(activity -> this.academicYearContext.inConsultedYear(activity.getAcademicYear()))
                 .map(this::toDto).toList();
     }
 
@@ -70,7 +73,8 @@ public class ActivityService {
                 .orElseThrow(() -> new NotFoundException("Establishment not found"));
 
         String name = form.getName().trim();
-        if (this.activityRepository.existsByEstablishment_IdAndNameIgnoreCase(scope, name)) {
+        AcademicYearEntity year = this.academicYearContext.consulted().orElse(null);
+        if (this.nameTaken(scope, name, year, null)) {
             throw new BadRequestException(String.format("Une activité nommée %s existe déjà.", name));
         }
 
@@ -87,8 +91,9 @@ public class ActivityService {
                 .capacity(form.getCapacity())
                 .status(Objects.requireNonNullElse(form.getStatus(), ActivityStatus.DRAFT))
                 .coach(this.resolveCoach(form.getCoachId(), establishment))
-                .fee(this.createFeeFor(name, form.getPrice(), establishment))
+                .fee(this.createFeeFor(name, form.getPrice(), establishment, year))
                 .establishment(establishment)
+                .academicYear(year)
                 .build();
 
         ActivityEntity saved = this.activityRepository.saveAndFlush(entity);
@@ -101,8 +106,7 @@ public class ActivityService {
         ActivityEntity entity = this.load(id);
         String name = form.getName().trim();
         if (!entity.getName().equalsIgnoreCase(name)
-                && this.activityRepository.existsByEstablishment_IdAndNameIgnoreCase(
-                        entity.getEstablishment().getId(), name)) {
+                && this.nameTaken(entity.getEstablishment().getId(), name, entity.getAcademicYear(), entity.getId())) {
             throw new BadRequestException(String.format("Une activité nommée %s existe déjà.", name));
         }
 
@@ -212,7 +216,17 @@ public class ActivityService {
      * service des frais serait un contresens : il exige des niveaux et facture aussitôt tous leurs
      * élèves, alors qu'ici la dette doit naître de l'inscription.
      */
-    private FeeEntity createFeeFor(String name, BigDecimal price, EstablishmentEntity establishment) {
+    /** Un nom d'activité est unique dans l'année : le judo revient chaque année. */
+    private boolean nameTaken(UUID establishmentId, String name, AcademicYearEntity year, UUID except) {
+        UUID yearId = Objects.isNull(year) ? null : year.getId();
+        return this.activityRepository.findByEstablishment_IdOrderByNameAsc(establishmentId).stream()
+                .filter(other -> !other.getId().equals(except))
+                .anyMatch(other -> other.getName().equalsIgnoreCase(name)
+                        && Objects.equals(Objects.isNull(other.getAcademicYear()) ? null : other.getAcademicYear().getId(), yearId));
+    }
+
+    private FeeEntity createFeeFor(String name, BigDecimal price, EstablishmentEntity establishment,
+                                   AcademicYearEntity year) {
         if (Objects.isNull(price) || price.signum() <= 0) {
             return null;
         }
@@ -223,6 +237,7 @@ public class ActivityService {
                 // Hors scolarité : le frais d'activité ne se compte pas dans la scolarité annuelle.
                 .academical(false)
                 .establishment(establishment)
+                .academicYear(year)
                 .build());
     }
 
@@ -239,7 +254,7 @@ public class ActivityService {
 
         if (Objects.isNull(fee)) {
             if (wanted) {
-                entity.setFee(this.createFeeFor(entity.getName(), price, entity.getEstablishment()));
+                entity.setFee(this.createFeeFor(entity.getName(), price, entity.getEstablishment(), entity.getAcademicYear()));
             }
             return;
         }

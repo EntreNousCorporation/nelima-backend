@@ -53,6 +53,7 @@ public class DashboardService {
 
     private final JPAQueryFactory queryFactory;
     private final CurrentUserProvider currentUserProvider;
+    private final AcademicYearContext academicYearContext;
 
     public DashboardSummaryDto summaryOf(UUID requestedEstablishmentId) {
         UUID scope = this.currentUserProvider.resolveEstablishmentScope(requestedEstablishmentId);
@@ -119,7 +120,8 @@ public class DashboardService {
         BigDecimal total = this.queryFactory.select(installment.amount.sum()).from(installment)
                 .where(installment.dueDate.goe(from), installment.dueDate.before(to),
                         scope == null ? null
-                                : installment.studentFee.student.establishment.id.eq(scope))
+                                : installment.studentFee.student.establishment.id.eq(scope),
+                        this.ofYear(scope, installment.studentFee.fee.academicYear.id))
                 .fetchOne();
         return Objects.requireNonNullElse(total, BigDecimal.ZERO);
     }
@@ -153,7 +155,8 @@ public class DashboardService {
                 .leftJoin(student.levelOfStudy, level)
                 .where(installment.status.eq(InstallmentStatus.PENDING),
                         installment.dueDate.before(today),
-                        scope == null ? null : student.establishment.id.eq(scope))
+                        scope == null ? null : student.establishment.id.eq(scope),
+                        this.ofYear(scope, installment.studentFee.fee.academicYear.id))
                 .groupBy(student.id, student.firstName, student.lastName,
                         student.registrationNumber, level.code)
                 .orderBy(installment.amount.sum().desc())
@@ -230,7 +233,7 @@ public class DashboardService {
                 .from(schoolClass)
                 .leftJoin(schoolClass.levelOfStudy, level)
                 .leftJoin(student).on(student.schoolClass.id.eq(schoolClass.id))
-                .where(schoolClass.establishment.id.eq(scope))
+                .where(schoolClass.establishment.id.eq(scope), this.openedInYear(schoolClass))
                 .groupBy(schoolClass.id, schoolClass.name, level.code, schoolClass.capacity)
                 .orderBy(schoolClass.name.asc())
                 .fetch().stream()
@@ -273,15 +276,44 @@ public class DashboardService {
         QStudentEntity student = QStudentEntity.studentEntity;
         Long count = this.queryFactory.select(student.count()).from(student)
                 .where(scope == null ? null : student.establishment.id.eq(scope),
-                        gender == null ? student.gender.isNull() : student.gender.eq(gender))
+                        gender == null ? student.gender.isNull() : student.gender.eq(gender),
+                        this.enrolledInYear(scope, student))
                 .fetchOne();
         return Objects.requireNonNullElse(count, 0L);
+    }
+
+    /*
+     * L'année consultée, pour une école. Le parc vu par la plateforme n'est pas filtré : une
+     * année commune ne dit rien de l'état des écoles, chacune avance à son rythme. QueryDSL
+     * ignore un prédicat nul.
+     */
+    private com.querydsl.core.types.Predicate ofYear(UUID scope,
+                                                     com.querydsl.core.types.dsl.ComparablePath<UUID> yearId) {
+        UUID year = scope == null ? null : this.academicYearContext.consultedId();
+        return year == null ? null : yearId.eq(year);
+    }
+
+    private com.querydsl.core.types.Predicate enrolledInYear(UUID scope, QStudentEntity student) {
+        UUID year = scope == null ? null : this.academicYearContext.consultedId();
+        return year == null ? null : StudentFilters.enrolledIn(student, year);
+    }
+
+    private com.querydsl.core.types.Predicate openedInYear(QSchoolClassEntity schoolClass) {
+        UUID year = this.academicYearContext.consultedId();
+        if (year == null) {
+            return null;
+        }
+        com.ypyit.neoelima.domain.establishment.entity.QSchoolClassYearEntity opening =
+                com.ypyit.neoelima.domain.establishment.entity.QSchoolClassYearEntity.schoolClassYearEntity;
+        return schoolClass.id.in(com.querydsl.jpa.JPAExpressions.select(opening.schoolClass.id)
+                .from(opening).where(opening.academicYear.id.eq(year)));
     }
 
     private long countStudents(UUID scope) {
         QStudentEntity student = QStudentEntity.studentEntity;
         Long count = this.queryFactory.select(student.count()).from(student)
-                .where(scope == null ? null : student.establishment.id.eq(scope))
+                .where(scope == null ? null : student.establishment.id.eq(scope),
+                        this.enrolledInYear(scope, student))
                 .fetchOne();
         return Objects.requireNonNullElse(count, 0L);
     }
@@ -292,7 +324,8 @@ public class DashboardService {
         BigDecimal total = this.queryFactory.select(receipt.amount.sum()).from(receipt)
                 .where(receipt.issuedAt.goe(since),
                         until == null ? null : receipt.issuedAt.before(until),
-                        scope == null ? null : receipt.establishment.id.eq(scope))
+                        scope == null ? null : receipt.establishment.id.eq(scope),
+                        this.ofYear(scope, receipt.paymentIntent.installment.studentFee.fee.academicYear.id))
                 .fetchOne();
         // `sum()` rend null sur un ensemble vide : une école sans encaissement affiche 0, pas rien.
         return Objects.requireNonNullElse(total, BigDecimal.ZERO);
@@ -302,7 +335,8 @@ public class DashboardService {
         QReceiptEntity receipt = QReceiptEntity.receiptEntity;
         Long count = this.queryFactory.select(receipt.count()).from(receipt)
                 .where(receipt.issuedAt.goe(since),
-                        scope == null ? null : receipt.establishment.id.eq(scope))
+                        scope == null ? null : receipt.establishment.id.eq(scope),
+                        this.ofYear(scope, receipt.paymentIntent.installment.studentFee.fee.academicYear.id))
                 .fetchOne();
         return Objects.requireNonNullElse(count, 0L);
     }
@@ -314,7 +348,8 @@ public class DashboardService {
                 .where(installment.status.eq(InstallmentStatus.PENDING),
                         dueBefore == null ? null : installment.dueDate.before(dueBefore),
                         scope == null ? null
-                                : installment.studentFee.student.establishment.id.eq(scope))
+                                : installment.studentFee.student.establishment.id.eq(scope),
+                        this.ofYear(scope, installment.studentFee.fee.academicYear.id))
                 .fetchOne();
         return Objects.requireNonNullElse(total, BigDecimal.ZERO);
     }
@@ -325,7 +360,8 @@ public class DashboardService {
                 .where(installment.status.eq(InstallmentStatus.PENDING),
                         dueBefore == null ? null : installment.dueDate.before(dueBefore),
                         scope == null ? null
-                                : installment.studentFee.student.establishment.id.eq(scope))
+                                : installment.studentFee.student.establishment.id.eq(scope),
+                        this.ofYear(scope, installment.studentFee.fee.academicYear.id))
                 .fetchOne();
         return Objects.requireNonNullElse(count, 0L);
     }
@@ -342,7 +378,8 @@ public class DashboardService {
                 .select(receipt.id, receipt.number, receipt.amount,
                         receipt.studentLabel, receipt.issuedAt)
                 .from(receipt)
-                .where(scope == null ? null : receipt.establishment.id.eq(scope))
+                .where(scope == null ? null : receipt.establishment.id.eq(scope),
+                        this.ofYear(scope, receipt.paymentIntent.installment.studentFee.fee.academicYear.id))
                 .orderBy(receipt.issuedAt.desc())
                 .limit(5)
                 .fetch();

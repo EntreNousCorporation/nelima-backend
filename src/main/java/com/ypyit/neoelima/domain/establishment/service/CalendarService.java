@@ -56,6 +56,7 @@ public class CalendarService {
     private final InstallmentRepository installmentRepository;
     private final StudentRepository studentRepository;
     private final AcademicYearService academicYearService;
+    private final AcademicYearContext academicYearContext;
     private final CurrentUserProvider currentUserProvider;
 
     /** Le calendrier de l'école : événements saisis, échéances agrégées et bornes de l'année. */
@@ -212,17 +213,20 @@ public class CalendarService {
      * une école qui n'a saisi que « 2025-2026 » y voit tout de même sa rentrée.
      */
     private List<CalendarEntryDto> academicEntries(UUID establishmentId, LocalDate from, LocalDate to) {
-        return this.academicYearService.activeYear(establishmentId)
+        // L'année consultée, avec les trimestres de cette école : ils lui sont propres.
+        List<AcademicPeriodEntity> periods = this.academicYearService.consultedSchoolYear(establishmentId)
+                .map(schoolYear -> schoolYear.getPeriods()).orElse(List.of());
+        return this.academicYearContext.consulted()
                 .map(year -> {
                     List<CalendarEntryDto> entries = new ArrayList<>();
-                    if (year.getPeriods().isEmpty()) {
+                    if (periods.isEmpty()) {
                         addMilestone(entries, "Rentrée scolaire — " + year.getLabel(),
                                 year.getStartDate(), from, to);
                         addMilestone(entries, "Fin de l'année — " + year.getLabel(),
                                 year.getEndDate(), from, to);
                         return entries;
                     }
-                    for (AcademicPeriodEntity period : year.getPeriods()) {
+                    for (AcademicPeriodEntity period : periods) {
                         addMilestone(entries, "Début — " + period.getLabel(),
                                 period.getStartDate(), from, to);
                         addMilestone(entries, "Fin — " + period.getLabel(),

@@ -46,7 +46,7 @@ import java.util.Set;
 @NoArgsConstructor
 @AllArgsConstructor
 @Table(name = "activity", uniqueConstraints = {
-        @UniqueConstraint(name = "uk_activity_establishment_name", columnNames = {"establishment_id", "name"})
+        @UniqueConstraint(name = "uk_activity_establishment_year_name", columnNames = {"establishment_id", "academic_year_id", "name"})
 })
 public class ActivityEntity extends BaseEntity {
 
@@ -138,6 +138,15 @@ public class ActivityEntity extends BaseEntity {
     @ToString.Exclude
     @JoinColumn(name = "establishment_id", referencedColumnName = "id")
     private EstablishmentEntity establishment;
+
+    /**
+     * Année scolaire du l'activité. Nulle seulement pour les données d'avant les années de plateforme
+     * créées sans année déclarée.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @ToString.Exclude
+    @JoinColumn(name = "academic_year_id", referencedColumnName = "id")
+    private AcademicYearEntity academicYear;
 
     @Override
     public boolean equals(Object o) {

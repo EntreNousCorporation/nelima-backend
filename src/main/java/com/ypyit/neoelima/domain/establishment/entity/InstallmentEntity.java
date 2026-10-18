@@ -85,7 +85,7 @@ public class InstallmentEntity extends BaseEntity {
      */
     @ManyToOne(fetch = FetchType.LAZY)
     @ToString.Exclude
-    @QueryInit("student.establishment")
+    @QueryInit({"student.establishment", "fee.academicYear"})
     @JoinColumn(name = "student_fee_id", referencedColumnName = "id")
     private StudentFeeEntity studentFee;
 

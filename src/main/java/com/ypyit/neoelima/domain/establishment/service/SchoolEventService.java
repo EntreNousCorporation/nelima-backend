@@ -48,6 +48,7 @@ public class SchoolEventService {
     private final EstablishmentRepository establishmentRepository;
     private final PushNotificationService pushNotificationService;
     private final CurrentUserProvider currentUserProvider;
+    private final AcademicYearContext academicYearContext;
 
     @Transactional
     public CalendarEntryDto create(SchoolEventForm form) {
@@ -60,6 +61,7 @@ public class SchoolEventService {
                 .kind(form.getKind())
                 .date(form.getDate())
                 .establishment(establishment)
+                .academicYear(this.academicYearContext.consulted().orElse(null))
                 .build();
         checkSlot(form);
         this.apply(entity, form);

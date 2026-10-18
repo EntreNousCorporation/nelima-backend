@@ -3,7 +3,6 @@ package com.ypyit.neoelima.domain.establishment.service;
 import com.ypyit.neoelima.domain.establishment.entity.AcademicYearEntity;
 import com.ypyit.neoelima.domain.establishment.entity.StudentEnrollmentEntity;
 import com.ypyit.neoelima.domain.establishment.entity.StudentEntity;
-import com.ypyit.neoelima.domain.establishment.repository.AcademicYearRepository;
 import com.ypyit.neoelima.domain.establishment.repository.StudentEnrollmentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -23,7 +22,7 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class StudentEnrollmentService {
 
-    private final AcademicYearRepository academicYearRepository;
+    private final AcademicYearContext academicYearContext;
     private final StudentEnrollmentRepository studentEnrollmentRepository;
 
     @Transactional
@@ -31,11 +30,13 @@ public class StudentEnrollmentService {
         if (Objects.isNull(student.getEstablishment())) {
             return;
         }
-        Optional<AcademicYearEntity> active = this.academicYearRepository
-                .findByEstablishment_IdAndActiveTrue(student.getEstablishment().getId());
+        // L'année de travail de l'utilisateur : celle qu'il consulte. Préparer la rentrée suivante
+        // depuis 2027-2028 y inscrit l'élève, sans toucher à 2026-2027.
+        Optional<AcademicYearEntity> active = this.academicYearContext.consulted();
         if (active.isEmpty()) {
             return;
         }
+        this.academicYearContext.schoolYear(student.getEstablishment().getId(), active.get());
         StudentEnrollmentEntity enrollment = this.studentEnrollmentRepository
                 .findByStudent_IdAndAcademicYear_Id(student.getId(), active.get().getId())
                 .orElseGet(() -> StudentEnrollmentEntity.builder()

@@ -5,6 +5,7 @@ import com.ypyit.neoelima.domain.establishment.enums.SchoolEventKind;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.JoinColumn;
@@ -106,6 +107,15 @@ public class SchoolEventEntity extends BaseEntity {
     @ToString.Exclude
     @JoinColumn(name = "establishment_id", referencedColumnName = "id")
     private EstablishmentEntity establishment;
+
+    /**
+     * Année scolaire du l'événement. Nulle seulement pour les données d'avant les années de plateforme
+     * créées sans année déclarée.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @ToString.Exclude
+    @JoinColumn(name = "academic_year_id", referencedColumnName = "id")
+    private AcademicYearEntity academicYear;
 
     @Override
     public boolean equals(Object o) {

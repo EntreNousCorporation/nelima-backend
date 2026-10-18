@@ -52,8 +52,8 @@ public class AcademicPeriodEntity extends BaseEntity {
 
     @ManyToOne(optional = false, fetch = FetchType.LAZY)
     @ToString.Exclude
-    @JoinColumn(name = "academic_year_id", referencedColumnName = "id")
-    private AcademicYearEntity academicYear;
+    @JoinColumn(name = "school_year_id", referencedColumnName = "id")
+    private SchoolYearEntity schoolYear;
 
     @Override
     public boolean equals(Object o) {

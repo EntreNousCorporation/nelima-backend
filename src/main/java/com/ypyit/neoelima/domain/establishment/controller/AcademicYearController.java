@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -37,36 +38,56 @@ public class AcademicYearController {
     private final AcademicYearService academicYearService;
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasAuthority('settings:read')")
-    @Operation(summary = "Années scolaires de l'établissement",
-            description = "La plus récente en tête. Les années passées sont conservées : les reçus "
-                    + "et les échéances y sont datés.")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Années scolaires de la plateforme",
+            description = "La plus récente en tête. Pour un compte d'école, chaque année porte les "
+                    + "trimestres et l'état de l'école ; l'année consultée par l'utilisateur est signalée.")
     public ResponseEntity<List<AcademicYearDto>> findAll() {
         return ResponseEntity.ok(this.academicYearService.findAll());
     }
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasAuthority('settings:write')")
-    @Operation(summary = "Déclare une année scolaire",
-            description = "L'activer désactive la précédente : une seule année est en cours.")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Déclare une année scolaire (plateforme)",
+            description = "Réservé à l'équipe de la plateforme. La désigner en cours retire ce statut à la précédente.")
     public ResponseEntity<AcademicYearDto> create(@RequestBody @Valid AcademicYearForm form) {
         return ResponseEntity.ok(this.academicYearService.create(form));
     }
 
     @PutMapping(value = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasAuthority('settings:write')")
-    @Operation(summary = "Modifie une année et remplace ses périodes")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Modifie une année (plateforme)",
+            description = "Réservé à l'équipe de la plateforme. Refusé si les trimestres d'une école sortiraient des nouvelles bornes.")
     public ResponseEntity<AcademicYearDto> update(@PathVariable UUID id,
                                                    @RequestBody @Valid AcademicYearForm form) {
         return ResponseEntity.ok(this.academicYearService.update(id, form));
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAuthority('settings:write')")
-    @Operation(summary = "Supprime une année",
-            description = "Refusé pour l'année en cours : l'école resterait sans repère.")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Supprime une année (plateforme)",
+            description = "Refusé pour l'année en cours, et dès qu'une école y travaille.")
     public ResponseEntity<Void> delete(@PathVariable UUID id) {
         this.academicYearService.delete(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PutMapping(value = "/{id}/periods", consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAuthority('settings:write')")
+    @Operation(summary = "Trimestres de l'école pour une année",
+            description = "Remplace les périodes de l'école ; chacune doit tenir dans les bornes de l'année.")
+    public ResponseEntity<AcademicYearDto> definePeriods(@PathVariable UUID id,
+                                                         @RequestBody @Valid List<AcademicYearForm.AcademicPeriodForm> periods) {
+        return ResponseEntity.ok(this.academicYearService.definePeriods(id, periods));
+    }
+
+    @PutMapping("/consulted")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Année consultée par l'utilisateur",
+            description = "Tous ses écrans passent sur cette année. Sans `academicYearId`, retour à l'année en cours.")
+    public ResponseEntity<Void> consult(@RequestParam(required = false) UUID academicYearId) {
+        this.academicYearService.consult(academicYearId);
         return ResponseEntity.noContent().build();
     }
 }

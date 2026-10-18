@@ -1,5 +1,6 @@
 package com.ypyit.neoelima.domain.establishment.dto;
 
+import com.ypyit.neoelima.domain.establishment.enums.SchoolYearStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -22,6 +23,10 @@ public class AcademicYearDto {
     private LocalDate startDate;
     private LocalDate endDate;
     private boolean active;
+    /** L'année que l'utilisateur consulte. */
+    private boolean consulted;
+    /** État de l'année dans l'école de l'utilisateur ; nul pour la plateforme. */
+    private SchoolYearStatus status;
 
     @Builder.Default
     private List<AcademicPeriodDto> periods = new ArrayList<>();

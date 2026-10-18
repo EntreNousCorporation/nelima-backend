@@ -61,6 +61,7 @@ public class ReminderCampaignService {
     private final ReminderDispatcher dispatcher;
     private final AuditService auditService;
     private final CurrentUserProvider currentUserProvider;
+    private final AcademicYearContext academicYearContext;
 
     /**
      * L'événement auquel une cible se rapporte, pour interroger le bon réglage.
@@ -237,7 +238,9 @@ public class ReminderCampaignService {
     private List<InstallmentEntity> unpaidOf(UUID establishmentId) {
         return this.installmentRepository
                 .findByStudentFee_Student_Establishment_IdAndStatusAndDueDateNotNull(
-                        establishmentId, InstallmentStatus.PENDING);
+                        establishmentId, InstallmentStatus.PENDING).stream()
+                .filter(line -> this.academicYearContext.inConsultedYear(line.getStudentFee().getFee().getAcademicYear()))
+                .toList();
     }
 
     /** Filtre les tranches encore dues selon l'ancienneté du retard, ou l'imminence de l'échéance. */

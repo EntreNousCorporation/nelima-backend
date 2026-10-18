@@ -6,28 +6,33 @@ import com.ypyit.neoelima.config.security.CurrentUserProvider;
 import com.ypyit.neoelima.domain.establishment.dto.AcademicYearDto;
 import com.ypyit.neoelima.domain.establishment.entity.AcademicPeriodEntity;
 import com.ypyit.neoelima.domain.establishment.entity.AcademicYearEntity;
-import com.ypyit.neoelima.domain.establishment.entity.EstablishmentEntity;
+import com.ypyit.neoelima.domain.establishment.entity.SchoolYearEntity;
 import com.ypyit.neoelima.domain.establishment.form.AcademicYearForm;
 import com.ypyit.neoelima.domain.establishment.repository.AcademicYearRepository;
+import com.ypyit.neoelima.domain.establishment.repository.SchoolYearRepository;
 import com.ypyit.neoelima.domain.establishment.repository.StudentEnrollmentRepository;
-import com.ypyit.neoelima.domain.establishment.repository.EstablishmentRepository;
+import com.ypyit.neoelima.domain.user.entity.UserEntity;
+import com.ypyit.neoelima.domain.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
- * Année scolaire de l'établissement et ses périodes.
+ * Années scolaires.
  *
- * <p>Une seule année est active à la fois, et c'est ici que la règle tient : la base ne l'exprime
- * pas — un index partiel unique interdirait de basculer d'une année à l'autre dans la même
- * transaction sans ordonner les écritures. Le service désactive les autres avant d'activer.
+ * <p>La plateforme les définit, pour toutes les écoles : libellé, bornes, année en cours. Chaque
+ * école y pose ses trimestres, et chaque utilisateur choisit l'année qu'il consulte.
  */
 @Slf4j
 @Service
@@ -36,123 +41,169 @@ import java.util.UUID;
 public class AcademicYearService {
 
     private final AcademicYearRepository academicYearRepository;
+    private final SchoolYearRepository schoolYearRepository;
     private final StudentEnrollmentRepository studentEnrollmentRepository;
-    private final EstablishmentRepository establishmentRepository;
+    private final UserRepository userRepository;
+    private final AcademicYearContext academicYearContext;
     private final CurrentUserProvider currentUserProvider;
 
-    /** Les années de l'école, la plus récente en tête. */
+    /**
+     * Les années de la plateforme, la plus récente en tête. Pour un compte d'école, chacune porte
+     * les trimestres et l'état de l'école ; et celle que l'utilisateur consulte est signalée.
+     */
     public List<AcademicYearDto> findAll() {
-        return this.academicYearRepository
-                .findByEstablishment_IdOrderByStartDateDesc(this.scope()).stream()
-                .map(AcademicYearService::toDto)
+        List<AcademicYearEntity> years = this.academicYearRepository.findAllByOrderByStartDateDesc();
+        UUID scope = this.currentUserProvider.isPlatformAdmin() ? null
+                : this.currentUserProvider.resolveEstablishmentScope(null);
+        Map<UUID, SchoolYearEntity> schoolYears = Objects.isNull(scope) ? Map.of()
+                : this.schoolYearRepository.findByEstablishment_Id(scope).stream()
+                        .collect(Collectors.toMap(sy -> sy.getAcademicYear().getId(), Function.identity()));
+        UUID consulted = this.academicYearContext.consultedId();
+        return years.stream()
+                .map(year -> toDto(year, schoolYears.get(year.getId()), year.getId().equals(consulted)))
                 .toList();
     }
 
-    /** L'année en cours, si l'école en a déclaré une. */
-    public Optional<AcademicYearEntity> activeYear(UUID establishmentId) {
-        return this.academicYearRepository.findByEstablishment_IdAndActiveTrue(establishmentId);
+    /** L'année en cours, avec les trimestres de l'école : le calendrier en tire ses repères. */
+    public Optional<SchoolYearEntity> consultedSchoolYear(UUID establishmentId) {
+        return this.academicYearContext.consulted()
+                .flatMap(year -> this.schoolYearRepository
+                        .findByEstablishment_IdAndAcademicYear_Id(establishmentId, year.getId()));
     }
+
+    /* ---------------------------------------------------------------- Plateforme ---- */
 
     @Transactional
     public AcademicYearDto create(AcademicYearForm form) {
-        UUID scope = this.scope();
-        EstablishmentEntity establishment = this.establishmentRepository.findById(scope)
-                .orElseThrow(() -> new NotFoundException("Establishment not found"));
-
-        AcademicYearEntity entity = AcademicYearEntity.builder()
-                .establishment(establishment)
-                .label(form.getLabel().trim())
-                .startDate(form.getStartDate())
-                .endDate(form.getEndDate())
-                .build();
+        this.assertPlatformAdmin();
+        if (this.academicYearRepository.existsByLabelIgnoreCase(form.getLabel().trim())) {
+            throw new BadRequestException(String.format("L'année %s existe déjà.", form.getLabel().trim()));
+        }
+        AcademicYearEntity entity = AcademicYearEntity.builder().build();
         this.apply(entity, form);
-
         AcademicYearEntity saved = this.academicYearRepository.saveAndFlush(entity);
-        log.info("ACADEMIC_YEAR_CREATED: {} in establishment {}", saved.getId(), scope);
-        return toDto(saved);
+        log.info("ACADEMIC_YEAR_CREATED: {} ({})", saved.getLabel(), saved.getId());
+        return toDto(saved, null, false);
     }
 
     @Transactional
     public AcademicYearDto update(UUID id, AcademicYearForm form) {
+        this.assertPlatformAdmin();
         AcademicYearEntity entity = this.load(id);
-        entity.setLabel(form.getLabel().trim());
-        entity.setStartDate(form.getStartDate());
-        entity.setEndDate(form.getEndDate());
+        if (this.academicYearRepository.existsByLabelIgnoreCaseAndIdNot(form.getLabel().trim(), id)) {
+            throw new BadRequestException(String.format("L'année %s existe déjà.", form.getLabel().trim()));
+        }
+        if (entity.isActive() && !form.isActive()) {
+            throw new BadRequestException(
+                    "Il faut toujours une année en cours : désignez-en une autre plutôt que de retirer celle-ci.");
+        }
         this.apply(entity, form);
-        return toDto(this.academicYearRepository.saveAndFlush(entity));
+        // Les trimestres des écoles doivent rester dans l'année : resserrer ses bornes ne doit pas
+        // laisser un trimestre déborder sans que personne ne le voie.
+        for (SchoolYearEntity schoolYear : this.schoolYearsOf(id)) {
+            for (AcademicPeriodEntity period : schoolYear.getPeriods()) {
+                if (period.getStartDate().isBefore(entity.getStartDate()) || period.getEndDate().isAfter(entity.getEndDate())) {
+                    throw new BadRequestException(String.format(
+                            "Le « %s » de %s sortirait de ces bornes : l'école doit d'abord l'ajuster.",
+                            period.getLabel(), schoolYear.getEstablishment().getName()));
+                }
+            }
+        }
+        return toDto(this.academicYearRepository.saveAndFlush(entity), null, false);
     }
 
-    /**
-     * Supprime une année.
-     *
-     * <p>L'année en cours ne se supprime pas. Elle borne le calendrier et sert de référence aux
-     * écrans : la retirer laisserait l'école sans repère jusqu'à ce qu'elle en active une autre,
-     * sans que rien ne le lui dise.
-     */
+    /** Supprimée seulement tant qu'aucune école ne s'en sert : ses données en dépendraient. */
     @Transactional
     public void delete(UUID id) {
+        this.assertPlatformAdmin();
         AcademicYearEntity entity = this.load(id);
         if (entity.isActive()) {
-            throw new BadRequestException(
-                    "L'année en cours ne peut pas être supprimée : activez-en une autre d'abord.");
+            throw new BadRequestException("L'année en cours ne peut pas être supprimée : désignez-en une autre d'abord.");
         }
-        // Ses inscriptions sont l'historique des élèves : la supprimer effacerait qui était dans
-        // quelle classe cette année-là.
-        if (this.studentEnrollmentRepository.existsByAcademicYear_Id(id)) {
+        if (this.schoolYearRepository.existsByAcademicYear_Id(id) || this.studentEnrollmentRepository.existsByAcademicYear_Id(id)) {
             throw new BadRequestException(String.format(
-                    "L'année %s compte des élèves inscrits : elle ne peut pas être supprimée.",
-                    entity.getLabel()));
+                    "Des écoles travaillent sur l'année %s : elle ne peut plus être supprimée.", entity.getLabel()));
         }
         this.academicYearRepository.delete(entity);
         log.info("ACADEMIC_YEAR_DELETED: {}", id);
     }
 
-    private void apply(AcademicYearEntity entity, AcademicYearForm form) {
-        assertRange(entity.getStartDate(), entity.getEndDate(),
-                "L'année scolaire doit se terminer après avoir commencé.");
+    /* ---------------------------------------------------------------- École ---- */
 
-        entity.getPeriods().clear();
+    /** Les trimestres de l'école pour une année : ses dates à elle, dans les bornes de l'année. */
+    @Transactional
+    public AcademicYearDto definePeriods(UUID id, List<AcademicYearForm.AcademicPeriodForm> periods) {
+        AcademicYearEntity year = this.load(id);
+        UUID scope = this.schoolScope();
+        SchoolYearEntity schoolYear = this.academicYearContext.schoolYear(scope, year);
+        schoolYear.getPeriods().clear();
         int position = 1;
-        for (AcademicYearForm.AcademicPeriodForm period : form.getPeriods()) {
+        for (AcademicYearForm.AcademicPeriodForm period : periods) {
             assertRange(period.getStartDate(), period.getEndDate(), String.format(
                     "La période « %s » doit se terminer après avoir commencé.", period.getLabel()));
-            // Une période hors de son année placerait au calendrier un trimestre que l'année ne
-            // couvre pas ; la faute vient d'une saisie, pas d'un cas limite à absorber.
-            if (period.getStartDate().isBefore(entity.getStartDate())
-                    || period.getEndDate().isAfter(entity.getEndDate())) {
+            if (period.getStartDate().isBefore(year.getStartDate()) || period.getEndDate().isAfter(year.getEndDate())) {
                 throw new BadRequestException(String.format(
-                        "La période « %s » sort des bornes de l'année scolaire.", period.getLabel()));
+                        "La période « %s » sort des bornes de l'année scolaire (%s).", period.getLabel(), year.getLabel()));
             }
-            entity.getPeriods().add(AcademicPeriodEntity.builder()
-                    .academicYear(entity)
+            schoolYear.getPeriods().add(AcademicPeriodEntity.builder()
+                    .schoolYear(schoolYear)
                     .label(period.getLabel().trim())
                     .startDate(period.getStartDate())
                     .endDate(period.getEndDate())
                     .position(position++)
                     .build());
         }
+        SchoolYearEntity saved = this.schoolYearRepository.saveAndFlush(schoolYear);
+        return toDto(year, saved, year.getId().equals(this.academicYearContext.consultedId()));
+    }
 
+    /** L'année que l'utilisateur consulte ; nul revient à l'année en cours. */
+    @Transactional
+    public void consult(UUID id) {
+        if (Objects.nonNull(id)) {
+            this.load(id);
+        }
+        UserEntity user = this.currentUserProvider.currentUser();
+        // L'année en cours n'a pas à être mémorisée : elle suivra d'elle-même le passage à la suivante.
+        UUID current = this.academicYearContext.currentId();
+        user.setConsultedAcademicYearId(Objects.equals(id, current) ? null : id);
+        this.userRepository.save(user);
+    }
+
+    /* ---------------------------------------------------------------- Outils ---- */
+
+    private void apply(AcademicYearEntity entity, AcademicYearForm form) {
+        assertRange(form.getStartDate(), form.getEndDate(), "L'année scolaire doit se terminer après avoir commencé.");
+        entity.setLabel(form.getLabel().trim());
+        entity.setStartDate(form.getStartDate());
+        entity.setEndDate(form.getEndDate());
         entity.setActive(form.isActive());
         if (form.isActive()) {
-            this.deactivateOthers(entity);
+            // Une seule année en cours : la base le garantit aussi, mais le message vient d'ici.
+            UUID keep = Objects.requireNonNullElse(entity.getId(), new UUID(0L, 0L));
+            List<AcademicYearEntity> others = this.academicYearRepository.findByActiveTrueAndIdNot(keep);
+            others.forEach(other -> other.setActive(false));
+            this.academicYearRepository.saveAllAndFlush(others);
         }
     }
 
-    /**
-     * Désactive les autres années de l'école.
-     *
-     * <p>Deux années actives feraient répondre deux jeux de bornes à la même question ; l'écran en
-     * afficherait une et le calendrier l'autre, sans que rien ne signale la contradiction.
-     */
-    private void deactivateOthers(AcademicYearEntity entity) {
-        UUID establishmentId = entity.getEstablishment().getId();
-        UUID keep = Objects.requireNonNullElse(entity.getId(), new UUID(0L, 0L));
-        List<AcademicYearEntity> others = this.academicYearRepository
-                .findByEstablishment_IdAndActiveTrueAndIdNot(establishmentId, keep);
-        for (AcademicYearEntity other : others) {
-            other.setActive(false);
+    private List<SchoolYearEntity> schoolYearsOf(UUID yearId) {
+        return this.schoolYearRepository.findAll().stream()
+                .filter(sy -> sy.getAcademicYear().getId().equals(yearId)).toList();
+    }
+
+    private void assertPlatformAdmin() {
+        if (!this.currentUserProvider.isPlatformAdmin()) {
+            throw new AccessDeniedException("Les années scolaires sont définies par la plateforme.");
         }
-        this.academicYearRepository.saveAll(others);
+    }
+
+    private UUID schoolScope() {
+        UUID scope = this.currentUserProvider.resolveEstablishmentScope(null);
+        if (Objects.isNull(scope)) {
+            throw new BadRequestException("Cette opération suppose un compte d'établissement.");
+        }
+        return scope;
     }
 
     private static void assertRange(LocalDate from, LocalDate to, String message) {
@@ -161,14 +212,21 @@ public class AcademicYearService {
         }
     }
 
-    static AcademicYearDto toDto(AcademicYearEntity entity) {
+    private AcademicYearEntity load(UUID id) {
+        return this.academicYearRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException(String.format("Academic year with provided id %s not found", id)));
+    }
+
+    static AcademicYearDto toDto(AcademicYearEntity entity, SchoolYearEntity schoolYear, boolean consulted) {
         return AcademicYearDto.builder()
                 .id(entity.getId().toString())
                 .label(entity.getLabel())
                 .startDate(entity.getStartDate())
                 .endDate(entity.getEndDate())
                 .active(entity.isActive())
-                .periods(entity.getPeriods().stream()
+                .consulted(consulted)
+                .status(Objects.isNull(schoolYear) ? null : schoolYear.getStatus())
+                .periods(Objects.isNull(schoolYear) ? List.of() : schoolYear.getPeriods().stream()
                         .map(period -> AcademicYearDto.AcademicPeriodDto.builder()
                                 .id(period.getId().toString())
                                 .label(period.getLabel())
@@ -178,25 +236,5 @@ public class AcademicYearService {
                                 .build())
                         .toList())
                 .build();
-    }
-
-    private AcademicYearEntity load(UUID id) {
-        AcademicYearEntity entity = this.academicYearRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException(
-                        String.format("Academic year with provided id %s not found", id)));
-        UUID scope = this.scope();
-        if (!entity.getEstablishment().getId().equals(scope)) {
-            throw new NotFoundException(
-                    String.format("Academic year with provided id %s not found", id));
-        }
-        return entity;
-    }
-
-    private UUID scope() {
-        UUID scope = this.currentUserProvider.resolveEstablishmentScope(null);
-        if (Objects.isNull(scope)) {
-            throw new BadRequestException("Cette opération suppose un compte d'établissement.");
-        }
-        return scope;
     }
 }

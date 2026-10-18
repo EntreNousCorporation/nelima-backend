@@ -3,6 +3,7 @@ package com.ypyit.neoelima.domain.establishment.entity;
 import com.ypyit.neoelima.common.entity.BaseEntity;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinTable;
 import jakarta.persistence.ManyToMany;
@@ -32,7 +33,7 @@ import java.util.Set;
 @SuperBuilder
 @NoArgsConstructor
 @AllArgsConstructor
-@Table(name = "fee", uniqueConstraints = {@UniqueConstraint(columnNames = {"name", "establishment_id"})
+@Table(name = "fee", uniqueConstraints = {@UniqueConstraint(name = "uk_fee_establishment_year_name", columnNames = {"establishment_id", "academic_year_id", "name"})
 })
 public class FeeEntity extends BaseEntity {
 
@@ -57,6 +58,15 @@ public class FeeEntity extends BaseEntity {
             inverseJoinColumns = @JoinColumn(name = "level_of_study_id", referencedColumnName = "id")
     )
     private Set<LevelOfStudyEntity> levelOfStudies = new HashSet<>();
+
+    /**
+     * Année scolaire du frais. Nulle seulement pour les données d'avant les années de plateforme
+     * créées sans année déclarée.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @ToString.Exclude
+    @JoinColumn(name = "academic_year_id", referencedColumnName = "id")
+    private AcademicYearEntity academicYear;
 
     @Override
     public boolean equals(Object o) {

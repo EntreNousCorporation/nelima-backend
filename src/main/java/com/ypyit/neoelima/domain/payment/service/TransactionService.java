@@ -1,5 +1,6 @@
 package com.ypyit.neoelima.domain.payment.service;
 
+import com.ypyit.neoelima.domain.establishment.service.AcademicYearContext;
 import com.ypyit.neoelima.common.exception.BadRequestException;
 import com.ypyit.neoelima.config.security.CurrentUserProvider;
 import com.ypyit.neoelima.domain.establishment.entity.InstallmentEntity;
@@ -47,6 +48,7 @@ public class TransactionService {
     private final PaymentIntentRepository paymentIntentRepository;
     private final ReceiptRepository receiptRepository;
     private final CurrentUserProvider currentUserProvider;
+    private final AcademicYearContext academicYearContext;
 
     public List<TransactionDto> findAll(LocalDate from, LocalDate to) {
         List<PaymentIntentEntity> intents = this.load(from, to);
@@ -87,7 +89,10 @@ public class TransactionService {
 
         return this.paymentIntentRepository
                 .findByInstallment_StudentFee_Student_Establishment_IdAndCreatedAtBetweenOrderByCreatedAtDesc(
-                        scope, start, end);
+                        scope, start, end).stream()
+                .filter(intent -> this.academicYearContext.inConsultedYear(
+                        intent.getInstallment().getStudentFee().getFee().getAcademicYear()))
+                .toList();
     }
 
     private static TransactionDto toDto(PaymentIntentEntity intent, Map<UUID, ReceiptEntity> receipts) {

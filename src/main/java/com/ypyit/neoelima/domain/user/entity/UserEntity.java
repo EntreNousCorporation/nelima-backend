@@ -3,6 +3,7 @@ package com.ypyit.neoelima.domain.user.entity;
 import com.ypyit.neoelima.common.entity.BaseEntity;
 import com.ypyit.neoelima.domain.utils.FunctionalUtils;
 import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
 import jakarta.persistence.DiscriminatorColumn;
 import jakarta.persistence.DiscriminatorType;
 import jakarta.persistence.Entity;
@@ -34,6 +35,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -83,6 +85,15 @@ public class UserEntity extends BaseEntity implements UserDetails {
     private LocalTime quietFrom;
 
     private LocalTime quietTo;
+
+    /**
+     * Année que l'utilisateur consulte, choisie dans Paramètres ; nulle, c'est l'année en cours.
+     *
+     * <p>Propre à chacun : la comptable qui revoit l'année passée ne fait pas basculer le
+     * secrétariat, qui inscrit les élèves de l'année en cours.
+     */
+    @Column(name = "consulted_academic_year_id")
+    private UUID consultedAcademicYearId;
     private boolean locked;
     @ManyToOne
     @ToString.Exclude

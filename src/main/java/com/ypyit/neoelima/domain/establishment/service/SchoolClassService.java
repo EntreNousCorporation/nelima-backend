@@ -12,8 +12,10 @@ import com.ypyit.neoelima.domain.establishment.entity.QInstallmentEntity;
 import com.ypyit.neoelima.domain.establishment.entity.QSchoolClassEntity;
 import com.ypyit.neoelima.domain.establishment.entity.QStaffEntity;
 import com.ypyit.neoelima.domain.establishment.entity.QStudentEntity;
+import com.ypyit.neoelima.domain.establishment.entity.QStudentEnrollmentEntity;
 import com.ypyit.neoelima.domain.establishment.entity.QStudentFeeEntity;
 import com.ypyit.neoelima.domain.establishment.entity.SchoolClassEntity;
+import com.ypyit.neoelima.domain.establishment.entity.SchoolClassYearEntity;
 import com.ypyit.neoelima.domain.establishment.entity.StaffEntity;
 import com.ypyit.neoelima.domain.establishment.entity.StudentEntity;
 import com.ypyit.neoelima.domain.establishment.enums.InstallmentStatus;
@@ -22,6 +24,7 @@ import com.ypyit.neoelima.domain.establishment.form.SchoolClassForm;
 import com.ypyit.neoelima.domain.establishment.repository.EstablishmentRepository;
 import com.ypyit.neoelima.domain.establishment.repository.LevelOfStudyRepository;
 import com.ypyit.neoelima.domain.establishment.repository.SchoolClassRepository;
+import com.ypyit.neoelima.domain.establishment.repository.SchoolClassYearRepository;
 import com.ypyit.neoelima.domain.establishment.repository.StaffRepository;
 import com.ypyit.neoelima.domain.establishment.repository.StudentRepository;
 import com.ypyit.neoelima.domain.payment.entity.QReceiptEntity;
@@ -55,6 +58,8 @@ public class SchoolClassService {
     private final StudentRepository studentRepository;
     private final LevelOfStudyRepository levelOfStudyRepository;
     private final StaffRepository staffRepository;
+    private final SchoolClassYearRepository schoolClassYearRepository;
+    private final AcademicYearContext academicYearContext;
     private final StudentEnrollmentService studentEnrollmentService;
     private final EstablishmentRepository establishmentRepository;
     private final CurrentUserProvider currentUserProvider;
@@ -62,8 +67,14 @@ public class SchoolClassService {
 
     public List<SchoolClassDto> findAll() {
         UUID scope = this.scope();
+        // Les classes ouvertes pour l'année consultée : une classe fermée cette année (pas
+        // d'instituteur) reste visible dans les années où elle fonctionnait.
+        UUID year = this.academicYearContext.consultedId();
         List<SchoolClassEntity> classes = this.schoolClassRepository
-                .findByEstablishment_IdOrderByNameAsc(scope);
+                .findByEstablishment_IdOrderByNameAsc(scope).stream()
+                .filter(schoolClass -> Objects.isNull(year)
+                        || this.schoolClassYearRepository.existsBySchoolClass_IdAndAcademicYear_Id(schoolClass.getId(), year))
+                .toList();
 
         // Trois agrégats groupés plutôt qu'une requête par classe : un tableau de vingt classes
         // aurait sinon coûté soixante allers-retours à l'affichage.
@@ -107,6 +118,12 @@ public class SchoolClassService {
 
         SchoolClassEntity saved = this.schoolClassRepository.saveAndFlush(entity);
         this.attachMainTeacherToClass(saved);
+        // Ouverte pour l'année où l'on travaille : c'est là qu'on vient de la créer.
+        this.academicYearContext.consulted().ifPresent(year -> {
+            this.academicYearContext.schoolYear(scope, year);
+            this.schoolClassYearRepository.saveAndFlush(SchoolClassYearEntity.builder()
+                    .schoolClass(saved).academicYear(year).build());
+        });
         log.info("SCHOOL_CLASS_CREATED: {} in establishment {}", saved.getName(), scope);
         return toDto(saved, 0L, BigDecimal.ZERO, BigDecimal.ZERO, this.namesOf(saved.getMainTeacher()));
     }
@@ -145,6 +162,7 @@ public class SchoolClassService {
 
     @Transactional
     public void assign(UUID id, List<UUID> studentIds) {
+        this.assertWorkingInCurrentYear();
         SchoolClassEntity entity = this.load(id);
         for (UUID studentId : studentIds) {
             StudentEntity student = this.studentRepository.findById(studentId)
@@ -161,6 +179,7 @@ public class SchoolClassService {
 
     @Transactional
     public void unassign(UUID id, UUID studentId) {
+        this.assertWorkingInCurrentYear();
         this.load(id);
         StudentEntity student = this.studentRepository.findById(studentId)
                 .orElseThrow(() -> new NotFoundException(
@@ -239,9 +258,41 @@ public class SchoolClassService {
         return level;
     }
 
+    /**
+     * Pour l'instant, on ne répartit les élèves que dans l'année en cours : la classe d'un élève
+     * l'an prochain se décidera à sa réinscription, pas en le déplaçant ici.
+     */
+    /** Sans année déclarée, aucun filtre (QueryDSL ignore un prédicat nul). */
+    private com.querydsl.core.types.Predicate feeOfConsultedYear(com.querydsl.core.types.dsl.ComparablePath<UUID> yearId) {
+        UUID year = this.academicYearContext.consultedId();
+        return Objects.isNull(year) ? null : yearId.eq(year);
+    }
+
+    private void assertWorkingInCurrentYear() {
+        UUID consulted = this.academicYearContext.consultedId();
+        if (Objects.nonNull(consulted) && !consulted.equals(this.academicYearContext.currentId())) {
+            throw new BadRequestException(
+                    "La répartition des élèves se fait dans l'année en cours. Revenez-y dans Paramètres.");
+        }
+    }
+
     private Map<UUID, Long> headcounts(UUID scope) {
         QStudentEntity student = QStudentEntity.studentEntity;
         Map<UUID, Long> counts = new HashMap<>();
+        UUID year = this.academicYearContext.consultedId();
+        if (Objects.nonNull(year)) {
+            // L'effectif de l'année décrite, lu dans les inscriptions de cette année-là.
+            QStudentEnrollmentEntity enrollment = QStudentEnrollmentEntity.studentEnrollmentEntity;
+            this.queryFactory.select(enrollment.schoolClass.id, enrollment.count())
+                    .from(enrollment)
+                    .where(enrollment.academicYear.id.eq(year), enrollment.student.establishment.id.eq(scope),
+                            enrollment.schoolClass.isNotNull())
+                    .groupBy(enrollment.schoolClass.id)
+                    .fetch()
+                    .forEach(row -> counts.put(row.get(enrollment.schoolClass.id),
+                            Objects.requireNonNullElse(row.get(enrollment.count()), 0L)));
+            return counts;
+        }
         this.queryFactory.select(student.schoolClass.id, student.count())
                 .from(student)
                 .where(student.establishment.id.eq(scope), student.schoolClass.isNotNull())
@@ -264,7 +315,8 @@ public class SchoolClassService {
                 .join(installment.studentFee, studentFee)
                 .join(studentFee.student, student)
                 .where(installment.status.eq(InstallmentStatus.PENDING),
-                        student.establishment.id.eq(scope), student.schoolClass.isNotNull())
+                        student.establishment.id.eq(scope), student.schoolClass.isNotNull(),
+                        this.feeOfConsultedYear(installment.studentFee.fee.academicYear.id))
                 .groupBy(student.schoolClass.id)
                 .fetch()) {
             amounts.put(row.get(student.schoolClass.id),
@@ -285,7 +337,8 @@ public class SchoolClassService {
                 .select(student.schoolClass.id, receipt.amount.sum())
                 .from(receipt)
                 .join(receipt.paymentIntent.installment.studentFee.student, student)
-                .where(receipt.establishment.id.eq(scope), student.schoolClass.isNotNull())
+                .where(receipt.establishment.id.eq(scope), student.schoolClass.isNotNull(),
+                        this.feeOfConsultedYear(receipt.paymentIntent.installment.studentFee.fee.academicYear.id))
                 .groupBy(student.schoolClass.id)
                 .fetch()) {
             amounts.put(row.get(student.schoolClass.id),

@@ -1,5 +1,6 @@
 package com.ypyit.neoelima.domain.payment.service;
 
+import com.ypyit.neoelima.domain.establishment.service.AcademicYearContext;
 import com.querydsl.core.BooleanBuilder;
 import com.ypyit.neoelima.common.exception.NotFoundException;
 import com.ypyit.neoelima.config.security.CurrentUserProvider;
@@ -40,6 +41,7 @@ public class ReceiptService {
     private final ReceiptRepository receiptRepository;
     private final StudentRepository studentRepository;
     private final CurrentUserProvider currentUserProvider;
+    private final AcademicYearContext academicYearContext;
 
     public Page<ReceiptEntity> search(UUID requestedEstablishmentId, Pageable pageable) {
         return this.search(requestedEstablishmentId, null, null, null, null, null, pageable);
@@ -86,6 +88,11 @@ public class ReceiptService {
             UUID scope = this.currentUserProvider.resolveEstablishmentScope(requestedEstablishmentId);
             if (Objects.nonNull(scope)) {
                 builder.and(receipt.establishment.id.eq(scope));
+                // Ciblé sur un élève, tous ses reçus ; sinon ceux de l'année consultée.
+                UUID year = this.academicYearContext.consultedId();
+                if (Objects.nonNull(year) && Objects.isNull(studentId)) {
+                    builder.and(receipt.paymentIntent.installment.studentFee.fee.academicYear.id.eq(year));
+                }
             }
         } else {
             builder.and(this.ownReceiptsOf(this.currentUserProvider.currentUser(), receipt));
