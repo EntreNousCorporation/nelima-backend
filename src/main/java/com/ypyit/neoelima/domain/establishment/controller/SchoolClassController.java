@@ -1,6 +1,9 @@
 package com.ypyit.neoelima.domain.establishment.controller;
 
 import com.ypyit.neoelima.domain.establishment.dto.SchoolClassDto;
+import com.ypyit.neoelima.domain.establishment.dto.TimetableSlotDto;
+import com.ypyit.neoelima.domain.establishment.form.TimetableSlotForm;
+import com.ypyit.neoelima.domain.establishment.service.TimetableService;
 import com.ypyit.neoelima.domain.establishment.form.SchoolClassForm;
 import com.ypyit.neoelima.domain.establishment.form.SchoolClassStudentsForm;
 import com.ypyit.neoelima.domain.establishment.service.SchoolClassService;
@@ -30,6 +33,7 @@ import java.util.UUID;
 public class SchoolClassController {
 
     private final SchoolClassService schoolClassService;
+    private final TimetableService timetableService;
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "Classes de l'établissement, avec effectif et recouvrement")
@@ -79,6 +83,40 @@ public class SchoolClassController {
     @PreAuthorize("hasAuthority('class:write')")
     public ResponseEntity<Void> unassign(@PathVariable UUID id, @PathVariable UUID studentId) {
         this.schoolClassService.unassign(id, studentId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping(value = "/{id}/timetable", produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Emploi du temps de la classe",
+            description = "La semaine type : créneaux triés par jour puis par heure de début.")
+    @PreAuthorize("hasAuthority('class:read')")
+    public ResponseEntity<List<TimetableSlotDto>> timetable(@PathVariable UUID id) {
+        return ResponseEntity.ok(this.timetableService.findByClass(id));
+    }
+
+    @PostMapping(value = "/{id}/timetable", consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Ajoute un créneau à l'emploi du temps",
+            description = "Refusé s'il chevauche un autre cours de la classe, ou si l'enseignant "
+                    + "est déjà dans une autre classe sur la même plage.")
+    @PreAuthorize("hasAuthority('class:write')")
+    public ResponseEntity<TimetableSlotDto> addSlot(@PathVariable UUID id,
+                                                    @RequestBody @Valid TimetableSlotForm form) {
+        return ResponseEntity.ok(this.timetableService.create(id, form));
+    }
+
+    @PutMapping(value = "/{id}/timetable/{slotId}", consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAuthority('class:write')")
+    public ResponseEntity<TimetableSlotDto> updateSlot(@PathVariable UUID id, @PathVariable UUID slotId,
+                                                       @RequestBody @Valid TimetableSlotForm form) {
+        return ResponseEntity.ok(this.timetableService.update(id, slotId, form));
+    }
+
+    @DeleteMapping("/{id}/timetable/{slotId}")
+    @PreAuthorize("hasAuthority('class:write')")
+    public ResponseEntity<Void> deleteSlot(@PathVariable UUID id, @PathVariable UUID slotId) {
+        this.timetableService.delete(id, slotId);
         return ResponseEntity.noContent().build();
     }
 }

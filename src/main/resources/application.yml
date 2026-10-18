@@ -8,6 +8,12 @@ springdoc:
     display-request-duration: true
 
 spring:
+  # Pièces du dossier élève : 5 Mo par fichier, contrôlés aussi par le service. Le défaut de
+  # Spring (1 Mo) refusait la photo d'un extrait de naissance prise au téléphone.
+  servlet:
+    multipart:
+      max-file-size: 6MB
+      max-request-size: 7MB
   application:
     name: nelima-backend
   datasource:

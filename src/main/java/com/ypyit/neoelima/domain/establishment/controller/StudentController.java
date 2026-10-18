@@ -1,6 +1,11 @@
 package com.ypyit.neoelima.domain.establishment.controller;
 
+import com.ypyit.neoelima.domain.establishment.dto.StudentDocumentDto;
 import com.ypyit.neoelima.domain.establishment.dto.StudentDto;
+import com.ypyit.neoelima.domain.establishment.enums.StudentDocumentKind;
+import com.ypyit.neoelima.domain.establishment.service.StudentDocumentService;
+import org.springframework.http.ContentDisposition;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import com.ypyit.neoelima.domain.establishment.dto.StudentFeeDto;
 import com.ypyit.neoelima.domain.establishment.form.EstablishmentStudentSearchForm;
 import com.ypyit.neoelima.domain.establishment.form.StudentCreationForm;
@@ -49,6 +54,7 @@ public class StudentController {
     private final StudentFeeService studentFeeService;
     private final StudentCsvImporter studentCsvImporter;
     private final StudentClaimService studentClaimService;
+    private final StudentDocumentService studentDocumentService;
 
     // `@Valid` sur le `@ModelAttribute` : sans lui, les `@NotBlank`/`@NotNull` du formulaire ne
     // s'exécutaient pas. Un `GET /students` nu chargeait alors la table élève entière avant de rendre
@@ -159,5 +165,51 @@ public class StudentController {
         var response = this.studentService.importFromFile(creationForm);
         URI uri = ControllerUtils.buildMvcPathComponent(UUID.randomUUID(), StudentController.class);
         return ResponseEntity.created(uri).body(response);
+    }
+
+    @GetMapping(value = "/{id}/documents", produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Pièces du dossier de l'élève", description = "Les plus récentes d'abord.")
+    @PreAuthorize("hasAuthority('student:read')")
+    public ResponseEntity<List<StudentDocumentDto>> documents(@PathVariable UUID id) {
+        return ResponseEntity.ok(this.studentDocumentService.findByStudent(id));
+    }
+
+    @PostMapping(value = "/{id}/documents", consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Ajoute une pièce au dossier de l'élève",
+            description = "PDF, JPEG, PNG ou WebP, 5 Mo au plus. Le type est vérifié sur le contenu "
+                    + "du fichier, pas sur son extension.")
+    @PreAuthorize("hasAuthority('student:write')")
+    public ResponseEntity<StudentDocumentDto> uploadDocument(@PathVariable UUID id,
+                                                             @RequestParam("kind") StudentDocumentKind kind,
+                                                             @RequestParam(value = "label", required = false) String label,
+                                                             @RequestParam("file") MultipartFile file) {
+        return ResponseEntity.ok(this.studentDocumentService.upload(id, kind, label, file));
+    }
+
+    @GetMapping("/{id}/documents/{documentId}/file")
+    @Operation(summary = "Contenu d'une pièce du dossier",
+            description = "Affiché dans le navigateur, ou téléchargé avec `download=true`.")
+    @PreAuthorize("hasAuthority('student:read')")
+    public ResponseEntity<byte[]> documentFile(@PathVariable UUID id, @PathVariable UUID documentId,
+                                               @RequestParam(value = "download", defaultValue = "false")
+                                               boolean download) {
+        StudentDocumentService.StoredFile file = this.studentDocumentService.download(id, documentId);
+        ContentDisposition disposition = (download ? ContentDisposition.attachment() : ContentDisposition.inline())
+                .filename(file.fileName(), StandardCharsets.UTF_8).build();
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(file.contentType()))
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                // Pièces personnelles : ni deviné par le navigateur, ni gardé en cache partagé.
+                .header("X-Content-Type-Options", "nosniff")
+                .header(HttpHeaders.CACHE_CONTROL, "private, no-store")
+                .body(file.content());
+    }
+
+    @DeleteMapping("/{id}/documents/{documentId}")
+    @PreAuthorize("hasAuthority('student:write')")
+    public ResponseEntity<Void> deleteDocument(@PathVariable UUID id, @PathVariable UUID documentId) {
+        this.studentDocumentService.delete(id, documentId);
+        return ResponseEntity.noContent().build();
     }
 }
