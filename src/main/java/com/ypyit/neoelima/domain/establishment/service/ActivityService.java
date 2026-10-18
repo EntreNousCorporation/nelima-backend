@@ -55,6 +55,7 @@ public class ActivityService {
     private final EstablishmentRepository establishmentRepository;
     private final CurrentUserProvider currentUserProvider;
     private final AcademicYearContext academicYearContext;
+    private final SchoolYearGuard schoolYearGuard;
 
     public List<ActivityDto> findAll() {
         return this.activityRepository.findByEstablishment_IdOrderByNameAsc(this.scope()).stream()
@@ -104,6 +105,7 @@ public class ActivityService {
     @Transactional
     public ActivityDto update(UUID id, ActivityForm form) {
         ActivityEntity entity = this.load(id);
+        this.schoolYearGuard.assertWritable(entity.getEstablishment().getId(), entity.getAcademicYear());
         String name = form.getName().trim();
         if (!entity.getName().equalsIgnoreCase(name)
                 && this.nameTaken(entity.getEstablishment().getId(), name, entity.getAcademicYear(), entity.getId())) {

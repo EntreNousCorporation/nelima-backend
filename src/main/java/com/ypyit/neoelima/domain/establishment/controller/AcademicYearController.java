@@ -1,6 +1,8 @@
 package com.ypyit.neoelima.domain.establishment.controller;
 
 import com.ypyit.neoelima.domain.establishment.dto.AcademicYearDto;
+import com.ypyit.neoelima.domain.establishment.dto.SchoolYearClosureDto;
+import com.ypyit.neoelima.domain.establishment.service.SchoolYearClosureService;
 import com.ypyit.neoelima.domain.establishment.form.AcademicYearForm;
 import com.ypyit.neoelima.domain.establishment.service.AcademicYearService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -36,6 +38,7 @@ import java.util.UUID;
 public class AcademicYearController {
 
     private final AcademicYearService academicYearService;
+    private final SchoolYearClosureService schoolYearClosureService;
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     @PreAuthorize("isAuthenticated()")
@@ -80,6 +83,23 @@ public class AcademicYearController {
     public ResponseEntity<AcademicYearDto> definePeriods(@PathVariable UUID id,
                                                          @RequestBody @Valid List<AcademicYearForm.AcademicPeriodForm> periods) {
         return ResponseEntity.ok(this.academicYearService.definePeriods(id, periods));
+    }
+
+    @GetMapping(value = "/{id}/closure", produces = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAuthority('settings:read')")
+    @Operation(summary = "Où en est la clôture de l'année dans l'école",
+            description = "Reste dû par élève, paiements en ligne en cours, et si la clôture est possible.")
+    public ResponseEntity<SchoolYearClosureDto> closure(@PathVariable UUID id) {
+        return ResponseEntity.ok(this.schoolYearClosureService.preview(id));
+    }
+
+    @PostMapping(value = "/{id}/close", produces = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAuthority('settings:write')")
+    @Operation(summary = "Clôture l'année dans l'école",
+            description = "Refusé tant qu'une tranche de l'année reste à encaisser, et pour l'année en cours. "
+                    + "Une fois clôturée, l'année se consulte et ne se modifie plus.")
+    public ResponseEntity<SchoolYearClosureDto> close(@PathVariable UUID id) {
+        return ResponseEntity.ok(this.schoolYearClosureService.close(id));
     }
 
     @PutMapping("/consulted")

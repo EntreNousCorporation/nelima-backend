@@ -1,5 +1,6 @@
 package com.ypyit.neoelima.domain.payment.service;
 
+import com.ypyit.neoelima.domain.establishment.service.SchoolYearGuard;
 import com.ypyit.neoelima.common.exception.BadRequestException;
 import com.ypyit.neoelima.common.exception.NotFoundException;
 import com.ypyit.neoelima.common.utils.XofFormat;
@@ -43,6 +44,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class OfflineCollectionService {
 
+    private final SchoolYearGuard schoolYearGuard;
     private final InstallmentRepository installmentRepository;
     private final PaymentIntentRepository paymentIntentRepository;
     private final ReceiptIssuer receiptIssuer;
@@ -60,6 +62,9 @@ public class OfflineCollectionService {
                         "Installment with provided id %s not found", form.getInstallmentId())));
 
         this.assertCallerRunsTheSchool(installment);
+        // Une année clôturée a tout encaissé ; rien ne doit s'y ajouter, même par erreur de saisie.
+        this.schoolYearGuard.assertWritable(installment.getStudentFee().getStudent().getEstablishment().getId(),
+                installment.getStudentFee().getFee().getAcademicYear());
 
         // Une tranche est indivisible et ne s'encaisse qu'une fois. Sans ce garde-fou, une double
         // saisie au guichet produirait deux reçus pour un seul règlement.

@@ -49,6 +49,7 @@ public class SchoolEventService {
     private final PushNotificationService pushNotificationService;
     private final CurrentUserProvider currentUserProvider;
     private final AcademicYearContext academicYearContext;
+    private final SchoolYearGuard schoolYearGuard;
 
     @Transactional
     public CalendarEntryDto create(SchoolEventForm form) {
@@ -76,6 +77,7 @@ public class SchoolEventService {
     @Transactional
     public CalendarEntryDto update(UUID id, SchoolEventForm form) {
         SchoolEventEntity entity = this.load(id);
+        this.schoolYearGuard.assertWritable(entity.getEstablishment().getId(), entity.getAcademicYear());
         checkSlot(form);
         entity.setTitle(form.getTitle().trim());
         entity.setKind(form.getKind());
@@ -87,6 +89,7 @@ public class SchoolEventService {
     @Transactional
     public void delete(UUID id) {
         SchoolEventEntity entity = this.load(id);
+        this.schoolYearGuard.assertWritable(entity.getEstablishment().getId(), entity.getAcademicYear());
         this.schoolEventRepository.delete(entity);
         log.info("SCHOOL_EVENT_DELETED: {}", id);
     }

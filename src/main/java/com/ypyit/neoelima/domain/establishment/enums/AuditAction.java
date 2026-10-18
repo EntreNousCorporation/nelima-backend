@@ -26,6 +26,9 @@ public enum AuditAction {
     /** Journal comptable exporté : des données nominatives sont sorties de la plateforme. */
     ACCOUNTING_EXPORTED,
 
+    /** Année clôturée par l'école : ses données ne se modifient plus. */
+    YEAR_CLOSED,
+
     /** Liste des élèves exportée : des données nominatives de mineurs sont sorties de la plateforme. */
     STUDENTS_EXPORTED,
 

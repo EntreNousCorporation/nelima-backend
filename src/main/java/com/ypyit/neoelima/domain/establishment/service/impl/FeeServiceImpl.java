@@ -1,5 +1,6 @@
 package com.ypyit.neoelima.domain.establishment.service.impl;
 
+import com.ypyit.neoelima.domain.establishment.service.SchoolYearGuard;
 import com.querydsl.core.BooleanBuilder;
 import com.querydsl.core.types.Predicate;
 import com.ypyit.neoelima.common.exception.BadRequestException;
@@ -71,6 +72,7 @@ public class FeeServiceImpl implements FeeService {
     private final CurrentUserProvider currentUserProvider;
     private final AuditService auditService;
     private final AcademicYearContext academicYearContext;
+    private final SchoolYearGuard schoolYearGuard;
     private final StudentEnrollmentRepository studentEnrollmentRepository;
 
     @Override
@@ -134,10 +136,15 @@ public class FeeServiceImpl implements FeeService {
             FeeEntity fee = this.feeRepository.findById(id)
                     .orElseThrow(() ->
                             new NotFoundException(String.format("Fee with provided id %s not found", id)));
+            this.schoolYearGuard.assertWritable(fee.getEstablishment().getId(), fee.getAcademicYear());
             if (StringUtils.isNotBlank(updateForm.getName())) {
-                Optional<FeeEntity> existingName = this.feeRepository
-                        .findByEstablishment_IdAndNameIgnoreCase(fee.getEstablishment().getId(), updateForm.getName());
-                if (existingName.isPresent() && !id.equals(existingName.get().getId())) {
+                // Unique dans l'année du frais : le même nom revient chaque année.
+                UUID feeYear = Objects.isNull(fee.getAcademicYear()) ? null : fee.getAcademicYear().getId();
+                boolean taken = this.feeRepository.findAllByEstablishment_Id(fee.getEstablishment().getId()).stream()
+                        .anyMatch(other -> !id.equals(other.getId())
+                                && other.getName().equalsIgnoreCase(updateForm.getName().trim())
+                                && Objects.equals(Objects.isNull(other.getAcademicYear()) ? null : other.getAcademicYear().getId(), feeYear));
+                if (taken) {
                     throw new DuplicateResourceException(String.format("Un frais portant ce nom existe déjà.",
                             updateForm.getName()));
                 }

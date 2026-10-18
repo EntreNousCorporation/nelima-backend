@@ -1,5 +1,6 @@
 package com.ypyit.neoelima.domain.establishment.service.impl;
 
+import com.ypyit.neoelima.domain.establishment.service.SchoolYearGuard;
 import com.ypyit.neoelima.common.exception.NotFoundException;
 import com.ypyit.neoelima.common.exception.ValidationException;
 import com.ypyit.neoelima.config.security.CurrentUserProvider;
@@ -41,6 +42,7 @@ public class FeeScheduleServiceImpl implements FeeScheduleService {
     private final FeeScheduleRepository feeScheduleRepository;
     private final InstallmentRepository installmentRepository;
     private final StudentFeeRepository studentFeeRepository;
+    private final SchoolYearGuard schoolYearGuard;
     private final InstallmentGenerator installmentGenerator;
     private final AuditService auditService;
     private final CurrentUserProvider currentUserProvider;
@@ -51,6 +53,8 @@ public class FeeScheduleServiceImpl implements FeeScheduleService {
                 .orElseThrow(() -> new NotFoundException(
                         String.format("Fee with provided id %s not found", feeId)));
         this.assertCallerOwns(fee);
+        this.schoolYearGuard.assertWritable(Objects.isNull(fee.getEstablishment()) ? null : fee.getEstablishment().getId(),
+                fee.getAcademicYear());
 
         if (CollectionUtils.isEmpty(schedules)) {
             throw new ValidationException("schedules", "At least one installment must be defined");
