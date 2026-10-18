@@ -10,6 +10,7 @@ import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 
 import java.time.LocalDate;
+import java.util.UUID;
 import java.math.BigDecimal;
 import java.util.Set;
 
@@ -26,6 +27,8 @@ public class StudentDto extends BaseDto {
     private LocalDate birthDay;
     private LevelOfStudyDto levelOfStudy;
     private String placeOfBirth;
+    /** Photo d'identité courante, servie par {@code /students/{id}/photo} ; nulle sans photo. */
+    private UUID photoId;
     private Gender gender;
     private Set<UserDto> parentUsers;
     private EstablishmentLiteDto establishment;

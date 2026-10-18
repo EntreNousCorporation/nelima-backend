@@ -170,6 +170,51 @@ class StudentDocumentServiceTest extends AbstractIntegrationTest {
         assertThat(file.fileName()).isEqualTo("extrait.pdf");
     }
 
+    @Test
+    @DisplayName("la dernière photo versée devient la photo de l'élève")
+    void lastPhotoBecomesTheStudentPhoto() {
+        this.studentDocumentService.upload(this.student.getId(),
+                StudentDocumentKind.PHOTO, null, this.file("2025.png", PNG));
+        StudentDocumentDto latest = this.studentDocumentService.upload(this.student.getId(),
+                StudentDocumentKind.PHOTO, null, this.file("2026.png", PNG));
+        this.studentDocumentService.upload(this.student.getId(),
+                StudentDocumentKind.BIRTH_CERTIFICATE, null, this.file("extrait.pdf", PDF));
+
+        assertThat(this.photoOfStudent()).isEqualTo(UUID.fromString(latest.getId()));
+    }
+
+    @Test
+    @DisplayName("supprimer la photo courante rend sa place à la précédente")
+    void deletingThePhotoFallsBackToThePreviousOne() {
+        StudentDocumentDto previous = this.studentDocumentService.upload(this.student.getId(),
+                StudentDocumentKind.PHOTO, null, this.file("bonne.png", PNG));
+        StudentDocumentDto failed = this.studentDocumentService.upload(this.student.getId(),
+                StudentDocumentKind.PHOTO, null, this.file("floue.png", PNG));
+
+        this.studentDocumentService.delete(this.student.getId(), UUID.fromString(failed.getId()));
+        assertThat(this.photoOfStudent()).isEqualTo(UUID.fromString(previous.getId()));
+
+        this.studentDocumentService.delete(this.student.getId(), UUID.fromString(previous.getId()));
+        assertThat(this.photoOfStudent()).isNull();
+    }
+
+    @Test
+    @DisplayName("la photo d'un élève d'une autre école ne se lit pas")
+    void photoDoesNotLeakToAnotherSchool() {
+        this.studentDocumentService.upload(this.student.getId(),
+                StudentDocumentKind.PHOTO, null, this.file("photo.png", PNG));
+
+        this.authenticateOn(this.school());
+
+        assertThatThrownBy(() -> this.studentDocumentService.photo(this.student.getId()))
+                .isInstanceOf(RuntimeException.class);
+        verify(this.privateFileStore, never()).get(any());
+    }
+
+    private UUID photoOfStudent() {
+        return this.studentRepository.findById(this.student.getId()).orElseThrow().getPhotoDocumentId();
+    }
+
     private MockMultipartFile file(String name, byte[] content) {
         return new MockMultipartFile("file", name, "application/octet-stream", content);
     }

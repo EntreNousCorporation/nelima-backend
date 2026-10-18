@@ -199,7 +199,8 @@ public class ParentListServiceImpl implements ParentListService {
 
         List<Tuple> rows = this.queryFactory
                 .select(parent.id, student.id, student.firstName, student.lastName,
-                        student.registrationNumber, schoolClass.name, levelName.fr, establishment.name)
+                        student.registrationNumber, schoolClass.name, levelName.fr, establishment.name,
+                        student.photoDocumentId)
                 .from(student)
                 .join(student.parentUsers, parent)
                 .leftJoin(student.schoolClass, schoolClass)
@@ -220,6 +221,7 @@ public class ParentListServiceImpl implements ParentListService {
                     .className(row.get(schoolClass.name))
                     .levelLabel(row.get(levelName.fr))
                     .establishmentName(row.get(establishment.name))
+                    .photoId(row.get(student.photoDocumentId))
                     .build();
             result.computeIfAbsent(row.get(parent.id), k -> new ArrayList<>()).add(child);
         }

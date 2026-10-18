@@ -7,6 +7,7 @@ import com.ypyit.neoelima.domain.establishment.form.StudentCreationForm;
 import com.ypyit.neoelima.domain.establishment.form.StudentUpdateForm;
 import com.ypyit.neoelima.domain.user.mapper.ContactMapper;
 import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
 import org.mapstruct.NullValueCheckStrategy;
 import org.mapstruct.NullValuePropertyMappingStrategy;
@@ -21,8 +22,10 @@ public interface StudentMapper {
 
     void toUpdate(StudentUpdateForm updateForm, @MappingTarget StudentEntity entity);
 
+    @Mapping(source = "photoDocumentId", target = "photoId")
     StudentDto toDto(StudentEntity student);
 
+    @Mapping(source = "photoDocumentId", target = "photoId")
     StudentLiteDto toLiteDto(StudentEntity student);
 
     List<StudentDto> toDtos(List<StudentEntity> students);

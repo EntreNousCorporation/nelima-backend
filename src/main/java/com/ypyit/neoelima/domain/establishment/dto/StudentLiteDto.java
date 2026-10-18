@@ -8,6 +8,7 @@ import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 
 import java.time.LocalDate;
+import java.util.UUID;
 
 @Getter
 @Setter
@@ -22,4 +23,6 @@ public class StudentLiteDto extends BaseDto {
     private LocalDate birthDay;
     private LevelOfStudyDto levelOfStudy;
     private String placeOfBirth;
+    /** Photo d'identité courante, servie par {@code /students/{id}/photo} ; nulle sans photo. */
+    private UUID photoId;
 }

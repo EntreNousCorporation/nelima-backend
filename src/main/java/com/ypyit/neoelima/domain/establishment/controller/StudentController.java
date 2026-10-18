@@ -206,6 +206,22 @@ public class StudentController {
                 .body(file.content());
     }
 
+    @GetMapping("/{id}/photo")
+    @Operation(summary = "Photo d'identité courante de l'élève",
+            description = "404 sans photo. L'URL se versionne avec `v=<photoId>` : la réponse peut "
+                    + "rester en cache dans le navigateur, une nouvelle photo change l'adresse.")
+    @PreAuthorize("hasAuthority('student:read')")
+    public ResponseEntity<byte[]> photo(@PathVariable UUID id) {
+        StudentDocumentService.StoredFile file = this.studentDocumentService.photo(id);
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(file.contentType()))
+                .header("X-Content-Type-Options", "nosniff")
+                // Cache du navigateur seulement (private) : les listes réaffichent les mêmes visages à
+                // chaque page, les retélécharger à chaque fois coûterait cher sur une connexion mobile.
+                .header(HttpHeaders.CACHE_CONTROL, "private, max-age=86400")
+                .body(file.content());
+    }
+
     @DeleteMapping("/{id}/documents/{documentId}")
     @PreAuthorize("hasAuthority('student:write')")
     public ResponseEntity<Void> deleteDocument(@PathVariable UUID id, @PathVariable UUID documentId) {

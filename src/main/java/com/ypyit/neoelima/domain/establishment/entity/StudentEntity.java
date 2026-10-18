@@ -29,6 +29,7 @@ import java.io.Serial;
 import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.Set;
 
 @Getter
@@ -58,6 +59,15 @@ public class StudentEntity extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "gender", length = 16)
     private Gender gender;
+
+    /**
+     * Photo d'identité courante : la dernière versée au dossier, nulle sans photo.
+     *
+     * <p>Un identifiant plutôt qu'une association : les listes n'ont besoin que de savoir s'il y a
+     * une photo et laquelle, jamais de la pièce elle-même.
+     */
+    @Column(name = "photo_document_id")
+    private UUID photoDocumentId;
     @ManyToOne
     @ToString.Exclude
     @JoinColumn(name = "level_of_study_id", referencedColumnName = "id")

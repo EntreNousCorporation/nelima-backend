@@ -89,6 +89,12 @@ public class StudentDocumentService {
                             .sizeBytes(content.length)
                             .objectKey(objectKey)
                             .build());
+            if (kind == StudentDocumentKind.PHOTO) {
+                // La dernière photo versée est celle qu'on montre : une photo de l'an dernier reste
+                // au dossier, mais l'élève a grandi.
+                student.setPhotoDocumentId(saved.getId());
+                this.studentRepository.save(student);
+            }
             return toDto(saved);
         } catch (RuntimeException e) {
             // Sans ligne en base, l'objet ne serait plus jamais ni listé ni supprimé.
@@ -103,9 +109,30 @@ public class StudentDocumentService {
                 this.privateFileStore.get(document.getObjectKey()));
     }
 
+    /** Photo courante de l'élève, introuvable s'il n'en a pas. */
+    public StoredFile photo(UUID studentId) {
+        StudentEntity student = this.loadStudent(studentId);
+        if (Objects.isNull(student.getPhotoDocumentId())) {
+            throw new NotFoundException(String.format("Student %s has no photo", studentId));
+        }
+        return this.download(studentId, student.getPhotoDocumentId());
+    }
+
     @Transactional
     public void delete(UUID studentId, UUID documentId) {
         StudentDocumentEntity document = this.loadDocument(studentId, documentId);
+        StudentEntity student = document.getStudent();
+        if (documentId.equals(student.getPhotoDocumentId())) {
+            // La photo retirée laisse place à la précédente, s'il y en a une : supprimer une photo
+            // ratée ne doit pas effacer celle qui convenait.
+            student.setPhotoDocumentId(this.studentDocumentRepository
+                    .findByStudent_IdOrderByCreatedAtDesc(studentId).stream()
+                    .filter(other -> other.getKind() == StudentDocumentKind.PHOTO)
+                    .map(StudentDocumentEntity::getId)
+                    .filter(id -> !id.equals(documentId))
+                    .findFirst().orElse(null));
+            this.studentRepository.saveAndFlush(student);
+        }
         this.studentDocumentRepository.delete(document);
         this.studentDocumentRepository.flush();
         this.privateFileStore.deleteQuietly(document.getObjectKey());

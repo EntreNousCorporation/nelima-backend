@@ -75,6 +75,9 @@ public class ParentListItemDto {
         private String lastName;
         private String registrationNumber;
 
+        /** Photo d'identité courante de l'enfant ; nulle sans photo. */
+        private UUID photoId;
+
         /** Classe d'affectation — « CM1 A ». Nulle tant que l'élève n'est pas réparti. */
         private String className;
 
