@@ -30,6 +30,7 @@ import com.ypyit.neoelima.domain.establishment.repository.StudentFeeRepository;
 import com.ypyit.neoelima.domain.establishment.repository.StudentRepository;
 import com.ypyit.neoelima.domain.establishment.service.AuditService;
 import com.ypyit.neoelima.domain.establishment.service.FeeService;
+import com.ypyit.neoelima.domain.establishment.service.InstallmentGenerator;
 import com.ypyit.neoelima.domain.establishment.service.LevelOfStudyService;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.collections4.CollectionUtils;
@@ -61,6 +62,7 @@ public class FeeServiceImpl implements FeeService {
     private final EstablishmentRepository establishmentRepository;
     private final StudentRepository studentRepository;
     private final StudentFeeRepository studentFeeRepository;
+    private final InstallmentGenerator installmentGenerator;
     private final InstallmentRepository installmentRepository;
     private final LevelOfStudyService levelOfStudyService;
     private final CurrentUserProvider currentUserProvider;
@@ -296,10 +298,14 @@ public class FeeServiceImpl implements FeeService {
         List<StudentEntity> studyCodeIn = this.studentRepository.findByEstablishment_IdAndLevelOfStudy_CodeIn(establishmentId, levelOfStudyCodes);
         if (CollectionUtils.isNotEmpty(studyCodeIn)) {
             for (StudentEntity entity : studyCodeIn) {
-                this.studentFeeRepository.saveAndFlush(StudentFeeEntity.builder()
+                // Tranches générées tout de suite, comme à l'inscription d'un élève : sans elles, la
+                // dette existe mais aucun solde ne la montre. Un échéancier défini ensuite les
+                // remplace, il commence par supprimer celles du frais.
+                StudentFeeEntity studentFee = this.studentFeeRepository.saveAndFlush(StudentFeeEntity.builder()
                         .student(entity)
                         .fee(fee)
                         .build());
+                this.installmentGenerator.generateFor(studentFee);
             }
         }
     }

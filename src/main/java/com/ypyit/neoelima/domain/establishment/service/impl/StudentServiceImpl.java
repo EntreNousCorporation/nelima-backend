@@ -26,6 +26,7 @@ import com.ypyit.neoelima.domain.establishment.repository.FeeRepository;
 import com.ypyit.neoelima.domain.establishment.repository.LevelOfStudyRepository;
 import com.ypyit.neoelima.domain.establishment.repository.StudentFeeRepository;
 import com.ypyit.neoelima.domain.establishment.repository.StudentRepository;
+import com.ypyit.neoelima.domain.establishment.service.InstallmentGenerator;
 import com.ypyit.neoelima.domain.establishment.service.StudentService;
 import com.ypyit.neoelima.domain.establishment.service.TutorContactPrivacy;
 import com.ypyit.neoelima.domain.storage.dto.StorageDto;
@@ -97,6 +98,7 @@ public class StudentServiceImpl implements StudentService {
     private final UserRepository userRepository;
     private final FeeRepository feeRepository;
     private final StudentFeeRepository studentFeeRepository;
+    private final InstallmentGenerator installmentGenerator;
     private final CurrentUserProvider currentUserProvider;
     private final JPAQueryFactory queryFactory;
 
@@ -337,10 +339,15 @@ public class StudentServiceImpl implements StudentService {
                     boolean studentLevelOfStudyExists = FunctionalUtils
                             .safelyGetStream(fee.getLevelOfStudies()).anyMatch(v -> levelOfStudyCode.equals(v.getCode()));
                     if (studentLevelOfStudyExists) {
-                        this.studentFeeRepository.save(StudentFeeEntity.builder()
-                                .student(student)
-                                .fee(fee)
-                                .build());
+                        // La dette sans ses tranches ne se voit nulle part : le solde, l'échéancier
+                        // et les relances se lisent tous dans les tranches. Un élève inscrit après
+                        // la définition des frais affichait ainsi zéro à régler.
+                        StudentFeeEntity studentFee = this.studentFeeRepository.saveAndFlush(
+                                StudentFeeEntity.builder()
+                                        .student(student)
+                                        .fee(fee)
+                                        .build());
+                        this.installmentGenerator.generateFor(studentFee);
                     }
                 }
             }

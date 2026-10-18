@@ -14,6 +14,8 @@ import com.ypyit.neoelima.domain.establishment.repository.InstallmentRepository;
 import com.ypyit.neoelima.domain.establishment.repository.LevelOfStudyRepository;
 import com.ypyit.neoelima.domain.establishment.repository.StudentRepository;
 import com.ypyit.neoelima.domain.establishment.service.FeeScheduleService;
+import com.ypyit.neoelima.domain.establishment.service.StudentService;
+import com.ypyit.neoelima.domain.establishment.form.StudentCreationForm;
 import com.ypyit.neoelima.domain.establishment.service.FeeService;
 import com.ypyit.neoelima.domain.user.entity.ContactEntity;
 import com.ypyit.neoelima.domain.user.entity.EstablishmentUserEntity;
@@ -53,6 +55,8 @@ class FeeScheduleRedefinitionTest extends AbstractIntegrationTest {
     private FeeService feeService;
     @Autowired
     private FeeScheduleService feeScheduleService;
+    @Autowired
+    private StudentService studentService;
     @Autowired
     private EstablishmentRepository establishmentRepository;
     @Autowired
@@ -139,6 +143,58 @@ class FeeScheduleRedefinitionTest extends AbstractIntegrationTest {
         assertThatThrownBy(() -> this.feeScheduleService.defineSchedules(feeId, List.of(
                 this.tranche("versement unique", "90000", LocalDate.of(2026, 10, 15)))))
                 .isInstanceOf(ValidationException.class);
+    }
+
+    @Test
+    @DisplayName("un élève inscrit après la définition de l'échéancier reçoit ses tranches")
+    void studentEnrolledAfterTheScheduleGetsInstallments() throws Exception {
+        // Le retour de recette : des élèves inscrits dans des classes aux frais définis
+        // affichaient un solde nul. La dette était créée, ses tranches jamais.
+        UUID feeId = this.fee(new BigDecimal("90000"));
+        this.feeScheduleService.defineSchedules(feeId, List.of(
+                this.tranche("1er versement", "45000", LocalDate.of(2026, 10, 15)),
+                this.tranche("2e versement", "45000", LocalDate.of(2027, 1, 15))));
+
+        StudentCreationForm form = new StudentCreationForm();
+        form.setFirstName("Yoel");
+        form.setLastName("MIENSAH");
+        form.setBirthDay(LocalDate.of(2022, 3, 1));
+        form.setLevelOfStudyCode(this.level.getCode());
+        UUID newcomer = this.studentService.create(form).getId();
+
+        List<InstallmentEntity> installments = this.installmentsOf(newcomer);
+        assertThat(installments).hasSize(2);
+        assertThat(installments.stream().map(InstallmentEntity::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add))
+                .isEqualByComparingTo(new BigDecimal("90000"));
+    }
+
+    @Test
+    @DisplayName("un frais sans échéancier est dû en une fois dès sa création")
+    void feeWithoutScheduleIsDueAtOnce() throws Exception {
+        this.fee(new BigDecimal("35000"));
+
+        List<InstallmentEntity> installments = this.installmentsOfStudent();
+        assertThat(installments).hasSize(1);
+        assertThat(installments.getFirst().getAmount()).isEqualByComparingTo(new BigDecimal("35000"));
+    }
+
+    @Test
+    @DisplayName("l'échéancier défini après coup remplace la tranche unique au lieu de s'y ajouter")
+    void scheduleReplacesTheSingleInstallment() throws Exception {
+        UUID feeId = this.fee(new BigDecimal("90000"));
+
+        this.feeScheduleService.defineSchedules(feeId, List.of(
+                this.tranche("1er versement", "45000", LocalDate.of(2026, 10, 15)),
+                this.tranche("2e versement", "45000", LocalDate.of(2027, 1, 15))));
+
+        assertThat(this.installmentsOfStudent()).hasSize(2);
+    }
+
+    private List<InstallmentEntity> installmentsOf(UUID studentId) {
+        return this.installmentRepository.findAll().stream()
+                .filter(line -> line.getStudentFee().getStudent().getId().equals(studentId))
+                .toList();
     }
 
     private List<InstallmentEntity> installmentsOfStudent() {
