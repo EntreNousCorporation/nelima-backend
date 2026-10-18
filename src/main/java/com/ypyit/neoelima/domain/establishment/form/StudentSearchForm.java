@@ -41,4 +41,7 @@ public class StudentSearchForm {
     private Boolean incompleteDossier;
 
     private Gender gender;
+
+    /** Année scolaire : seuls les élèves inscrits pour cette année. Absente, aucun filtre. */
+    private UUID academicYearId;
 }

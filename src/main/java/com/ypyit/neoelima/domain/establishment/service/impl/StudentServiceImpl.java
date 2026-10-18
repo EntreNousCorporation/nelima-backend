@@ -11,7 +11,6 @@ import com.ypyit.neoelima.config.security.CurrentUserProvider;
 import com.ypyit.neoelima.domain.establishment.dto.StudentDto;
 import com.ypyit.neoelima.domain.establishment.dto.StudentLiteDto;
 import com.ypyit.neoelima.domain.establishment.entity.EstablishmentEntity;
-import com.ypyit.neoelima.domain.establishment.entity.FeeEntity;
 import com.ypyit.neoelima.domain.establishment.entity.LevelOfStudyEntity;
 import com.ypyit.neoelima.domain.establishment.entity.QStudentEntity;
 import com.ypyit.neoelima.domain.establishment.service.StudentFilters;
@@ -19,18 +18,16 @@ import com.ypyit.neoelima.domain.establishment.enums.StudentPaymentStatus;
 import com.ypyit.neoelima.domain.establishment.enums.StudentDocumentKind;
 import com.ypyit.neoelima.domain.establishment.entity.QStudentDocumentEntity;
 import com.ypyit.neoelima.domain.establishment.entity.StudentEntity;
-import com.ypyit.neoelima.domain.establishment.entity.StudentFeeEntity;
 import com.ypyit.neoelima.domain.establishment.form.EstablishmentStudentSearchForm;
 import com.ypyit.neoelima.domain.establishment.form.StudentCreationForm;
 import com.ypyit.neoelima.domain.establishment.form.StudentSearchForm;
 import com.ypyit.neoelima.domain.establishment.form.StudentUpdateForm;
 import com.ypyit.neoelima.domain.establishment.mapper.StudentMapper;
 import com.ypyit.neoelima.domain.establishment.repository.EstablishmentRepository;
-import com.ypyit.neoelima.domain.establishment.repository.FeeRepository;
 import com.ypyit.neoelima.domain.establishment.repository.LevelOfStudyRepository;
-import com.ypyit.neoelima.domain.establishment.repository.StudentFeeRepository;
 import com.ypyit.neoelima.domain.establishment.repository.StudentRepository;
-import com.ypyit.neoelima.domain.establishment.service.InstallmentGenerator;
+import com.ypyit.neoelima.domain.establishment.service.StudentEnrollmentService;
+import com.ypyit.neoelima.domain.establishment.service.StudentFeeAttacher;
 import com.ypyit.neoelima.domain.establishment.service.StudentService;
 import com.ypyit.neoelima.domain.establishment.service.TutorContactPrivacy;
 import com.ypyit.neoelima.domain.storage.dto.StorageDto;
@@ -102,9 +99,8 @@ public class StudentServiceImpl implements StudentService {
     private final StorageMapper storageMapper;
     private final UserService userService;
     private final UserRepository userRepository;
-    private final FeeRepository feeRepository;
-    private final StudentFeeRepository studentFeeRepository;
-    private final InstallmentGenerator installmentGenerator;
+    private final StudentFeeAttacher studentFeeAttacher;
+    private final StudentEnrollmentService studentEnrollmentService;
     private final CurrentUserProvider currentUserProvider;
     private final JPAQueryFactory queryFactory;
 
@@ -189,6 +185,9 @@ public class StudentServiceImpl implements StudentService {
             }
             if (Objects.nonNull(searchForm.getGender())) {
                 builder.and(student.gender.eq(searchForm.getGender()));
+            }
+            if (Objects.nonNull(searchForm.getAcademicYearId())) {
+                builder.and(StudentFilters.enrolledIn(student, searchForm.getAcademicYearId()));
             }
             List<Predicate> levelOfStudies = new ArrayList<>();
             if (CollectionUtils.isNotEmpty(searchForm.getLevelOfStudies())) {
@@ -290,7 +289,10 @@ public class StudentServiceImpl implements StudentService {
             this.checkEstablishment(establishmentId, savedStudent, creationForm.getLevelOfStudyCode());
             this.checkLevelOfStudy(creationForm.getLevelOfStudyCode(), savedStudent);
             this.manageParent(creationForm.getParentId(), creationForm.getParent(), savedStudent);
-            return this.studentMapper.toDto(this.studentRepository.save(savedStudent));
+            StudentEntity created = this.studentRepository.save(savedStudent);
+            // Inscrit d'office dans l'année en cours : c'est elle que l'écran Élèves montre.
+            this.studentEnrollmentService.syncActiveYear(created);
+            return this.studentMapper.toDto(created);
         } catch (NotFoundException | DuplicateResourceException | BadRequestException | AccessDeniedException e) {
             throw e;
         } catch (Exception e) {
@@ -316,7 +318,9 @@ public class StudentServiceImpl implements StudentService {
             }
             this.studentMapper.toUpdate(updateForm, student);
             this.checkLevelOfStudy(updateForm.getLevelOfStudyCode(), student);
-            return this.studentMapper.toDto(this.studentRepository.save(student));
+            StudentEntity updated = this.studentRepository.save(student);
+            this.studentEnrollmentService.syncActiveYear(updated);
+            return this.studentMapper.toDto(updated);
         } catch (NotFoundException | DuplicateResourceException | AccessDeniedException e) {
             throw e;
         } catch (Exception e) {
@@ -378,24 +382,7 @@ public class StudentServiceImpl implements StudentService {
             if (levelOfStudyNotExists) {
                 throw new BadRequestException("Le niveau scolaire " + levelOfStudyCode + " n'existe pas dans cet établissement.");
             }
-            List<FeeEntity> allByEstablishmentId = this.feeRepository.findAllByEstablishment_Id(establishmentId);
-            if (CollectionUtils.isNotEmpty(allByEstablishmentId)) {
-                for (FeeEntity fee : allByEstablishmentId) {
-                    boolean studentLevelOfStudyExists = FunctionalUtils
-                            .safelyGetStream(fee.getLevelOfStudies()).anyMatch(v -> levelOfStudyCode.equals(v.getCode()));
-                    if (studentLevelOfStudyExists) {
-                        // La dette sans ses tranches ne se voit nulle part : le solde, l'échéancier
-                        // et les relances se lisent tous dans les tranches. Un élève inscrit après
-                        // la définition des frais affichait ainsi zéro à régler.
-                        StudentFeeEntity studentFee = this.studentFeeRepository.saveAndFlush(
-                                StudentFeeEntity.builder()
-                                        .student(student)
-                                        .fee(fee)
-                                        .build());
-                        this.installmentGenerator.generateFor(studentFee);
-                    }
-                }
-            }
+            this.studentFeeAttacher.attachFees(student, establishmentId, levelOfStudyCode);
             student.setEstablishment(establishment);
         }
     }

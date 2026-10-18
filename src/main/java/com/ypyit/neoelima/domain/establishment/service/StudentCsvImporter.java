@@ -118,6 +118,8 @@ public class StudentCsvImporter {
     private final StudentRepository studentRepository;
     private final EstablishmentRepository establishmentRepository;
     private final SchoolClassRepository schoolClassRepository;
+    private final StudentFeeAttacher studentFeeAttacher;
+    private final StudentEnrollmentService studentEnrollmentService;
     private final CurrentUserProvider currentUserProvider;
 
     /** La cellule d'une colonne facultative, vide si le fichier ne la porte pas. */
@@ -239,6 +241,13 @@ public class StudentCsvImporter {
         }
 
         this.studentRepository.saveAllAndFlush(students);
+        // Mêmes suites qu'une inscription unitaire : les frais du niveau avec leurs tranches, et
+        // l'inscription dans l'année en cours.
+        for (StudentEntity student : students) {
+            this.studentFeeAttacher.attachFees(student, establishmentId,
+                    Objects.isNull(student.getLevelOfStudy()) ? null : student.getLevelOfStudy().getCode());
+            this.studentEnrollmentService.syncActiveYear(student);
+        }
         log.info("STUDENT_CSV_IMPORT: {} élèves importés dans l'établissement {}",
                 students.size(), establishmentId);
         return new ImportReport(students.size(), List.of());

@@ -55,6 +55,7 @@ public class SchoolClassService {
     private final StudentRepository studentRepository;
     private final LevelOfStudyRepository levelOfStudyRepository;
     private final StaffRepository staffRepository;
+    private final StudentEnrollmentService studentEnrollmentService;
     private final EstablishmentRepository establishmentRepository;
     private final CurrentUserProvider currentUserProvider;
     private final JPAQueryFactory queryFactory;
@@ -154,6 +155,7 @@ public class SchoolClassService {
             this.currentUserProvider.assertCanAccessStudent(student);
             student.setSchoolClass(entity);
             this.studentRepository.save(student);
+            this.studentEnrollmentService.syncActiveYear(student);
         }
     }
 
@@ -166,6 +168,7 @@ public class SchoolClassService {
         this.currentUserProvider.assertCanAccessStudent(student);
         student.setSchoolClass(null);
         this.studentRepository.save(student);
+        this.studentEnrollmentService.syncActiveYear(student);
     }
 
     private SchoolClassEntity load(UUID id) {

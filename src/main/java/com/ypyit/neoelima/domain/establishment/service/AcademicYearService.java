@@ -9,6 +9,7 @@ import com.ypyit.neoelima.domain.establishment.entity.AcademicYearEntity;
 import com.ypyit.neoelima.domain.establishment.entity.EstablishmentEntity;
 import com.ypyit.neoelima.domain.establishment.form.AcademicYearForm;
 import com.ypyit.neoelima.domain.establishment.repository.AcademicYearRepository;
+import com.ypyit.neoelima.domain.establishment.repository.StudentEnrollmentRepository;
 import com.ypyit.neoelima.domain.establishment.repository.EstablishmentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,6 +36,7 @@ import java.util.UUID;
 public class AcademicYearService {
 
     private final AcademicYearRepository academicYearRepository;
+    private final StudentEnrollmentRepository studentEnrollmentRepository;
     private final EstablishmentRepository establishmentRepository;
     private final CurrentUserProvider currentUserProvider;
 
@@ -93,6 +95,13 @@ public class AcademicYearService {
         if (entity.isActive()) {
             throw new BadRequestException(
                     "L'année en cours ne peut pas être supprimée : activez-en une autre d'abord.");
+        }
+        // Ses inscriptions sont l'historique des élèves : la supprimer effacerait qui était dans
+        // quelle classe cette année-là.
+        if (this.studentEnrollmentRepository.existsByAcademicYear_Id(id)) {
+            throw new BadRequestException(String.format(
+                    "L'année %s compte des élèves inscrits : elle ne peut pas être supprimée.",
+                    entity.getLabel()));
         }
         this.academicYearRepository.delete(entity);
         log.info("ACADEMIC_YEAR_DELETED: {}", id);

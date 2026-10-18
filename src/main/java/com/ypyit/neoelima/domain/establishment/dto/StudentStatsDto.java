@@ -6,6 +6,7 @@ import lombok.Getter;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * L'effectif de l'école vu d'en haut : ce que montrent les cartes, les graphiques et les onglets
@@ -17,6 +18,14 @@ import java.util.List;
 @Getter
 @Builder
 public class StudentStatsDto {
+    /** Année sur laquelle portent les chiffres ; nulle si l'école n'en a déclaré aucune. */
+    private UUID academicYearId;
+    private String academicYearLabel;
+    /** Effectif de l'année précédente, s'il y en a une avec des inscrits. */
+    private Long previousYearTotal;
+    /** Évolution de l'effectif sur l'année précédente, en pour cent. */
+    private Double totalDeltaPercent;
+
     private long total;
     /** Inscrits depuis le premier du mois. */
     private long newThisMonth;

@@ -88,8 +88,8 @@ public class StudentController {
             description = "Sur tout l'effectif de l'école : cartes, répartitions et statuts. Les "
                     + "statuts suivent les mêmes règles que les filtres de la recherche.")
     @PreAuthorize("hasAuthority('student:read')")
-    public ResponseEntity<StudentStatsDto> stats() {
-        return ResponseEntity.ok(this.studentStatsService.compute());
+    public ResponseEntity<StudentStatsDto> stats(@RequestParam(required = false) UUID academicYearId) {
+        return ResponseEntity.ok(this.studentStatsService.compute(academicYearId));
     }
 
     @GetMapping(value = "/export", produces = "text/csv; charset=UTF-8")

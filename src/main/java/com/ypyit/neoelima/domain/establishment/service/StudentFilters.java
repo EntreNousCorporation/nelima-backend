@@ -4,6 +4,7 @@ import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.jpa.JPAExpressions;
 import com.ypyit.neoelima.domain.establishment.entity.QInstallmentEntity;
 import com.ypyit.neoelima.domain.establishment.entity.QStudentDocumentEntity;
+import com.ypyit.neoelima.domain.establishment.entity.QStudentEnrollmentEntity;
 import com.ypyit.neoelima.domain.establishment.entity.QStudentEntity;
 import com.ypyit.neoelima.domain.establishment.enums.InstallmentStatus;
 import com.ypyit.neoelima.domain.establishment.enums.StudentDocumentKind;
@@ -11,6 +12,7 @@ import com.ypyit.neoelima.domain.establishment.enums.StudentPaymentStatus;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Les définitions qui classent un élève — statut de paiement, dossier complet — écrites une seule
@@ -61,6 +63,14 @@ public final class StudentFilters {
             case DEPOSIT -> deposit(student, today);
             case UP_TO_DATE -> overdue(student, today).not().and(deposit(student, today).not());
         };
+    }
+
+    /** Inscrit pour cette année scolaire. */
+    public static BooleanExpression enrolledIn(QStudentEntity student, UUID academicYearId) {
+        QStudentEnrollmentEntity enrollment = new QStudentEnrollmentEntity("yearEnrollment");
+        return JPAExpressions.selectOne().from(enrollment)
+                .where(enrollment.student.id.eq(student.id), enrollment.academicYear.id.eq(academicYearId))
+                .exists();
     }
 
     /** Il manque au moins une des pièces requises. */

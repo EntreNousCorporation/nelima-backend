@@ -114,7 +114,7 @@ class StudentStatsServiceTest extends AbstractIntegrationTest {
     @Test
     @DisplayName("les statuts sont exclusifs et leur somme fait l'effectif")
     void statusesAreExclusive() {
-        StudentStatsDto stats = this.studentStatsService.compute();
+        StudentStatsDto stats = this.studentStatsService.compute(null);
 
         assertThat(stats.getTotal()).isEqualTo(4);
         assertThat(stats.getStatusIncomplete()).isEqualTo(1);
