@@ -14,6 +14,10 @@ import com.ypyit.neoelima.domain.establishment.entity.EstablishmentEntity;
 import com.ypyit.neoelima.domain.establishment.entity.FeeEntity;
 import com.ypyit.neoelima.domain.establishment.entity.LevelOfStudyEntity;
 import com.ypyit.neoelima.domain.establishment.entity.QStudentEntity;
+import com.ypyit.neoelima.domain.establishment.service.StudentFilters;
+import com.ypyit.neoelima.domain.establishment.enums.StudentPaymentStatus;
+import com.ypyit.neoelima.domain.establishment.enums.StudentDocumentKind;
+import com.ypyit.neoelima.domain.establishment.entity.QStudentDocumentEntity;
 import com.ypyit.neoelima.domain.establishment.entity.StudentEntity;
 import com.ypyit.neoelima.domain.establishment.entity.StudentFeeEntity;
 import com.ypyit.neoelima.domain.establishment.form.EstablishmentStudentSearchForm;
@@ -60,10 +64,12 @@ import java.io.FileInputStream;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -172,6 +178,18 @@ public class StudentServiceImpl implements StudentService {
             if (Boolean.TRUE.equals(searchForm.getUnassignedOnly())) {
                 builder.and(student.schoolClass.isNull());
             }
+            LocalDate today = LocalDate.now();
+            if (Objects.nonNull(searchForm.getPaymentStatus())) {
+                builder.and(StudentFilters.paymentStatus(student, searchForm.getPaymentStatus(), today));
+            }
+            if (Objects.nonNull(searchForm.getIncompleteDossier())) {
+                builder.and(searchForm.getIncompleteDossier()
+                        ? StudentFilters.incompleteDossier(student)
+                        : StudentFilters.incompleteDossier(student).not());
+            }
+            if (Objects.nonNull(searchForm.getGender())) {
+                builder.and(student.gender.eq(searchForm.getGender()));
+            }
             List<Predicate> levelOfStudies = new ArrayList<>();
             if (CollectionUtils.isNotEmpty(searchForm.getLevelOfStudies())) {
                 searchForm.getLevelOfStudies().forEach(levelOfStudy -> levelOfStudies
@@ -223,11 +241,38 @@ public class StudentServiceImpl implements StudentService {
                         Objects.requireNonNullElse(row.get(installment.amount.sum()), BigDecimal.ZERO),
                         Objects.requireNonNullElse(row.get(2, BigDecimal.class), BigDecimal.ZERO)}));
 
+        // Élèves ayant déjà réglé au moins une tranche : c'est ce qui distingue l'acompte.
+        Set<UUID> havePaid = new HashSet<>(this.queryFactory
+                .selectDistinct(student.id)
+                .from(installment)
+                .join(installment.studentFee, studentFee)
+                .join(studentFee.student, student)
+                .where(student.id.in(ids), installment.status.eq(InstallmentStatus.PAID))
+                .fetch());
+
+        // Pièces requises présentes, par élève : un dossier est complet quand il les a toutes.
+        QStudentDocumentEntity document = QStudentDocumentEntity.studentDocumentEntity;
+        Map<UUID, Set<StudentDocumentKind>> filed = new HashMap<>();
+        this.queryFactory.select(document.student.id, document.kind)
+                .from(document)
+                .where(document.student.id.in(ids), document.kind.in(StudentFilters.REQUIRED_DOCUMENTS))
+                .fetch()
+                .forEach(row -> filed.computeIfAbsent(row.get(document.student.id), k -> new HashSet<>())
+                        .add(row.get(document.kind)));
+
         for (StudentDto dto : students) {
             BigDecimal[] found = balances.get(dto.getId());
             // Zéro et non nul : la requête a bien porté sur cet élève, il ne doit simplement rien.
-            dto.setOutstandingAmount(found == null ? BigDecimal.ZERO : found[0]);
-            dto.setOverdueAmount(found == null ? BigDecimal.ZERO : found[1]);
+            BigDecimal outstanding = found == null ? BigDecimal.ZERO : found[0];
+            BigDecimal overdue = found == null ? BigDecimal.ZERO : found[1];
+            dto.setOutstandingAmount(outstanding);
+            dto.setOverdueAmount(overdue);
+            // Mêmes règles que StudentFilters, appliquées aux montants déjà chargés.
+            dto.setPaymentStatus(overdue.signum() > 0 ? StudentPaymentStatus.OVERDUE
+                    : outstanding.signum() > 0 && havePaid.contains(dto.getId()) ? StudentPaymentStatus.DEPOSIT
+                    : StudentPaymentStatus.UP_TO_DATE);
+            dto.setDossierComplete(filed.getOrDefault(dto.getId(), Set.of())
+                    .containsAll(StudentFilters.REQUIRED_DOCUMENTS));
         }
     }
 

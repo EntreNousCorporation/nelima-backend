@@ -26,6 +26,9 @@ public enum AuditAction {
     /** Journal comptable exporté : des données nominatives sont sorties de la plateforme. */
     ACCOUNTING_EXPORTED,
 
+    /** Liste des élèves exportée : des données nominatives de mineurs sont sorties de la plateforme. */
+    STUDENTS_EXPORTED,
+
     /** Campagne de relance envoyée : des familles ont été sollicitées, parfois à un coût. */
     REMINDER_CAMPAIGN_SENT,
 

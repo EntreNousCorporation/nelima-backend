@@ -1,5 +1,6 @@
 package com.ypyit.neoelima.domain.establishment.dto;
 
+import com.ypyit.neoelima.domain.establishment.enums.StudentPaymentStatus;
 import com.ypyit.neoelima.domain.establishment.enums.Gender;
 import com.ypyit.neoelima.common.dto.BaseDto;
 import com.ypyit.neoelima.domain.user.dto.UserDto;
@@ -50,4 +51,10 @@ public class StudentDto extends BaseDto {
      * 100 000 F depuis mars, et les deux appellent des gestes différents.
      */
     private BigDecimal overdueAmount;
+
+    /** Statut de paiement, selon les mêmes règles que le filtre et les statistiques. */
+    private StudentPaymentStatus paymentStatus;
+
+    /** Toutes les pièces requises sont au dossier (extrait de naissance et photo). */
+    private Boolean dossierComplete;
 }

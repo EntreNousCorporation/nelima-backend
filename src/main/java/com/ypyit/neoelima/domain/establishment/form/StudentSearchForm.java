@@ -1,5 +1,7 @@
 package com.ypyit.neoelima.domain.establishment.form;
 
+import com.ypyit.neoelima.domain.establishment.enums.Gender;
+import com.ypyit.neoelima.domain.establishment.enums.StudentPaymentStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -31,4 +33,12 @@ public class StudentSearchForm {
 
     private Boolean unassignedOnly;
     private UUID establishmentId;
+
+    /** Statut de paiement : les onglets « En retard » et le filtre de statut s'appuient dessus. */
+    private StudentPaymentStatus paymentStatus;
+
+    /** Vrai : seuls les dossiers où manque une pièce requise ; faux : seuls les complets. */
+    private Boolean incompleteDossier;
+
+    private Gender gender;
 }

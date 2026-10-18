@@ -2,6 +2,14 @@ package com.ypyit.neoelima.domain.establishment.controller;
 
 import com.ypyit.neoelima.domain.establishment.dto.StudentDocumentDto;
 import com.ypyit.neoelima.domain.establishment.dto.StudentDto;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.PageRequest;
+import com.ypyit.neoelima.config.security.CurrentUserProvider;
+import com.ypyit.neoelima.domain.establishment.service.StudentStatsService;
+import com.ypyit.neoelima.domain.establishment.service.StudentCsvExporter;
+import com.ypyit.neoelima.domain.establishment.service.AuditService;
+import com.ypyit.neoelima.domain.establishment.enums.AuditAction;
+import com.ypyit.neoelima.domain.establishment.dto.StudentStatsDto;
 import com.ypyit.neoelima.domain.establishment.enums.StudentDocumentKind;
 import com.ypyit.neoelima.domain.establishment.service.StudentDocumentService;
 import org.springframework.http.ContentDisposition;
@@ -55,6 +63,10 @@ public class StudentController {
     private final StudentCsvImporter studentCsvImporter;
     private final StudentClaimService studentClaimService;
     private final StudentDocumentService studentDocumentService;
+    private final StudentStatsService studentStatsService;
+    private final StudentCsvExporter studentCsvExporter;
+    private final AuditService auditService;
+    private final CurrentUserProvider currentUserProvider;
 
     // `@Valid` sur le `@ModelAttribute` : sans lui, les `@NotBlank`/`@NotNull` du formulaire ne
     // s'exécutaient pas. Un `GET /students` nu chargeait alors la table élève entière avant de rendre
@@ -69,6 +81,33 @@ public class StudentController {
                                                                @RequestParam("academical") Boolean academical,
                                                                @PageableDefault @ParameterObject Pageable page) {
         return ResponseEntity.ok(this.studentFeeService.findByStudentId(id, academical, page));
+    }
+
+    @GetMapping(value = "/stats", produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Chiffres de l'écran Élèves",
+            description = "Sur tout l'effectif de l'école : cartes, répartitions et statuts. Les "
+                    + "statuts suivent les mêmes règles que les filtres de la recherche.")
+    @PreAuthorize("hasAuthority('student:read')")
+    public ResponseEntity<StudentStatsDto> stats() {
+        return ResponseEntity.ok(this.studentStatsService.compute());
+    }
+
+    @GetMapping(value = "/export", produces = "text/csv; charset=UTF-8")
+    @Operation(summary = "Liste des élèves au format tableur", description = "Mêmes filtres que la recherche.")
+    @PreAuthorize("hasAuthority('student:read')")
+    public ResponseEntity<byte[]> export(@ModelAttribute @ParameterObject StudentSearchForm searchForm) {
+        // Toute la sélection, pas la page affichée : un export tronqué serait faux sans le dire.
+        List<StudentDto> students = this.studentService.search(searchForm,
+                PageRequest.of(0, 10_000, Sort.by("lastName", "firstName"))).getContent();
+        byte[] csv = this.studentCsvExporter.export(students);
+        this.auditService.record(this.currentUserProvider.resolveEstablishmentScope(null),
+                AuditAction.STUDENTS_EXPORTED, "Liste des élèves",
+                String.format("%d ligne(s) exportée(s)", students.size()));
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("text/csv; charset=UTF-8"))
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment().filename("eleves.csv").build().toString())
+                .body(csv);
     }
 
     @GetMapping(value = "/search", produces = MediaType.APPLICATION_JSON_VALUE)
