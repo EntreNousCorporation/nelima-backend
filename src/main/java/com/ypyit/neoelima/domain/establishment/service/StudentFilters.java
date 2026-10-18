@@ -73,6 +73,24 @@ public final class StudentFilters {
                 .exists();
     }
 
+    /** Dans cette classe cette année-là ; une classe nulle désigne les élèves sans classe. */
+    public static BooleanExpression inClass(QStudentEntity student, UUID academicYearId, UUID schoolClassId) {
+        QStudentEnrollmentEntity enrollment = new QStudentEnrollmentEntity("classEnrollment");
+        return JPAExpressions.selectOne().from(enrollment)
+                .where(enrollment.student.id.eq(student.id), enrollment.academicYear.id.eq(academicYearId),
+                        schoolClassId == null ? enrollment.schoolClass.isNull() : enrollment.schoolClass.id.eq(schoolClassId))
+                .exists();
+    }
+
+    /** À l'un de ces niveaux cette année-là. */
+    public static BooleanExpression atLevel(QStudentEntity student, UUID academicYearId, java.util.Collection<String> codes) {
+        QStudentEnrollmentEntity enrollment = new QStudentEnrollmentEntity("levelEnrollment");
+        return JPAExpressions.selectOne().from(enrollment)
+                .where(enrollment.student.id.eq(student.id), enrollment.academicYear.id.eq(academicYearId),
+                        enrollment.levelOfStudy.code.in(codes))
+                .exists();
+    }
+
     /** Il manque au moins une des pièces requises. */
     public static BooleanExpression incompleteDossier(QStudentEntity student) {
         BooleanExpression missing = null;

@@ -46,6 +46,12 @@ public class SchoolClassYearEntity extends BaseEntity {
     @JoinColumn(name = "academic_year_id", referencedColumnName = "id")
     private AcademicYearEntity academicYear;
 
+    /** Titulaire de la classe cette année-là. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @ToString.Exclude
+    @JoinColumn(name = "main_teacher_id", referencedColumnName = "id")
+    private StaffEntity mainTeacher;
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;

@@ -80,6 +80,48 @@ public class SchoolYearClosureService {
         return this.describe(scope, year, schoolYear);
     }
 
+    /**
+     * Rouvre l'année d'une école. Réservé à la plateforme : l'école a clôturé en connaissance de
+     * cause, et rouvrir ses comptes d'une année se fait sur demande, tracé au journal de l'école.
+     */
+    @Transactional
+    public void reopen(UUID academicYearId, UUID establishmentId) {
+        if (!this.currentUserProvider.isPlatformAdmin()) {
+            throw new org.springframework.security.access.AccessDeniedException("Seule la plateforme rouvre une année clôturée.");
+        }
+        AcademicYearEntity year = this.load(academicYearId);
+        SchoolYearEntity schoolYear = this.schoolYearRepository
+                .findByEstablishment_IdAndAcademicYear_Id(establishmentId, academicYearId)
+                .filter(SchoolYearEntity::isClosed)
+                .orElseThrow(() -> new BadRequestException("Cette année n'est pas clôturée dans cette école."));
+        schoolYear.setStatus(SchoolYearStatus.OPEN);
+        schoolYear.setClosedAt(null);
+        schoolYear.setClosedBy(null);
+        this.schoolYearRepository.saveAndFlush(schoolYear);
+        this.auditService.record(establishmentId, AuditAction.YEAR_REOPENED, year.getLabel(),
+                "Année rouverte par la plateforme (" + this.currentUserProvider.currentUser().getUsername() + ")");
+        log.info("SCHOOL_YEAR_REOPENED: {} in establishment {}", year.getLabel(), establishmentId);
+    }
+
+    /** Les écoles et leur état pour une année : la vue de la plateforme. */
+    public List<SchoolYearClosureDto.SchoolState> schools(UUID academicYearId) {
+        if (!this.currentUserProvider.isPlatformAdmin()) {
+            throw new org.springframework.security.access.AccessDeniedException("Vue réservée à la plateforme.");
+        }
+        this.load(academicYearId);
+        return this.schoolYearRepository.findAll().stream()
+                .filter(sy -> sy.getAcademicYear().getId().equals(academicYearId))
+                .map(sy -> SchoolYearClosureDto.SchoolState.builder()
+                        .establishmentId(sy.getEstablishment().getId().toString())
+                        .name(sy.getEstablishment().getName())
+                        .status(sy.getStatus())
+                        .closedAt(sy.getClosedAt())
+                        .closedBy(sy.getClosedBy())
+                        .build())
+                .sorted(java.util.Comparator.comparing(SchoolYearClosureDto.SchoolState::getName))
+                .toList();
+    }
+
     private SchoolYearClosureDto describe(UUID scope, AcademicYearEntity year, SchoolYearEntity schoolYear) {
         QInstallmentEntity installment = QInstallmentEntity.installmentEntity;
         QStudentEntity student = QStudentEntity.studentEntity;

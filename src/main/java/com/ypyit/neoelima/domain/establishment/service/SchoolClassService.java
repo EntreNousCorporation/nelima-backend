@@ -1,5 +1,8 @@
 package com.ypyit.neoelima.domain.establishment.service;
 
+import com.ypyit.neoelima.domain.establishment.repository.StudentEnrollmentRepository;
+import com.ypyit.neoelima.domain.establishment.entity.AcademicYearEntity;
+import com.ypyit.neoelima.domain.establishment.entity.StudentEnrollmentEntity;
 import com.querydsl.core.Tuple;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import com.ypyit.neoelima.common.exception.BadRequestException;
@@ -59,6 +62,7 @@ public class SchoolClassService {
     private final LevelOfStudyRepository levelOfStudyRepository;
     private final StaffRepository staffRepository;
     private final SchoolClassYearRepository schoolClassYearRepository;
+    private final StudentEnrollmentRepository studentEnrollmentRepository;
     private final AcademicYearContext academicYearContext;
     private final StudentEnrollmentService studentEnrollmentService;
     private final EstablishmentRepository establishmentRepository;
@@ -84,7 +88,7 @@ public class SchoolClassService {
 
         Map<UUID, List<String>> teachers = this.teachersByClass(scope);
 
-        return classes.stream().map(entity -> toDto(entity,
+        return classes.stream().map(entity -> toDto(entity, this.teacherOf(entity),
                 headcounts.getOrDefault(entity.getId(), 0L),
                 outstanding.getOrDefault(entity.getId(), BigDecimal.ZERO),
                 collected.getOrDefault(entity.getId(), BigDecimal.ZERO),
@@ -93,7 +97,7 @@ public class SchoolClassService {
 
     public SchoolClassDto findById(UUID id) {
         SchoolClassEntity entity = this.load(id);
-        return toDto(entity,
+        return toDto(entity, this.teacherOf(entity),
                 this.headcounts(this.scope()).getOrDefault(id, 0L),
                 this.outstandingByClass(this.scope()).getOrDefault(id, BigDecimal.ZERO),
                 this.collectedByClass(this.scope()).getOrDefault(id, BigDecimal.ZERO),
@@ -116,16 +120,21 @@ public class SchoolClassService {
                 .establishment(establishment)
                 .build();
 
+        StaffEntity teacher = entity.getMainTeacher();
+        if (!this.workingInCurrentYear()) {
+            // Créée pour une autre année : le titulaire est celui de cette année-là seulement.
+            entity.setMainTeacher(null);
+        }
         SchoolClassEntity saved = this.schoolClassRepository.saveAndFlush(entity);
-        this.attachMainTeacherToClass(saved);
+        this.attachMainTeacherToClass(saved, teacher);
         // Ouverte pour l'année où l'on travaille : c'est là qu'on vient de la créer.
         this.academicYearContext.consulted().ifPresent(year -> {
             this.academicYearContext.schoolYear(scope, year);
             this.schoolClassYearRepository.saveAndFlush(SchoolClassYearEntity.builder()
-                    .schoolClass(saved).academicYear(year).build());
+                    .schoolClass(saved).academicYear(year).mainTeacher(teacher).build());
         });
         log.info("SCHOOL_CLASS_CREATED: {} in establishment {}", saved.getName(), scope);
-        return toDto(saved, 0L, BigDecimal.ZERO, BigDecimal.ZERO, this.namesOf(saved.getMainTeacher()));
+        return toDto(saved, teacher, 0L, BigDecimal.ZERO, BigDecimal.ZERO, this.namesOf(teacher));
     }
 
     @Transactional
@@ -134,11 +143,22 @@ public class SchoolClassService {
         entity.setName(form.getName().trim());
         entity.setRoom(trimToNull(form.getRoom()));
         entity.setCapacity(form.getCapacity());
-        entity.setMainTeacher(this.resolveMainTeacher(form.getMainTeacherId(), entity.getEstablishment()));
+        StaffEntity teacher = this.resolveMainTeacher(form.getMainTeacherId(), entity.getEstablishment());
+        // Le titulaire de l'année consultée ; celui que porte la classe suit l'année en cours, que
+        // d'autres écrans lisent encore.
+        if (this.workingInCurrentYear()) {
+            entity.setMainTeacher(teacher);
+        }
+        this.academicYearContext.consulted().flatMap(year -> this.schoolClassYearRepository
+                        .findBySchoolClass_IdAndAcademicYear_Id(entity.getId(), year.getId()))
+                .ifPresent(opening -> {
+                    opening.setMainTeacher(teacher);
+                    this.schoolClassYearRepository.save(opening);
+                });
         entity.setMainTeacherName(trimToNull(form.getMainTeacherName()));
         entity.setLevelOfStudy(this.resolveLevel(form.getLevelOfStudyCode(), entity.getEstablishment()));
         this.schoolClassRepository.saveAndFlush(entity);
-        this.attachMainTeacherToClass(entity);
+        this.attachMainTeacherToClass(entity, teacher);
         return this.findById(id);
     }
 
@@ -162,7 +182,6 @@ public class SchoolClassService {
 
     @Transactional
     public void assign(UUID id, List<UUID> studentIds) {
-        this.assertWorkingInCurrentYear();
         SchoolClassEntity entity = this.load(id);
         for (UUID studentId : studentIds) {
             StudentEntity student = this.studentRepository.findById(studentId)
@@ -171,23 +190,45 @@ public class SchoolClassService {
             // Contrôle explicite : un identifiant d'élève arrive du client, et rien n'empêcherait
             // sinon d'affecter à sa classe l'élève d'une autre école.
             this.currentUserProvider.assertCanAccessStudent(student);
-            student.setSchoolClass(entity);
-            this.studentRepository.save(student);
-            this.studentEnrollmentService.syncActiveYear(student);
+            this.place(student, entity);
         }
     }
 
     @Transactional
     public void unassign(UUID id, UUID studentId) {
-        this.assertWorkingInCurrentYear();
         this.load(id);
         StudentEntity student = this.studentRepository.findById(studentId)
                 .orElseThrow(() -> new NotFoundException(
                         String.format("Student with provided id %s not found", studentId)));
         this.currentUserProvider.assertCanAccessStudent(student);
-        student.setSchoolClass(null);
-        this.studentRepository.save(student);
-        this.studentEnrollmentService.syncActiveYear(student);
+        this.place(student, null);
+    }
+
+    /**
+     * Range l'élève dans une classe (ou l'en retire) pour l'année consultée.
+     *
+     * <p>Dans l'année en cours, la classe que porte l'élève suit, et d'autres écrans la lisent.
+     * Dans une autre année — la rentrée qu'on prépare —, seule son inscription de cette année
+     * change : il est encore dans sa classe actuelle jusqu'à la rentrée.
+     */
+    private void place(StudentEntity student, SchoolClassEntity schoolClass) {
+        if (this.workingInCurrentYear()) {
+            student.setSchoolClass(schoolClass);
+            this.studentRepository.save(student);
+            this.studentEnrollmentService.syncActiveYear(student);
+            return;
+        }
+        AcademicYearEntity year = this.academicYearContext.consulted().orElseThrow();
+        StudentEnrollmentEntity enrollment = this.studentEnrollmentRepository
+                .findByStudent_IdAndAcademicYear_Id(student.getId(), year.getId())
+                .orElseThrow(() -> new BadRequestException(String.format(
+                        "%s %s n'est pas inscrit pour %s : réinscrivez-le d'abord.",
+                        student.getLastName(), student.getFirstName(), year.getLabel())));
+        enrollment.setSchoolClass(schoolClass);
+        if (Objects.nonNull(schoolClass) && Objects.nonNull(schoolClass.getLevelOfStudy())) {
+            enrollment.setLevelOfStudy(schoolClass.getLevelOfStudy());
+        }
+        this.studentEnrollmentRepository.save(enrollment);
     }
 
     private SchoolClassEntity load(UUID id) {
@@ -258,22 +299,11 @@ public class SchoolClassService {
         return level;
     }
 
-    /**
-     * Pour l'instant, on ne répartit les élèves que dans l'année en cours : la classe d'un élève
-     * l'an prochain se décidera à sa réinscription, pas en le déplaçant ici.
-     */
+
     /** Sans année déclarée, aucun filtre (QueryDSL ignore un prédicat nul). */
     private com.querydsl.core.types.Predicate feeOfConsultedYear(com.querydsl.core.types.dsl.ComparablePath<UUID> yearId) {
         UUID year = this.academicYearContext.consultedId();
         return Objects.isNull(year) ? null : yearId.eq(year);
-    }
-
-    private void assertWorkingInCurrentYear() {
-        UUID consulted = this.academicYearContext.consultedId();
-        if (Objects.nonNull(consulted) && !consulted.equals(this.academicYearContext.currentId())) {
-            throw new BadRequestException(
-                    "La répartition des élèves se fait dans l'année en cours. Revenez-y dans Paramètres.");
-        }
     }
 
     private Map<UUID, Long> headcounts(UUID scope) {
@@ -380,8 +410,7 @@ public class SchoolClassService {
      * classe, et faire du dernier rattaché son titulaire écraserait un choix de la direction. La
      * synchronisation ne va donc que dans ce sens-là, le seul qui soit sans ambiguïté.
      */
-    private void attachMainTeacherToClass(SchoolClassEntity schoolClass) {
-        StaffEntity mainTeacher = schoolClass.getMainTeacher();
+    private void attachMainTeacherToClass(SchoolClassEntity schoolClass, StaffEntity mainTeacher) {
         if (Objects.isNull(mainTeacher) || mainTeacher.getClasses().contains(schoolClass)) {
             return;
         }
@@ -394,11 +423,26 @@ public class SchoolClassService {
                 : List.of(String.format("%s %s", staff.getLastName(), staff.getFirstName()));
     }
 
-    private static SchoolClassDto toDto(SchoolClassEntity entity, long studentCount,
+    /** Le titulaire de l'année consultée ; sans année déclarée, celui de la classe. */
+    private StaffEntity teacherOf(SchoolClassEntity schoolClass) {
+        UUID year = this.academicYearContext.consultedId();
+        if (Objects.isNull(year)) {
+            return schoolClass.getMainTeacher();
+        }
+        return this.schoolClassYearRepository.findBySchoolClass_IdAndAcademicYear_Id(schoolClass.getId(), year)
+                .map(SchoolClassYearEntity::getMainTeacher)
+                .orElse(null);
+    }
+
+    private boolean workingInCurrentYear() {
+        UUID consulted = this.academicYearContext.consultedId();
+        return Objects.isNull(consulted) || consulted.equals(this.academicYearContext.currentId());
+    }
+
+    private static SchoolClassDto toDto(SchoolClassEntity entity, StaffEntity mainTeacher, long studentCount,
                                         BigDecimal outstanding, BigDecimal collected,
                                         List<String> teacherNames) {
         LevelOfStudyEntity level = entity.getLevelOfStudy();
-        StaffEntity mainTeacher = entity.getMainTeacher();
         return SchoolClassDto.builder()
                 .id(entity.getId().toString())
                 .name(entity.getName())

@@ -1,5 +1,10 @@
 package com.ypyit.neoelima.domain.establishment.service.impl;
 
+import com.ypyit.neoelima.domain.establishment.mapper.LevelOfStudyMapper;
+import com.ypyit.neoelima.domain.establishment.repository.StudentEnrollmentRepository;
+import com.ypyit.neoelima.domain.establishment.dto.SchoolClassLiteDto;
+import com.ypyit.neoelima.domain.establishment.entity.SchoolClassEntity;
+import com.ypyit.neoelima.domain.establishment.entity.StudentEnrollmentEntity;
 import com.querydsl.core.BooleanBuilder;
 import com.querydsl.core.types.Predicate;
 import com.ypyit.neoelima.common.exception.BadRequestException;
@@ -103,6 +108,8 @@ public class StudentServiceImpl implements StudentService {
     private final StudentFeeAttacher studentFeeAttacher;
     private final StudentEnrollmentService studentEnrollmentService;
     private final AcademicYearContext academicYearContext;
+    private final StudentEnrollmentRepository studentEnrollmentRepository;
+    private final LevelOfStudyMapper levelOfStudyMapper;
     private final CurrentUserProvider currentUserProvider;
     private final JPAQueryFactory queryFactory;
 
@@ -168,13 +175,24 @@ public class StudentServiceImpl implements StudentService {
                         .or(student.firstName.containsIgnoreCase(keyword))
                         .or(student.lastName.containsIgnoreCase(keyword)));
             }
+            // L'année demandée, sinon celle que l'utilisateur consulte : l'école voit les élèves de
+            // l'année où elle travaille, pas ceux de toutes les années confondues. Classe et niveau
+            // se lisent alors dans l'inscription de cette année : l'élève réinscrit pour l'an
+            // prochain est encore en CM1 cette année.
+            UUID year = Objects.nonNull(searchForm.getAcademicYearId()) ? searchForm.getAcademicYearId()
+                    : Objects.nonNull(establishmentScope) ? this.academicYearContext.consultedId() : null;
+            if (Objects.nonNull(year)) {
+                builder.and(StudentFilters.enrolledIn(student, year));
+            }
             if (Objects.nonNull(searchForm.getSchoolClassId())) {
-                builder.and(student.schoolClass.id.eq(searchForm.getSchoolClassId()));
+                builder.and(Objects.isNull(year) ? student.schoolClass.id.eq(searchForm.getSchoolClassId())
+                        : StudentFilters.inClass(student, year, searchForm.getSchoolClassId()));
             }
             // Les élèves sans classe sont ceux que la rentrée oublie : il faut pouvoir les isoler
             // pour les répartir, et un filtre « toutes classes » ne les distingue pas.
             if (Boolean.TRUE.equals(searchForm.getUnassignedOnly())) {
-                builder.and(student.schoolClass.isNull());
+                builder.and(Objects.isNull(year) ? student.schoolClass.isNull()
+                        : StudentFilters.inClass(student, year, null));
             }
             LocalDate today = LocalDate.now();
             if (Objects.nonNull(searchForm.getPaymentStatus())) {
@@ -188,28 +206,45 @@ public class StudentServiceImpl implements StudentService {
             if (Objects.nonNull(searchForm.getGender())) {
                 builder.and(student.gender.eq(searchForm.getGender()));
             }
-            // L'année demandée, sinon celle que l'utilisateur consulte : l'école voit les élèves de
-            // l'année où elle travaille, pas ceux de toutes les années confondues.
-            UUID year = Objects.nonNull(searchForm.getAcademicYearId()) ? searchForm.getAcademicYearId()
-                    : Objects.nonNull(establishmentScope) ? this.academicYearContext.consultedId() : null;
-            if (Objects.nonNull(year)) {
-                builder.and(StudentFilters.enrolledIn(student, year));
-            }
-            List<Predicate> levelOfStudies = new ArrayList<>();
             if (CollectionUtils.isNotEmpty(searchForm.getLevelOfStudies())) {
-                searchForm.getLevelOfStudies().forEach(levelOfStudy -> levelOfStudies
-                        .add(student.levelOfStudy.code.eq(levelOfStudy)));
-                builder.andAnyOf(levelOfStudies.toArray(new Predicate[0]));
+                builder.and(Objects.isNull(year) ? student.levelOfStudy.code.in(searchForm.getLevelOfStudies())
+                        : StudentFilters.atLevel(student, year, searchForm.getLevelOfStudies()));
             }
             Page<StudentEntity> result = this.studentRepository.findAll(builder, pageable);
             List<StudentDto> response = result.get()
                     .map(this.studentMapper::toDto).collect(Collectors.toList());
             this.attachBalances(response);
+            if (Objects.nonNull(year)) {
+                this.attachYearPlacement(response, year);
+            }
             return new PageImpl<>(response, pageable, result.getTotalElements());
         } catch (NotFoundException | NonUniqueUserFoundException | AccessDeniedException e) {
             throw e;
         } catch (Exception e) {
             throw new BusinessException(e);
+        }
+    }
+
+    /** Classe et niveau de l'année décrite, lus dans les inscriptions de la page en une requête. */
+    private void attachYearPlacement(List<StudentDto> students, UUID year) {
+        List<UUID> ids = students.stream().map(StudentDto::getId).filter(Objects::nonNull).toList();
+        if (ids.isEmpty()) {
+            return;
+        }
+        Map<UUID, StudentEnrollmentEntity> byStudent = new HashMap<>();
+        this.studentEnrollmentRepository.findByAcademicYear_IdAndStudent_IdIn(year, ids)
+                .forEach(enrollment -> byStudent.put(enrollment.getStudent().getId(), enrollment));
+        for (StudentDto dto : students) {
+            StudentEnrollmentEntity enrollment = byStudent.get(dto.getId());
+            if (Objects.isNull(enrollment)) {
+                continue;
+            }
+            SchoolClassEntity schoolClass = enrollment.getSchoolClass();
+            dto.setSchoolClass(Objects.isNull(schoolClass) ? null : SchoolClassLiteDto.builder()
+                    .id(schoolClass.getId().toString()).name(schoolClass.getName()).room(schoolClass.getRoom()).build());
+            if (Objects.nonNull(enrollment.getLevelOfStudy())) {
+                dto.setLevelOfStudy(this.levelOfStudyMapper.toDto(enrollment.getLevelOfStudy()));
+            }
         }
     }
 

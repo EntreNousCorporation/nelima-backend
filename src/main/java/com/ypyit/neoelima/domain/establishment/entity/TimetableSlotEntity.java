@@ -66,6 +66,12 @@ public class TimetableSlotEntity extends BaseEntity {
     @JoinColumn(name = "teacher_id", referencedColumnName = "id")
     private StaffEntity teacher;
 
+    /** Année de la grille : chaque rentrée a la sienne. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @ToString.Exclude
+    @JoinColumn(name = "academic_year_id", referencedColumnName = "id")
+    private AcademicYearEntity academicYear;
+
     /** Salle du créneau quand elle diffère de celle de la classe : laboratoire, terrain. */
     @Column(length = 64)
     private String room;

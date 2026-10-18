@@ -44,17 +44,21 @@ public class TimetableService {
     private final SchoolClassRepository schoolClassRepository;
     private final StaffRepository staffRepository;
     private final CurrentUserProvider currentUserProvider;
+    private final AcademicYearContext academicYearContext;
 
     public List<TimetableSlotDto> findByClass(UUID classId) {
         this.loadClass(classId);
+        // La grille de l'année consultée : chaque rentrée a la sienne.
         return this.timetableSlotRepository.findBySchoolClass_IdOrderByDayOfWeekAscStartTimeAsc(classId)
-                .stream().map(TimetableService::toDto).toList();
+                .stream().filter(slot -> this.academicYearContext.inConsultedYear(slot.getAcademicYear()))
+                .map(TimetableService::toDto).toList();
     }
 
     @Transactional
     public TimetableSlotDto create(UUID classId, TimetableSlotForm form) {
         SchoolClassEntity schoolClass = this.loadClass(classId);
-        TimetableSlotEntity slot = TimetableSlotEntity.builder().schoolClass(schoolClass).build();
+        TimetableSlotEntity slot = TimetableSlotEntity.builder().schoolClass(schoolClass)
+                .academicYear(this.academicYearContext.consulted().orElse(null)).build();
         this.apply(slot, form);
         return toDto(this.timetableSlotRepository.saveAndFlush(slot));
     }
@@ -92,6 +96,7 @@ public class TimetableService {
                 .findBySchoolClass_IdAndDayOfWeek(slot.getSchoolClass().getId(), form.getDayOfWeek())
                 .stream()
                 .filter(other -> !other.getId().equals(slot.getId()))
+                .filter(other -> sameYear(other, slot))
                 .filter(other -> overlaps(other, form.getStartTime(), form.getEndTime()))
                 .findFirst()
                 .ifPresent(other -> {
@@ -114,6 +119,7 @@ public class TimetableService {
         this.timetableSlotRepository.findByTeacher_IdAndDayOfWeek(teacher.getId(), form.getDayOfWeek())
                 .stream()
                 .filter(other -> !other.getId().equals(slot.getId()))
+                .filter(other -> sameYear(other, slot))
                 .filter(other -> overlaps(other, form.getStartTime(), form.getEndTime()))
                 .findFirst()
                 .ifPresent(other -> {
@@ -161,6 +167,13 @@ public class TimetableService {
                 .filter(found -> found.getSchoolClass().getId().equals(classId))
                 .orElseThrow(() -> new NotFoundException(
                         String.format("Timetable slot with provided id %s not found", slotId)));
+    }
+
+    /** Une grille ne se heurte qu'à celle de la même année : l'an passé, l'enseignant était ailleurs. */
+    private static boolean sameYear(TimetableSlotEntity other, TimetableSlotEntity slot) {
+        UUID a = Objects.isNull(other.getAcademicYear()) ? null : other.getAcademicYear().getId();
+        UUID b = Objects.isNull(slot.getAcademicYear()) ? null : slot.getAcademicYear().getId();
+        return Objects.equals(a, b);
     }
 
     /** Bornes ouvertes : un cours qui finit à 10 h et le suivant qui commence à 10 h s'enchaînent. */

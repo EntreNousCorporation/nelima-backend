@@ -29,6 +29,9 @@ public enum AuditAction {
     /** Année clôturée par l'école : ses données ne se modifient plus. */
     YEAR_CLOSED,
 
+    /** Année rouverte par la plateforme, à la demande de l'école. */
+    YEAR_REOPENED,
+
     /** Liste des élèves exportée : des données nominatives de mineurs sont sorties de la plateforme. */
     STUDENTS_EXPORTED,
 

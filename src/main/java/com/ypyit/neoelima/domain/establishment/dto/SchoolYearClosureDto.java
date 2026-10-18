@@ -34,6 +34,16 @@ public class SchoolYearClosureDto {
 
     @Getter
     @Builder
+    public static class SchoolState {
+        private String establishmentId;
+        private String name;
+        private SchoolYearStatus status;
+        private Instant closedAt;
+        private String closedBy;
+    }
+
+    @Getter
+    @Builder
     public static class Outstanding {
         private String studentId;
         private String studentName;

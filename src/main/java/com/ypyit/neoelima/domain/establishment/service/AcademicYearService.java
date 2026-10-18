@@ -46,6 +46,7 @@ public class AcademicYearService {
     private final UserRepository userRepository;
     private final AcademicYearContext academicYearContext;
     private final CurrentUserProvider currentUserProvider;
+    private final jakarta.persistence.EntityManager entityManager;
 
     /**
      * Les années de la plateforme, la plus récente en tête. Pour un compte d'école, chacune porte
@@ -82,6 +83,7 @@ public class AcademicYearService {
         AcademicYearEntity entity = AcademicYearEntity.builder().build();
         this.apply(entity, form);
         AcademicYearEntity saved = this.academicYearRepository.saveAndFlush(entity);
+        this.alignStudentsOn(saved);
         log.info("ACADEMIC_YEAR_CREATED: {} ({})", saved.getLabel(), saved.getId());
         return toDto(saved, null, false);
     }
@@ -109,7 +111,27 @@ public class AcademicYearService {
                 }
             }
         }
-        return toDto(this.academicYearRepository.saveAndFlush(entity), null, false);
+        AcademicYearEntity saved = this.academicYearRepository.saveAndFlush(entity);
+        this.alignStudentsOn(saved);
+        return toDto(saved, null, false);
+    }
+
+    /**
+     * L'année devient l'année en cours : la classe actuelle de chaque élève réinscrit devient celle
+     * de son inscription pour cette année. Les élèves pas encore réinscrits gardent la leur.
+     */
+    private void alignStudentsOn(AcademicYearEntity year) {
+        if (!year.isActive()) {
+            return;
+        }
+        this.entityManager.createNativeQuery("""
+                update student s
+                   set school_class_id   = e.school_class_id,
+                       level_of_study_id = coalesce(e.level_of_study_id, s.level_of_study_id)
+                  from student_enrollment e
+                 where e.student_id = s.id
+                   and e.academic_year_id = :year
+                """).setParameter("year", year.getId()).executeUpdate();
     }
 
     /** Supprimée seulement tant qu'aucune école ne s'en sert : ses données en dépendraient. */
@@ -174,17 +196,19 @@ public class AcademicYearService {
 
     private void apply(AcademicYearEntity entity, AcademicYearForm form) {
         assertRange(form.getStartDate(), form.getEndDate(), "L'année scolaire doit se terminer après avoir commencé.");
-        entity.setLabel(form.getLabel().trim());
-        entity.setStartDate(form.getStartDate());
-        entity.setEndDate(form.getEndDate());
-        entity.setActive(form.isActive());
         if (form.isActive()) {
-            // Une seule année en cours : la base le garantit aussi, mais le message vient d'ici.
+            // Une seule année en cours, et la base le garantit par un index unique : l'ancienne doit
+            // être désactivée en base AVANT que la nouvelle ne soit écrite active, sans quoi l'ordre
+            // des écritures d'Hibernate peut faire passer la nouvelle d'abord, et l'index refuse.
             UUID keep = Objects.requireNonNullElse(entity.getId(), new UUID(0L, 0L));
             List<AcademicYearEntity> others = this.academicYearRepository.findByActiveTrueAndIdNot(keep);
             others.forEach(other -> other.setActive(false));
             this.academicYearRepository.saveAllAndFlush(others);
         }
+        entity.setLabel(form.getLabel().trim());
+        entity.setStartDate(form.getStartDate());
+        entity.setEndDate(form.getEndDate());
+        entity.setActive(form.isActive());
     }
 
     private List<SchoolYearEntity> schoolYearsOf(UUID yearId) {

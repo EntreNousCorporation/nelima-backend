@@ -1,5 +1,9 @@
 package com.ypyit.neoelima.domain.establishment.controller;
 
+import java.util.Map;
+import com.ypyit.neoelima.domain.establishment.service.YearPreparationService;
+import com.ypyit.neoelima.domain.establishment.form.ReenrollmentForm;
+import com.ypyit.neoelima.domain.establishment.dto.YearPreparationDto;
 import com.ypyit.neoelima.domain.establishment.dto.AcademicYearDto;
 import com.ypyit.neoelima.domain.establishment.dto.SchoolYearClosureDto;
 import com.ypyit.neoelima.domain.establishment.service.SchoolYearClosureService;
@@ -39,6 +43,7 @@ public class AcademicYearController {
 
     private final AcademicYearService academicYearService;
     private final SchoolYearClosureService schoolYearClosureService;
+    private final YearPreparationService yearPreparationService;
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     @PreAuthorize("isAuthenticated()")
@@ -100,6 +105,54 @@ public class AcademicYearController {
                     + "Une fois clôturée, l'année se consulte et ne se modifie plus.")
     public ResponseEntity<SchoolYearClosureDto> close(@PathVariable UUID id) {
         return ResponseEntity.ok(this.schoolYearClosureService.close(id));
+    }
+
+    @GetMapping(value = "/{id}/schools", produces = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Écoles et état de l'année (plateforme)")
+    public ResponseEntity<List<SchoolYearClosureDto.SchoolState>> schools(@PathVariable UUID id) {
+        return ResponseEntity.ok(this.schoolYearClosureService.schools(id));
+    }
+
+    @PostMapping("/{id}/schools/{establishmentId}/reopen")
+    @PreAuthorize("isAuthenticated()")
+    @Operation(summary = "Rouvre l'année d'une école (plateforme)",
+            description = "Réservé à l'équipe de la plateforme ; consigné au journal de l'école.")
+    public ResponseEntity<Void> reopen(@PathVariable UUID id, @PathVariable UUID establishmentId) {
+        this.schoolYearClosureService.reopen(id, establishmentId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping(value = "/{id}/preparation", produces = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAuthority('class:read')")
+    @Operation(summary = "Rentrée de l'année dans l'école",
+            description = "Classes à ouvrir (comparées à l'année précédente) et élèves de l'an passé à réinscrire.")
+    public ResponseEntity<YearPreparationDto> preparation(@PathVariable UUID id) {
+        return ResponseEntity.ok(this.yearPreparationService.preparation(id));
+    }
+
+    @PostMapping(value = "/{id}/preparation/classes", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAuthority('class:write')")
+    @Operation(summary = "Ouvre des classes pour l'année", description = "Le titulaire de l'an passé est repris.")
+    public ResponseEntity<Void> openClasses(@PathVariable UUID id, @RequestBody List<UUID> classIds) {
+        this.yearPreparationService.openClasses(id, classIds);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/{id}/preparation/classes/{classId}")
+    @PreAuthorize("hasAuthority('class:write')")
+    @Operation(summary = "Ne pas ouvrir une classe cette année", description = "Refusé si des élèves y sont inscrits.")
+    public ResponseEntity<Void> closeClass(@PathVariable UUID id, @PathVariable UUID classId) {
+        this.yearPreparationService.closeClass(id, classId);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping(value = "/{id}/reenrollments", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAuthority('student:write')")
+    @Operation(summary = "Réinscrit des élèves pour l'année",
+            description = "Chacun dans sa classe de rentrée, avec les frais de son niveau. Depuis l'année visée.")
+    public ResponseEntity<Map<String, Integer>> reenroll(@PathVariable UUID id, @RequestBody @Valid ReenrollmentForm form) {
+        return ResponseEntity.ok(Map.of("reenrolled", this.yearPreparationService.reenroll(id, form)));
     }
 
     @PutMapping("/consulted")
