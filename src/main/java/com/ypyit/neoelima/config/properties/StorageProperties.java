@@ -14,6 +14,14 @@ import org.springframework.stereotype.Component;
 public class StorageProperties {
 
     private String url;
+    /**
+     * Adresse de MinIO vue depuis le réseau des conteneurs, par exemple {@code http://storage:9000}.
+     *
+     * <p>Le stockage privé ne sert jamais d'URL au navigateur : il n'a aucune raison de sortir sur
+     * Internet pour revenir sur la même machine, ni de dépendre du DNS public de {@link #url}.
+     * Vide, il reprend {@link #url}.
+     */
+    private String internalUrl;
     private String apiKey;
     private String apiSecret;
     private String bucketName;

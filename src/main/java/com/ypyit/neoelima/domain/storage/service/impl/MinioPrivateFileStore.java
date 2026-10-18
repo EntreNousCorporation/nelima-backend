@@ -11,6 +11,7 @@ import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import io.minio.RemoveObjectArgs;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayInputStream;
@@ -38,7 +39,8 @@ public class MinioPrivateFileStore implements PrivateFileStore {
             synchronized (this) {
                 if (this.minioClient == null) {
                     this.minioClient = MinioClient.builder()
-                            .endpoint(this.storageProperties.getUrl())
+                            .endpoint(StringUtils.defaultIfBlank(
+                                    this.storageProperties.getInternalUrl(), this.storageProperties.getUrl()))
                             .credentials(this.storageProperties.getApiKey(), this.storageProperties.getApiSecret())
                             .build();
                 }
