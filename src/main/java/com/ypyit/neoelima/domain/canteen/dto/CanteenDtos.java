@@ -25,6 +25,8 @@ public final class CanteenDtos {
         private String name;
         private List<DayOfWeek> days;
         private BigDecimal monthlyPrice;
+        /** Prix d'un repas pour une formule au repas ; nul sinon. */
+        private BigDecimal mealPrice;
         private boolean active;
         private long subscribers;
     }

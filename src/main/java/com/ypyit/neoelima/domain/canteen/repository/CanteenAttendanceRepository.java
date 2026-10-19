@@ -13,4 +13,6 @@ public interface CanteenAttendanceRepository extends JpaRepository<CanteenAttend
     List<CanteenAttendanceEntity> findByStudent_Establishment_IdAndDay(UUID establishmentId, LocalDate day);
 
     Optional<CanteenAttendanceEntity> findByStudent_IdAndDay(UUID studentId, LocalDate day);
+
+    List<CanteenAttendanceEntity> findByStudent_IdAndDayBetween(UUID studentId, LocalDate from, LocalDate to);
 }

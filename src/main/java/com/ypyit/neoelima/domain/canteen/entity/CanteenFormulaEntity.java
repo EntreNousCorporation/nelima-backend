@@ -67,6 +67,14 @@ public class CanteenFormulaEntity extends BaseEntity {
     @Column(nullable = false)
     private BigDecimal monthlyPrice;
 
+    /** Prix d'un repas pour une formule au repas (ticket) ; nul pour une formule mensuelle. */
+    private BigDecimal mealPrice;
+
+    /** Formule au repas : facturée au repas servi, et non au forfait mensuel. */
+    public boolean perMeal() {
+        return java.util.Objects.nonNull(this.mealPrice);
+    }
+
     @ManyToOne(fetch = FetchType.LAZY)
     @ToString.Exclude
     @JoinColumn(name = "fee_id", referencedColumnName = "id")

@@ -242,6 +242,41 @@ class CanteenServiceTest extends AbstractIntegrationTest {
                 argThat(m -> m.contains("Yao") && m.contains("4 jours") && m.contains("15 000")), anyMap());
     }
 
+    @Test
+    @DisplayName("une formule au repas facture les repas servis du mois, et suit les pointages jusqu'au règlement")
+    void perMealFormulaBillsServedMeals() {
+        CanteenForms.Formula tickets = new CanteenForms.Formula();
+        tickets.setName("Ticket");
+        tickets.setMealPrice(new BigDecimal("1500"));
+        CanteenDtos.Formula formula = this.canteenService.createFormula(tickets);
+        this.subscribe(this.yao, formula, LocalDate.of(2026, 10, 1));
+        assertThat(this.installmentsOf(this.yao)).as("pas de forfait mensuel").isEmpty();
+
+        this.mark(this.yao, WEDNESDAY, CanteenAttendanceStatus.SERVED);
+        this.mark(this.yao, THURSDAY, CanteenAttendanceStatus.SERVED);
+        assertThat(this.installmentsOf(this.yao)).singleElement().satisfies(i -> {
+            assertThat(i.getAmount()).isEqualByComparingTo("3000");
+            assertThat(i.getLabel()).isEqualTo("Ticket — repas de octobre 2026");
+            assertThat(i.getDueDate()).isEqualTo(LocalDate.of(2026, 11, 5));
+        });
+
+        this.mark(this.yao, THURSDAY, null);
+        assertThat(this.installmentsOf(this.yao)).singleElement()
+                .satisfies(i -> assertThat(i.getAmount()).isEqualByComparingTo("1500"));
+
+        // Réglé, puis un repas de plus : une tranche complémentaire, le réglé ne bouge pas.
+        InstallmentEntity paid = this.installmentsOf(this.yao).getFirst();
+        paid.setStatus(InstallmentStatus.PAID);
+        this.installmentRepository.saveAndFlush(paid);
+        this.mark(this.yao, LocalDate.of(2026, 10, 16), CanteenAttendanceStatus.SERVED);
+        assertThat(this.installmentsOf(this.yao)).filteredOn(i -> i.getStatus() == InstallmentStatus.PENDING)
+                .singleElement().satisfies(i -> assertThat(i.getAmount()).isEqualByComparingTo("1500"));
+
+        CanteenForms.Formula both = this.formula("Mixte", "10000");
+        both.setMealPrice(new BigDecimal("1000"));
+        assertThatThrownBy(() -> this.canteenService.createFormula(both)).isInstanceOf(BadRequestException.class);
+    }
+
     private String schoolUser;
 
     private CanteenDtos.Subscriber subscribe(StudentEntity student, CanteenDtos.Formula formula, LocalDate start) {

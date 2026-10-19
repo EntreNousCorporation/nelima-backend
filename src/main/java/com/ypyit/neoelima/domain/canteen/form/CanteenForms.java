@@ -30,9 +30,12 @@ public final class CanteenForms {
         private String name;
         /** Vide : formule ponctuelle, servie à la demande. */
         private List<DayOfWeek> days = new ArrayList<>();
-        @NotNull
+        /** Forfait mensuel ; absent pour une formule au repas. */
         @DecimalMin("0")
         private BigDecimal monthlyPrice;
+        /** Prix d'un repas : la formule est alors au repas (ticket), sans jour fixe. */
+        @DecimalMin("0")
+        private BigDecimal mealPrice;
         private boolean active = true;
     }
 

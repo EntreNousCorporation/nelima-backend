@@ -113,11 +113,12 @@ public class CanteenService {
                 .orElseThrow(() -> new NotFoundException("Establishment not found"));
         AcademicYearEntity year = this.academicYearContext.consulted().orElse(null);
         this.assertNameFree(scope, form.getName(), null);
+        validatePricing(form);
         // Le frais porte le tarif dans la comptabilité de l'école ; c'est l'abonnement qui crée la
         // dette, jamais l'appartenance à un niveau.
         FeeEntity fee = this.feeRepository.saveAndFlush(FeeEntity.builder()
                 .name("Cantine — " + form.getName().trim())
-                .price(form.getMonthlyPrice())
+                .price(priceOf(form))
                 .optional(true)
                 .academical(false)
                 .establishment(establishment)
@@ -128,7 +129,8 @@ public class CanteenService {
                 .academicYear(year)
                 .name(form.getName().trim())
                 .days(joinDays(form.getDays()))
-                .monthlyPrice(form.getMonthlyPrice())
+                .monthlyPrice(Objects.requireNonNullElse(form.getMonthlyPrice(), BigDecimal.ZERO))
+                .mealPrice(form.getMealPrice())
                 .fee(fee)
                 .active(form.isActive())
                 .build());
@@ -141,13 +143,20 @@ public class CanteenService {
         CanteenFormulaEntity formula = this.loadFormula(id);
         this.schoolYearGuard.assertWritable(formula.getEstablishment().getId(), formula.getAcademicYear());
         this.assertNameFree(formula.getEstablishment().getId(), form.getName(), id);
+        validatePricing(form);
+        if (formula.perMeal() != Objects.nonNull(form.getMealPrice())) {
+            // Les abonnés d'une formule mensuelle ont leurs mois déjà facturés : la changer en
+            // formule au repas (ou l'inverse) laisserait des dettes incohérentes.
+            throw new BadRequestException("Une formule ne passe pas du forfait mensuel au repas : créez-en une nouvelle.");
+        }
         formula.setName(form.getName().trim());
         formula.setDays(joinDays(form.getDays()));
-        formula.setMonthlyPrice(form.getMonthlyPrice());
+        formula.setMonthlyPrice(Objects.requireNonNullElse(form.getMonthlyPrice(), BigDecimal.ZERO));
+        formula.setMealPrice(form.getMealPrice());
         formula.setActive(form.isActive());
         if (Objects.nonNull(formula.getFee())) {
             formula.getFee().setName("Cantine — " + formula.getName());
-            formula.getFee().setPrice(form.getMonthlyPrice());
+            formula.getFee().setPrice(priceOf(form));
             this.feeRepository.save(formula.getFee());
         }
         return toDto(this.formulaRepository.saveAndFlush(formula), 0);
@@ -176,7 +185,9 @@ public class CanteenService {
         AcademicYearEntity year = formula.getAcademicYear();
         StudentFeeEntity studentFee = this.studentFeeRepository.saveAndFlush(StudentFeeEntity.builder()
                 .student(student).fee(formula.getFee()).name(formula.getFee().getName()).build());
-        this.monthlyBilling.bill(studentFee, formula.getName(), formula.getMonthlyPrice(), start, year);
+        if (!formula.perMeal()) {
+            this.monthlyBilling.bill(studentFee, formula.getName(), formula.getMonthlyPrice(), start, year);
+        }
 
         CanteenSubscriptionEntity subscription = this.subscriptionRepository.saveAndFlush(CanteenSubscriptionEntity.builder()
                 .student(student).formula(formula).academicYear(year).startDate(start).studentFee(studentFee).build());
@@ -222,12 +233,83 @@ public class CanteenService {
         Optional<CanteenAttendanceEntity> existing = this.attendanceRepository.findByStudent_IdAndDay(student.getId(), form.getDay());
         if (Objects.isNull(form.getStatus())) {
             existing.ifPresent(this.attendanceRepository::delete);
+        } else {
+            CanteenAttendanceEntity attendance = existing.orElseGet(() -> CanteenAttendanceEntity.builder()
+                    .student(student).day(form.getDay()).build());
+            attendance.setStatus(form.getStatus());
+            this.attendanceRepository.save(attendance);
+        }
+        this.attendanceRepository.flush();
+        this.billMeals(student, form.getDay());
+    }
+
+    /**
+     * Facture le mois d'un élève à formule au repas : une tranche « repas de <mois> » qui suit les
+     * pointages tant qu'elle n'est pas réglée.
+     *
+     * <p>Le montant dû est toujours recalculé depuis les repas servis du mois, moins ce qui en a déjà
+     * été réglé : marquer puis démarquer un repas ne laisse aucune trace, et un repas pointé après
+     * le règlement fait naître une tranche complémentaire. Payable le 5 du mois suivant, comme les
+     * forfaits mensuels.
+     */
+    private void billMeals(StudentEntity student, LocalDate day) {
+        Optional<CanteenSubscriptionEntity> subscription = this.subscriptionRepository.findByStudent_Id(student.getId()).stream()
+                .filter(s -> s.activeOn(day) && s.getFormula().perMeal() && Objects.nonNull(s.getStudentFee()))
+                .findFirst();
+        if (subscription.isEmpty()) {
             return;
         }
-        CanteenAttendanceEntity attendance = existing.orElseGet(() -> CanteenAttendanceEntity.builder()
-                .student(student).day(form.getDay()).build());
-        attendance.setStatus(form.getStatus());
-        this.attendanceRepository.save(attendance);
+        CanteenFormulaEntity formula = subscription.get().getFormula();
+        StudentFeeEntity studentFee = subscription.get().getStudentFee();
+        java.time.YearMonth month = java.time.YearMonth.from(day);
+        long meals = this.attendanceRepository.findByStudent_IdAndDayBetween(student.getId(), month.atDay(1), month.atEndOfMonth())
+                .stream().filter(a -> a.getStatus() == CanteenAttendanceStatus.SERVED).count();
+        String label = String.format("%s — repas de %s %d", formula.getName(),
+                month.getMonth().getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.FRENCH), month.getYear());
+
+        List<InstallmentEntity> lines = this.installmentRepository.findByStudentFee_Id(studentFee.getId()).stream()
+                .filter(i -> label.equals(i.getLabel())).toList();
+        BigDecimal settled = lines.stream().filter(i -> i.getStatus() == InstallmentStatus.PAID)
+                .map(InstallmentEntity::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal due = formula.getMealPrice().multiply(BigDecimal.valueOf(meals)).subtract(settled);
+        List<InstallmentEntity> pending = lines.stream().filter(i -> i.getStatus() == InstallmentStatus.PENDING).toList();
+
+        if (due.signum() > 0) {
+            InstallmentEntity open = pending.isEmpty()
+                    ? InstallmentEntity.builder().studentFee(studentFee).label(label)
+                            .dueDate(month.plusMonths(1).atDay(5)).status(InstallmentStatus.PENDING).build()
+                    : pending.getFirst();
+            open.setAmount(due);
+            this.installmentRepository.save(open);
+            pending.stream().skip(1).forEach(this::cancel);
+        } else {
+            pending.forEach(this::cancel);
+        }
+    }
+
+    private void cancel(InstallmentEntity installment) {
+        installment.setStatus(InstallmentStatus.CANCELLED);
+        this.installmentRepository.save(installment);
+    }
+
+    /** Un forfait mensuel, ou un prix au repas sans jour fixe : jamais les deux, jamais aucun. */
+    private static void validatePricing(CanteenForms.Formula form) {
+        boolean monthly = Objects.nonNull(form.getMonthlyPrice()) && form.getMonthlyPrice().signum() > 0;
+        boolean perMeal = Objects.nonNull(form.getMealPrice());
+        if (perMeal && monthly) {
+            throw new BadRequestException("Une formule est au mois ou au repas, pas les deux.");
+        }
+        if (!perMeal && Objects.isNull(form.getMonthlyPrice())) {
+            throw new BadRequestException("Indiquez le tarif mensuel, ou un prix par repas.");
+        }
+        if (perMeal && Objects.nonNull(form.getDays()) && !form.getDays().isEmpty()) {
+            throw new BadRequestException("Une formule au repas n'a pas de jours fixes : l'élève est facturé les jours où il mange.");
+        }
+    }
+
+    private static BigDecimal priceOf(CanteenForms.Formula form) {
+        return Objects.nonNull(form.getMealPrice()) ? form.getMealPrice()
+                : Objects.requireNonNullElse(form.getMonthlyPrice(), BigDecimal.ZERO);
     }
 
     /* ------------------------------------------------------------------ Chiffres ---- */
@@ -447,6 +529,7 @@ public class CanteenService {
                 .name(formula.getName())
                 .days(formula.dayOfWeeks().stream().sorted().toList())
                 .monthlyPrice(formula.getMonthlyPrice())
+                .mealPrice(formula.getMealPrice())
                 .active(formula.isActive())
                 .subscribers(subscribers)
                 .build();
