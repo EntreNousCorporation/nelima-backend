@@ -156,6 +156,32 @@ class YearPreparationTest extends AbstractIntegrationTest {
         this.login(this.director);
     }
 
+    @Autowired
+    private com.ypyit.neoelima.domain.establishment.repository.StaffClassYearRepository staffClassYearRepository;
+
+    @Test
+    @DisplayName("les enseignants d'une classe sont de l'année : rouverte, elle reprend ceux encore en poste")
+    void teachersAreYearlyAndCarriedOver() {
+        StaffEntity aya = this.staffRepository.saveAndFlush(StaffEntity.builder()
+                .firstName("Aya").lastName("BAMBA").role(StaffRole.TEACHER).active(true).establishment(this.school).build());
+        StaffEntity gone = this.staffRepository.saveAndFlush(StaffEntity.builder()
+                .firstName("Paul").lastName("YAO").role(StaffRole.TEACHER).active(false).establishment(this.school).build());
+        for (StaffEntity teacher : List.of(aya, gone)) {
+            this.staffClassYearRepository.saveAndFlush(com.ypyit.neoelima.domain.establishment.entity.StaffClassYearEntity.builder()
+                    .staff(teacher).schoolClass(this.cp1).academicYear(this.current).build());
+        }
+
+        this.academicYearService.consult(this.next.getId());
+        this.preparationService.openClasses(this.next.getId(), List.of(this.cp1.getId()));
+
+        assertThat(this.staffClassYearRepository.findBySchoolClass_IdAndAcademicYear_Id(this.cp1.getId(), this.next.getId()))
+                .extracting(a -> a.getStaff().getLastName())
+                .as("BAMBA repris, YAO parti, KOFFI titulaire")
+                .containsExactlyInAnyOrder("BAMBA", "KOFFI");
+        assertThat(this.staffClassYearRepository.findBySchoolClass_IdAndAcademicYear_Id(this.cp1.getId(), this.current.getId()))
+                .as("l'année passée garde qui y enseignait").hasSize(2);
+    }
+
     @Test
     @DisplayName("on rouvre les classes de l'an passé d'un geste, titulaire repris")
     void opensLastYearClasses() {

@@ -105,17 +105,7 @@ public class StaffEntity extends BaseEntity {
     @JoinColumn(name = "user_id", referencedColumnName = "id")
     private UserEntity user;
 
-    /** Classes où il intervient. Le titulariat, lui, se lit depuis la classe. */
-    @Builder.Default
-    @ToString.Exclude
-    @EqualsAndHashCode.Exclude
-    @ManyToMany(cascade = {CascadeType.MERGE, CascadeType.PERSIST})
-    @JoinTable(
-            name = "staff_class",
-            joinColumns = @JoinColumn(name = "staff_id", referencedColumnName = "id"),
-            inverseJoinColumns = @JoinColumn(name = "school_class_id", referencedColumnName = "id")
-    )
-    private Set<SchoolClassEntity> classes = new HashSet<>();
+    // Les classes où il intervient sont annuelles : voir StaffClassYearEntity.
 
     @Override
     public boolean equals(Object o) {

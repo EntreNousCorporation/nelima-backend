@@ -68,6 +68,8 @@ class SchoolClassServiceTest extends AbstractIntegrationTest {
     @BeforeEach
     void setUp() {
         SecurityContextHolder.clearContext();
+        // Les classes d'un enseignant sont celles d'une année : la plateforme en a toujours une active.
+        this.activeYear();
         // Le catalogue des niveaux n'est pas semé dans la base de test : on crée les deux dont
         // ces cas ont besoin, plutôt que de dépendre d'un jeu de données implicite.
         this.level = this.level("CM1-" + UUID.randomUUID().toString().substring(0, 6), "CM1");
@@ -297,5 +299,17 @@ class SchoolClassServiceTest extends AbstractIntegrationTest {
                 .build());
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(email, "n/a", List.of()));
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.ypyit.neoelima.domain.establishment.repository.AcademicYearRepository academicYearRepository;
+
+    private void activeYear() {
+        if (this.academicYearRepository.findAll().stream().anyMatch(com.ypyit.neoelima.domain.establishment.entity.AcademicYearEntity::isActive)) {
+            return;
+        }
+        this.academicYearRepository.saveAndFlush(com.ypyit.neoelima.domain.establishment.entity.AcademicYearEntity.builder()
+                .label("2026-2027").startDate(java.time.LocalDate.of(2026, 9, 1))
+                .endDate(java.time.LocalDate.of(2027, 7, 31)).active(true).build());
     }
 }

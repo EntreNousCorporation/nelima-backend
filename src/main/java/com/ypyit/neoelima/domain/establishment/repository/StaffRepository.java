@@ -12,15 +12,11 @@ public interface StaffRepository extends JpaRepository<StaffEntity, UUID>,
         QuerydslPredicateExecutor<StaffEntity> {
 
     /**
-     * Les classes sont chargées avec l'annuaire.
-     *
-     * <p>Sans ce graphe, afficher les affectations coûterait une requête par membre : soixante
-     * allers-retours pour une école de taille ordinaire, sur l'écran le plus consulté du module.
+     * L'annuaire. Les classes de l'année se lisent à part, en une requête pour tout l'établissement
+     * ({@code StaffClassYearRepository}).
      */
-    @EntityGraph(attributePaths = "classes")
     List<StaffEntity> findByEstablishment_IdOrderByLastNameAscFirstNameAsc(UUID establishmentId);
 
-    @EntityGraph(attributePaths = "classes")
     List<StaffEntity> findByEstablishment_IdAndActiveTrueOrderByLastNameAscFirstNameAsc(UUID establishmentId);
 
     long countByEstablishment_IdAndActiveTrue(UUID establishmentId);

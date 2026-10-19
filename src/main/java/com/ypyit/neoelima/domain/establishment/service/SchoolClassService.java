@@ -31,6 +31,8 @@ import com.ypyit.neoelima.domain.establishment.repository.SchoolClassYearReposit
 import com.ypyit.neoelima.domain.establishment.repository.StaffRepository;
 import com.ypyit.neoelima.domain.establishment.repository.StudentRepository;
 import com.ypyit.neoelima.domain.payment.entity.QReceiptEntity;
+import com.ypyit.neoelima.domain.establishment.entity.StaffClassYearEntity;
+import com.ypyit.neoelima.domain.establishment.repository.StaffClassYearRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -68,6 +70,7 @@ public class SchoolClassService {
     private final EstablishmentRepository establishmentRepository;
     private final CurrentUserProvider currentUserProvider;
     private final JPAQueryFactory queryFactory;
+    private final StaffClassYearRepository staffClassYearRepository;
 
     public List<SchoolClassDto> findAll() {
         UUID scope = this.scope();
@@ -386,12 +389,20 @@ public class SchoolClassService {
     private Map<UUID, List<String>> teachersByClass(UUID scope) {
         QStaffEntity staff = QStaffEntity.staffEntity;
         QSchoolClassEntity schoolClass = QSchoolClassEntity.schoolClassEntity;
+        com.ypyit.neoelima.domain.establishment.entity.QStaffClassYearEntity assignment =
+                com.ypyit.neoelima.domain.establishment.entity.QStaffClassYearEntity.staffClassYearEntity;
+        UUID year = this.academicYearContext.consultedId();
+        if (Objects.isNull(year)) {
+            return new HashMap<>();
+        }
 
         List<Tuple> rows = this.queryFactory
                 .select(schoolClass.id, staff.lastName, staff.firstName)
-                .from(staff)
-                .join(staff.classes, schoolClass)
-                .where(scope == null ? null : staff.establishment.id.eq(scope))
+                .from(assignment)
+                .join(assignment.staff, staff)
+                .join(assignment.schoolClass, schoolClass)
+                .where(assignment.academicYear.id.eq(year),
+                        scope == null ? null : staff.establishment.id.eq(scope))
                 .orderBy(staff.lastName.asc(), staff.firstName.asc())
                 .fetch();
 
@@ -411,11 +422,13 @@ public class SchoolClassService {
      * synchronisation ne va donc que dans ce sens-là, le seul qui soit sans ambiguïté.
      */
     private void attachMainTeacherToClass(SchoolClassEntity schoolClass, StaffEntity mainTeacher) {
-        if (Objects.isNull(mainTeacher) || mainTeacher.getClasses().contains(schoolClass)) {
+        AcademicYearEntity year = this.academicYearContext.consulted().orElse(null);
+        if (Objects.isNull(mainTeacher) || Objects.isNull(year) || this.staffClassYearRepository
+                .existsByStaff_IdAndSchoolClass_IdAndAcademicYear_Id(mainTeacher.getId(), schoolClass.getId(), year.getId())) {
             return;
         }
-        mainTeacher.getClasses().add(schoolClass);
-        this.staffRepository.saveAndFlush(mainTeacher);
+        this.staffClassYearRepository.saveAndFlush(StaffClassYearEntity.builder()
+                .staff(mainTeacher).schoolClass(schoolClass).academicYear(year).build());
     }
 
     private List<String> namesOf(StaffEntity staff) {

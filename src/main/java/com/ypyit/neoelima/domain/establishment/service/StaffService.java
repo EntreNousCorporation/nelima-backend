@@ -18,6 +18,9 @@ import com.ypyit.neoelima.domain.establishment.repository.SchoolClassRepository;
 import com.ypyit.neoelima.domain.establishment.repository.StaffAttendanceRepository;
 import com.ypyit.neoelima.domain.establishment.repository.StaffRepository;
 import com.ypyit.neoelima.domain.user.entity.UserEntity;
+import com.ypyit.neoelima.domain.establishment.entity.StaffClassYearEntity;
+import com.ypyit.neoelima.domain.establishment.entity.AcademicYearEntity;
+import com.ypyit.neoelima.domain.establishment.repository.StaffClassYearRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -59,6 +62,9 @@ public class StaffService {
     private final SchoolClassRepository schoolClassRepository;
     private final EstablishmentRepository establishmentRepository;
     private final CurrentUserProvider currentUserProvider;
+    private final StaffClassYearRepository staffClassYearRepository;
+    private final AcademicYearContext academicYearContext;
+    private final SchoolYearGuard schoolYearGuard;
 
     public List<StaffDto> findAll(boolean includeInactive) {
         UUID scope = this.scope();
@@ -71,14 +77,21 @@ public class StaffService {
         Map<UUID, StaffAttendanceEntity> today = this.attendanceByStaff(scope, LocalDate.now());
 
         boolean salaryVisible = this.canReadSalary();
-        return members.stream().map(member -> toDto(member, today.get(member.getId()), salaryVisible)).toList();
+        // Les classes de l'année, elles aussi en une fois.
+        UUID year = this.academicYearContext.consultedId();
+        Map<UUID, List<SchoolClassEntity>> classes = Objects.isNull(year) ? Map.of()
+                : this.staffClassYearRepository.findByStaff_Establishment_IdAndAcademicYear_Id(scope, year).stream()
+                        .collect(Collectors.groupingBy(a -> a.getStaff().getId(),
+                                Collectors.mapping(StaffClassYearEntity::getSchoolClass, Collectors.toList())));
+        return members.stream().map(member -> toDto(member, today.get(member.getId()), salaryVisible,
+                classes.getOrDefault(member.getId(), List.of()))).toList();
     }
 
     public StaffDto findById(UUID id) {
         StaffEntity entity = this.load(id);
         StaffAttendanceEntity today = this.staffAttendanceRepository
                 .findByStaff_IdAndDay(id, LocalDate.now()).orElse(null);
-        return toDto(entity, today, this.canReadSalary());
+        return toDto(entity, today, this.canReadSalary(), this.classesOf(entity));
     }
 
     @Transactional
@@ -106,7 +119,7 @@ public class StaffService {
         // Ni nom ni salaire dans les journaux : le répertoire porte des données personnelles d'un
         // tout autre régime que les données scolaires.
         log.info("STAFF_CREATED: {} in establishment {}", saved.getId(), scope);
-        return toDto(saved, null, this.canReadSalary());
+        return toDto(saved, null, this.canReadSalary(), this.classesOf(saved));
     }
 
     @Transactional
@@ -144,7 +157,12 @@ public class StaffService {
                 || Objects.nonNull(entity.getUser());
         if (hasHistory) {
             entity.setActive(false);
-            entity.getClasses().clear();
+            // Il n'intervient plus : on le retire des classes de l'année consultée et des suivantes,
+            // les années passées gardent qui y enseignait.
+            AcademicYearEntity from = this.academicYearContext.consulted().orElse(null);
+            this.staffClassYearRepository.findByStaff_Id(id).stream()
+                    .filter(a -> Objects.isNull(from) || !a.getAcademicYear().getStartDate().isBefore(from.getStartDate()))
+                    .forEach(this.staffClassYearRepository::delete);
             this.staffRepository.saveAndFlush(entity);
             log.info("STAFF_DEACTIVATED: {}", id);
             return;
@@ -163,6 +181,7 @@ public class StaffService {
                     "%s %s n'a pas le profil enseignant : seul un enseignant peut être rattaché à une classe.",
                     entity.getFirstName(), entity.getLastName()));
         }
+        AcademicYearEntity year = this.assignmentYear(entity);
         for (UUID classId : classIds) {
             SchoolClassEntity schoolClass = this.schoolClassRepository.findById(classId)
                     .orElseThrow(() -> new NotFoundException(
@@ -172,18 +191,32 @@ public class StaffService {
             if (!schoolClass.getEstablishment().getId().equals(entity.getEstablishment().getId())) {
                 throw new NotFoundException(String.format("Class with provided id %s not found", classId));
             }
-            entity.getClasses().add(schoolClass);
+            if (!this.staffClassYearRepository.existsByStaff_IdAndSchoolClass_IdAndAcademicYear_Id(id, classId, year.getId())) {
+                this.staffClassYearRepository.save(StaffClassYearEntity.builder()
+                        .staff(entity).schoolClass(schoolClass).academicYear(year).build());
+            }
         }
-        this.staffRepository.saveAndFlush(entity);
+        this.staffClassYearRepository.flush();
         return this.findById(id);
     }
 
     @Transactional
     public StaffDto unassignClass(UUID id, UUID classId) {
         StaffEntity entity = this.load(id);
-        entity.getClasses().removeIf(schoolClass -> schoolClass.getId().equals(classId));
-        this.staffRepository.saveAndFlush(entity);
+        AcademicYearEntity year = this.assignmentYear(entity);
+        this.staffClassYearRepository.findByStaff_IdAndAcademicYear_Id(id, year.getId()).stream()
+                .filter(a -> a.getSchoolClass().getId().equals(classId))
+                .forEach(this.staffClassYearRepository::delete);
+        this.staffClassYearRepository.flush();
         return this.findById(id);
+    }
+
+    /** Les rattachements se font sur l'année consultée, tant qu'elle n'est pas clôturée. */
+    private AcademicYearEntity assignmentYear(StaffEntity entity) {
+        AcademicYearEntity year = this.academicYearContext.consulted()
+                .orElseThrow(() -> new BadRequestException("Aucune année scolaire n'est définie : impossible de rattacher une classe."));
+        this.schoolYearGuard.assertWritable(entity.getEstablishment().getId(), year);
+        return year;
     }
 
     /**
@@ -276,7 +309,7 @@ public class StaffService {
                         Function.identity(), (first, second) -> first));
     }
 
-    static StaffDto toDto(StaffEntity entity, StaffAttendanceEntity today, boolean salaryVisible) {
+    StaffDto toDto(StaffEntity entity, StaffAttendanceEntity today, boolean salaryVisible, List<SchoolClassEntity> classes) {
         UserEntity user = entity.getUser();
         return StaffDto.builder()
                 .id(entity.getId().toString())
@@ -291,7 +324,7 @@ public class StaffService {
                 .weeklyHours(salaryVisible ? entity.getWeeklyHours() : null)
                 .hiredAt(entity.getHiredAt())
                 .active(entity.isActive())
-                .classes(entity.getClasses().stream()
+                .classes(classes.stream()
                         .sorted(java.util.Comparator.comparing(SchoolClassEntity::getName))
                         .map(schoolClass -> SchoolClassLiteDto.builder()
                                 .id(schoolClass.getId().toString())
@@ -310,5 +343,15 @@ public class StaffService {
 
     private static String trimToNull(String value) {
         return StringUtils.isBlank(value) ? null : value.trim();
+    }
+
+    /** Les classes où il intervient l'année consultée. */
+    private List<SchoolClassEntity> classesOf(StaffEntity entity) {
+        UUID year = this.academicYearContext.consultedId();
+        if (Objects.isNull(year) || Objects.isNull(entity.getId())) {
+            return List.of();
+        }
+        return this.staffClassYearRepository.findByStaff_IdAndAcademicYear_Id(entity.getId(), year).stream()
+                .map(StaffClassYearEntity::getSchoolClass).toList();
     }
 }

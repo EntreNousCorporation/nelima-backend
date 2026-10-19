@@ -80,6 +80,8 @@ class StaffServiceTest extends AbstractIntegrationTest {
     @BeforeEach
     void setUp() {
         SecurityContextHolder.clearContext();
+        // Les classes d'un enseignant sont celles d'une année : la plateforme en a toujours une active.
+        this.activeYear();
         this.level = this.levelOfStudyRepository.saveAndFlush(LevelOfStudyEntity.builder()
                 .code("CM2-" + UUID.randomUUID().toString().substring(0, 6)).position(1)
                 .name(TranslateEntity.builder().fr("CM2").en("CM2").build())
@@ -309,5 +311,17 @@ class StaffServiceTest extends AbstractIntegrationTest {
                 .build());
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(email, "n/a", List.of()));
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.ypyit.neoelima.domain.establishment.repository.AcademicYearRepository academicYearRepository;
+
+    private void activeYear() {
+        if (this.academicYearRepository.findAll().stream().anyMatch(com.ypyit.neoelima.domain.establishment.entity.AcademicYearEntity::isActive)) {
+            return;
+        }
+        this.academicYearRepository.saveAndFlush(com.ypyit.neoelima.domain.establishment.entity.AcademicYearEntity.builder()
+                .label("2026-2027").startDate(java.time.LocalDate.of(2026, 9, 1))
+                .endDate(java.time.LocalDate.of(2027, 7, 31)).active(true).build());
     }
 }

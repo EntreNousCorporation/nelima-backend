@@ -17,6 +17,8 @@ import com.ypyit.neoelima.domain.establishment.repository.SchoolClassRepository;
 import com.ypyit.neoelima.domain.establishment.repository.SchoolClassYearRepository;
 import com.ypyit.neoelima.domain.establishment.repository.StudentEnrollmentRepository;
 import com.ypyit.neoelima.domain.establishment.repository.StudentRepository;
+import com.ypyit.neoelima.domain.establishment.entity.StaffClassYearEntity;
+import com.ypyit.neoelima.domain.establishment.repository.StaffClassYearRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -56,6 +58,7 @@ public class YearPreparationService {
     private final AcademicYearContext academicYearContext;
     private final SchoolYearGuard schoolYearGuard;
     private final CurrentUserProvider currentUserProvider;
+    private final StaffClassYearRepository staffClassYearRepository;
 
     public YearPreparationDto preparation(UUID targetYearId) {
         UUID scope = this.scope();
@@ -113,8 +116,37 @@ public class YearPreparationService {
                     .orElse(null);
             this.schoolClassYearRepository.save(SchoolClassYearEntity.builder()
                     .schoolClass(schoolClass).academicYear(target).mainTeacher(teacher).build());
+            this.carryTeachers(schoolClass, previous, target, teacher);
         }
         log.info("CLASSES_OPENED: {} class(es) for {} in establishment {}", classIds.size(), target.getLabel(), scope);
+    }
+
+    /**
+     * Reprend les enseignants de l'an passé dans la classe rouverte, ceux qui sont toujours en
+     * poste, et y rattache le titulaire : on ajuste ensuite plutôt que de tout ressaisir.
+     */
+    private void carryTeachers(SchoolClassEntity schoolClass, AcademicYearEntity previous, AcademicYearEntity target, StaffEntity mainTeacher) {
+        java.util.Set<UUID> attached = new java.util.HashSet<>();
+        if (Objects.nonNull(previous)) {
+            this.staffClassYearRepository.findBySchoolClass_IdAndAcademicYear_Id(schoolClass.getId(), previous.getId()).stream()
+                    .map(StaffClassYearEntity::getStaff)
+                    .filter(StaffEntity::isActive)
+                    .forEach(staff -> {
+                        if (attached.add(staff.getId())) {
+                            this.attach(staff, schoolClass, target);
+                        }
+                    });
+        }
+        if (Objects.nonNull(mainTeacher) && attached.add(mainTeacher.getId())) {
+            this.attach(mainTeacher, schoolClass, target);
+        }
+    }
+
+    private void attach(StaffEntity staff, SchoolClassEntity schoolClass, AcademicYearEntity year) {
+        if (!this.staffClassYearRepository.existsByStaff_IdAndSchoolClass_IdAndAcademicYear_Id(staff.getId(), schoolClass.getId(), year.getId())) {
+            this.staffClassYearRepository.save(StaffClassYearEntity.builder()
+                    .staff(staff).schoolClass(schoolClass).academicYear(year).build());
+        }
     }
 
     /** Ne pas ouvrir cette classe cette année : possible tant que personne n'y est inscrit. */
