@@ -145,5 +145,33 @@
       "fr": "Consulter le journal d'audit",
       "en": "Read the audit log"
     }
+  },
+  {
+    "code": "canteen:read",
+    "name": {
+      "fr": "Consulter la cantine",
+      "en": "Read canteen"
+    }
+  },
+  {
+    "code": "canteen:write",
+    "name": {
+      "fr": "Gérer la cantine : formules, inscriptions, menus, pointage",
+      "en": "Manage canteen"
+    }
+  },
+  {
+    "code": "transport:read",
+    "name": {
+      "fr": "Consulter le transport scolaire",
+      "en": "Read school transport"
+    }
+  },
+  {
+    "code": "transport:write",
+    "name": {
+      "fr": "Gérer le transport : lignes, cars, chauffeurs, inscriptions",
+      "en": "Manage school transport"
+    }
   }
 ]

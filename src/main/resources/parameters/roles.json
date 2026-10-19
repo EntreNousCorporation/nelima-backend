@@ -76,6 +76,18 @@
       },
       {
         "code": "audit:read"
+      },
+      {
+        "code": "canteen:read"
+      },
+      {
+        "code": "canteen:write"
+      },
+      {
+        "code": "transport:read"
+      },
+      {
+        "code": "transport:write"
       }
     ]
   },
@@ -148,6 +160,18 @@
       },
       {
         "code": "audit:read"
+      },
+      {
+        "code": "canteen:read"
+      },
+      {
+        "code": "canteen:write"
+      },
+      {
+        "code": "transport:read"
+      },
+      {
+        "code": "transport:write"
       }
     ]
   },
@@ -193,6 +217,12 @@
       },
       {
         "code": "settings:read"
+      },
+      {
+        "code": "canteen:read"
+      },
+      {
+        "code": "transport:read"
       }
     ]
   },
@@ -241,6 +271,18 @@
       },
       {
         "code": "settings:read"
+      },
+      {
+        "code": "canteen:read"
+      },
+      {
+        "code": "canteen:write"
+      },
+      {
+        "code": "transport:read"
+      },
+      {
+        "code": "transport:write"
       }
     ]
   },
