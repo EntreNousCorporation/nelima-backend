@@ -96,6 +96,12 @@ public class InstallmentEntity extends BaseEntity {
 
     private UUID paymentId;
 
+    /** Tranche de l'année suivante qui reprend celle-ci, quand elle a été reportée. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @ToString.Exclude
+    @JoinColumn(name = "carried_to_id", referencedColumnName = "id")
+    private InstallmentEntity carriedTo;
+
     public boolean isSettled() {
         return InstallmentStatus.PAID.equals(this.status);
     }

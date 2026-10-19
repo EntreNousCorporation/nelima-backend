@@ -13,4 +13,6 @@ public interface StudentFeeRepository extends JpaRepository<StudentFeeEntity, UU
 
     List<StudentFeeEntity> findByFee_Id(UUID feeId);
 
+    java.util.Optional<StudentFeeEntity> findByStudent_IdAndFee_Id(UUID studentId, UUID feeId);
+
 }

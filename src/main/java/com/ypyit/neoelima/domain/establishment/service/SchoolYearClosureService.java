@@ -52,6 +52,7 @@ public class SchoolYearClosureService {
     private final CurrentUserProvider currentUserProvider;
     private final AuditService auditService;
     private final JPAQueryFactory queryFactory;
+    private final DebtCarryOverService debtCarryOverService;
 
     public SchoolYearClosureDto preview(UUID academicYearId) {
         UUID scope = this.scope();
@@ -172,6 +173,7 @@ public class SchoolYearClosureService {
                 .pendingCount(pendingCount)
                 .pendingAmount(pendingAmount)
                 .paymentsInProgress(payments)
+                .nextYearLabel(this.debtCarryOverService.nextYear(year).map(AcademicYearEntity::getLabel).orElse(null))
                 .outstanding(rows.stream().limit(OUTSTANDING_SHOWN).map(row -> SchoolYearClosureDto.Outstanding.builder()
                         .studentId(Objects.requireNonNull(row.get(student.id)).toString())
                         .studentName(String.format("%s %s", row.get(student.lastName), row.get(student.firstName)))

@@ -44,6 +44,7 @@ public class AcademicYearController {
     private final AcademicYearService academicYearService;
     private final SchoolYearClosureService schoolYearClosureService;
     private final YearPreparationService yearPreparationService;
+    private final com.ypyit.neoelima.domain.establishment.service.DebtCarryOverService debtCarryOverService;
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     @PreAuthorize("isAuthenticated()")
@@ -96,6 +97,14 @@ public class AcademicYearController {
             description = "Reste dû par élève, paiements en ligne en cours, et si la clôture est possible.")
     public ResponseEntity<SchoolYearClosureDto> closure(@PathVariable UUID id) {
         return ResponseEntity.ok(this.schoolYearClosureService.preview(id));
+    }
+
+    @PostMapping(value = "/{id}/carry-over", produces = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAuthority('settings:write')")
+    @Operation(summary = "Reporte les impayés de l'année sur la suivante",
+            description = "Une tranche par tranche due, sous un frais « Report <année> », payable à la rentrée. L'année peut ensuite se clôturer.")
+    public ResponseEntity<com.ypyit.neoelima.domain.establishment.dto.CarryOverDto> carryOver(@PathVariable UUID id) {
+        return ResponseEntity.ok(this.debtCarryOverService.carryOver(id));
     }
 
     @PostMapping(value = "/{id}/close", produces = MediaType.APPLICATION_JSON_VALUE)

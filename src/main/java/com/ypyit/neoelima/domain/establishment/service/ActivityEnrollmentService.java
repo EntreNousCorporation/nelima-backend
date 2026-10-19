@@ -286,7 +286,8 @@ public class ActivityEnrollmentService {
                     .findByStudentFee_Id(studentFee.getId());
             due = installments.stream()
                     .filter(installment -> !InstallmentStatus.CANCELLED.equals(installment.getStatus())
-                            && !InstallmentStatus.WRITTEN_OFF.equals(installment.getStatus()))
+                            && !InstallmentStatus.WRITTEN_OFF.equals(installment.getStatus())
+                            && !InstallmentStatus.CARRIED_OVER.equals(installment.getStatus()))
                     .map(InstallmentEntity::getAmount)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
             partiallyPaid = installments.stream()

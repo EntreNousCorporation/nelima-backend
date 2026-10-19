@@ -29,6 +29,8 @@ public class SchoolYearClosureDto {
     private BigDecimal pendingAmount;
     /** Paiements en ligne encore en attente de confirmation sur des tranches de l'année. */
     private long paymentsInProgress;
+    /** Année sur laquelle reporter les impayés ; nulle si la plateforme ne l'a pas définie. */
+    private String nextYearLabel;
     /** Les élèves qui doivent encore, les plus gros soldes d'abord. */
     private List<Outstanding> outstanding;
 

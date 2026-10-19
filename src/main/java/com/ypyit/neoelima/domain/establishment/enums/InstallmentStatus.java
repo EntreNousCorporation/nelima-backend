@@ -13,5 +13,7 @@ public enum InstallmentStatus {
     PENDING,
     PAID,
     CANCELLED,
-    WRITTEN_OFF
+    WRITTEN_OFF,
+    /** Reportée sur l'année suivante : la dette continue sous une nouvelle tranche ({@code carriedTo}). */
+    CARRIED_OVER
 }

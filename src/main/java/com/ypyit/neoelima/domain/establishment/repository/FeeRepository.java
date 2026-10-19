@@ -17,4 +17,6 @@ public interface FeeRepository extends JpaRepository<FeeEntity, UUID>, QuerydslP
     Optional<FeeEntity> findByEstablishment_IdAndNameIgnoreCase(UUID establishmentId, String name);
 
     List<FeeEntity> findAllByEstablishment_Id(UUID establishmentId);
+
+    Optional<FeeEntity> findByEstablishment_IdAndAcademicYear_IdAndName(UUID establishmentId, UUID academicYearId, String name);
 }
