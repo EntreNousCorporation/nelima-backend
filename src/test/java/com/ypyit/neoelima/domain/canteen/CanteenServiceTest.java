@@ -1,6 +1,7 @@
 package com.ypyit.neoelima.domain.canteen;
 
 import com.ypyit.neoelima.AbstractIntegrationTest;
+import com.ypyit.neoelima.common.service.push.PushNotificationService;
 import com.ypyit.neoelima.common.exception.BadRequestException;
 import com.ypyit.neoelima.domain.canteen.dto.CanteenDtos;
 import com.ypyit.neoelima.domain.canteen.enums.CanteenAttendanceStatus;
@@ -31,6 +32,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -43,6 +45,12 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 /**
  * Cantine : facturation mensuelle à l'abonnement, pointage par exception, régimes jusqu'à la
@@ -55,6 +63,8 @@ class CanteenServiceTest extends AbstractIntegrationTest {
     private static final LocalDate WEDNESDAY = LocalDate.of(2026, 10, 14);
     private static final LocalDate THURSDAY = LocalDate.of(2026, 10, 15);
 
+    @MockitoBean
+    private PushNotificationService pushNotificationService;
     @Autowired
     private CanteenService canteenService;
     @Autowired
@@ -186,6 +196,50 @@ class CanteenServiceTest extends AbstractIntegrationTest {
         assertThat(this.menuService.mine(LocalDate.of(2026, 10, 14)).values()).singleElement()
                 .satisfies(week -> assertThat(week).singleElement()
                         .satisfies(day -> assertThat(day.getMainCourse()).isEqualTo("Attiéké, poisson braisé")));
+    }
+
+    @Test
+    @DisplayName("un jour sans service, aucun abonné n'est attendu")
+    void closedDayExpectsNobody() {
+        this.subscribe(this.awa, this.fourDays, LocalDate.of(2026, 10, 1));
+        CanteenForms.MenuDay thursday = new CanteenForms.MenuDay();
+        thursday.setDay(THURSDAY);
+        thursday.setClosed(true);
+        CanteenForms.Menu menu = new CanteenForms.Menu();
+        menu.setDays(List.of(thursday));
+        this.menuService.save(menu);
+
+        CanteenDtos.Overview overview = this.canteenService.overview(THURSDAY);
+        assertThat(overview.getExpectedToday()).isZero();
+        assertThat(overview.getServedToday()).isZero();
+        assertThat(this.menuService.week(THURSDAY)).filteredOn(d -> d.getDay().equals(THURSDAY))
+                .singleElement().satisfies(d -> assertThat(d.isClosed()).isTrue());
+    }
+
+    @Test
+    @DisplayName("la famille n'est prévenue de l'inscription que si l'école le demande")
+    void familyNotifiedOnlyOnRequest() {
+        String parentEmail = this.user(StudentParentUserEntity.builder());
+        StudentParentUserEntity parent = (StudentParentUserEntity) this.userRepository.findAll().stream()
+                .filter(u -> u instanceof StudentParentUserEntity && u.getContacts().stream().anyMatch(c -> c.getValue().equals(parentEmail)))
+                .findFirst().orElseThrow();
+        this.awa.getParentUsers().add(parent);
+        this.yao.getParentUsers().add(parent);
+        this.studentRepository.saveAndFlush(this.awa);
+        this.studentRepository.saveAndFlush(this.yao);
+
+        this.subscribe(this.awa, this.fourDays, LocalDate.of(2026, 10, 1));
+        verify(this.pushNotificationService, never()).send(any(), any(), any(), anyMap());
+
+        CanteenForms.Subscription form = new CanteenForms.Subscription();
+        form.setStudentId(this.yao.getId());
+        form.setFormulaId(UUID.fromString(this.fourDays.getId()));
+        form.setStartDate(LocalDate.of(2026, 10, 1));
+        form.setNotifyFamily(true);
+        this.canteenService.subscribe(form);
+
+        verify(this.pushNotificationService).send(argThat(ids -> ids.contains(parent.getId())), eq("Cantine"),
+                argThat(m -> m.contains("Yao") && m.contains("4 jours") && m.contains("15 000")), anyMap());
     }
 
     private String schoolUser;

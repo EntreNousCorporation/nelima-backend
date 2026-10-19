@@ -20,6 +20,22 @@ SKIP_TESTS="${SKIP_TESTS:-false}"
 
 say() { printf '\n==> %s\n' "$1"; }
 
+# Une connexion morte sans signe de vie laissait ssh attendre indéfiniment, au point de bloquer
+# un déploiement pendant des heures : elle est déclarée perdue après une minute de silence, et
+# les envois sont retentés. Chaque tentative repart d'un dossier distant vidé.
+SSH_OPTS=(-o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=4)
+ssh() { command ssh "${SSH_OPTS[@]}" "$@"; }
+scp() { command scp "${SSH_OPTS[@]}" "$@"; }
+retry() {
+    local attempt
+    for attempt in 1 2 3; do
+        "$@" && return 0
+        echo "    envoi interrompu, nouvelle tentative ($attempt/3)"
+        sleep 5
+    done
+    return 1
+}
+
 say "Construction"
 if [ "$SKIP_TESTS" = "true" ]; then
     JAVA_HOME="$JAVA_HOME" mvn -B clean package -DskipTests
@@ -44,19 +60,25 @@ ssh "$REMOTE" "mkdir -p $REMOTE_DIR/layers"
 
 if [ "$HEAVY_HASH" != "$REMOTE_HASH" ]; then
     say "Dépendances modifiées — envoi complet (~125 Mo, quelques minutes)"
-    ssh "$REMOTE" "rm -rf $REMOTE_DIR/layers/dependencies $REMOTE_DIR/layers/spring-boot-loader"
-    COPYFILE_DISABLE=1 tar czf - -C target/layers dependencies spring-boot-loader \
-        | ssh "$REMOTE" "tar xzf - -C $REMOTE_DIR/layers"
+    send_heavy() {
+        ssh "$REMOTE" "rm -rf $REMOTE_DIR/layers/dependencies $REMOTE_DIR/layers/spring-boot-loader" \
+            && COPYFILE_DISABLE=1 tar czf - -C target/layers dependencies spring-boot-loader \
+            | ssh "$REMOTE" "tar xzf - -C $REMOTE_DIR/layers"
+    }
+    retry send_heavy
     ssh "$REMOTE" "echo '$HEAVY_HASH' > $REMOTE_DIR/.heavy-hash"
 else
     say "Dépendances inchangées — rien à envoyer"
 fi
 
 say "Envoi du code applicatif"
-ssh "$REMOTE" "rm -rf $REMOTE_DIR/layers/application $REMOTE_DIR/layers/snapshot-dependencies"
-COPYFILE_DISABLE=1 tar czf - -C target/layers application snapshot-dependencies \
-    | ssh "$REMOTE" "tar xzf - -C $REMOTE_DIR/layers"
-scp -q Dockerfile "$REMOTE:$REMOTE_DIR/Dockerfile"
+send_application() {
+    ssh "$REMOTE" "rm -rf $REMOTE_DIR/layers/application $REMOTE_DIR/layers/snapshot-dependencies" \
+        && COPYFILE_DISABLE=1 tar czf - -C target/layers application snapshot-dependencies \
+        | ssh "$REMOTE" "tar xzf - -C $REMOTE_DIR/layers"
+}
+retry send_application
+retry scp -q Dockerfile "$REMOTE:$REMOTE_DIR/Dockerfile"
 ssh "$REMOTE" "rm -f $REMOTE_DIR/nelima.jar"
 
 say "Reconstruction de l'image et redémarrage"

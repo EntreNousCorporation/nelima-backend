@@ -34,6 +34,9 @@ public abstract class AbstractIntegrationTest {
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
         registry.add("nelima.initialize-data", () -> "false");
+        // Les tâches planifiées sont appelées directement par leurs tests ; en arrière-plan, elles
+        // touchaient aux bouchons et aux données des autres tests (voir SchedulingConfiguration).
+        registry.add("nelima.scheduling.enabled", () -> "false");
         // Le secret de signature n'a plus de repli dans `application.yml` : un défaut fonctionnel
         // publié dans le dépôt laissait démarrer en silence un environnement aux jetons forgeables.
         // La suite fournit donc le sien, propre à elle et sans valeur ailleurs.

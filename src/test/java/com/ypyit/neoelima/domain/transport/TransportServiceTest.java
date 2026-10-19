@@ -148,6 +148,45 @@ class TransportServiceTest extends AbstractIntegrationTest {
                 .containsExactly("Ligne 3");
     }
 
+    @Test
+    @DisplayName("un dossier chauffeur est complet avec téléphone, permis valide et les quatre pièces")
+    void driverDossier() {
+        TransportForms.Driver form = new TransportForms.Driver();
+        form.setFirstName("Firmin");
+        form.setLastName("Konan");
+        form.setPhone("07 48 22 10 05");
+        form.setLicenseCategory("D");
+        form.setLicenseExpiry(LocalDate.now().plusYears(2));
+        form.setDocuments(List.of("LICENSE", "ID", "RECORD"));
+        TransportDtos.Driver incomplete = this.transportService.saveDriver(null, form);
+        assertThat(incomplete.isDossierComplete()).isFalse();
+        assertThat(incomplete.getLastName()).isEqualTo("KONAN");
+
+        form.setDocuments(List.of("LICENSE", "ID", "RECORD", "MEDICAL"));
+        assertThat(this.transportService.saveDriver(UUID.fromString(incomplete.getId()), form).isDossierComplete()).isTrue();
+
+        form.setLicenseExpiry(LocalDate.now().minusDays(1));
+        assertThat(this.transportService.saveDriver(UUID.fromString(incomplete.getId()), form).isDossierComplete())
+                .as("un permis expiré rend le dossier incomplet").isFalse();
+    }
+
+    @Test
+    @DisplayName("une ligne annoncée prévient les familles de l'école, une ligne discrète non")
+    void announcedLineWarnsFamilies() {
+        StudentEntity awa = this.student("KONE");
+        awa.getParentUsers().add(this.parent);
+        this.studentRepository.saveAndFlush(awa);
+
+        this.line("Ligne 4", 30, "Cocody");
+        verify(this.pushNotificationService, never()).send(any(), any(), any(), anyMap());
+
+        TransportForms.Line form = this.form("Ligne 5", 30, "Angré", "Djibi");
+        form.setAnnounce(true);
+        this.transportService.saveLine(null, form);
+        verify(this.pushNotificationService).send(argThat(ids -> ids.contains(this.parent.getId())),
+                eq("Transport scolaire"), argThat(m -> m.contains("Ligne 5") && m.contains("Angré")), anyMap());
+    }
+
     private TransportDtos.Line line(String name, int capacity, String... stops) {
         return this.transportService.saveLine(null, this.form(name, capacity, stops));
     }

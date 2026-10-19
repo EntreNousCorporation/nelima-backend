@@ -7,7 +7,6 @@ import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.EnableAspectJAutoProxy;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.scheduling.annotation.EnableAsync;
-import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * Les deux déclarations ci-dessous ne sont pas redondantes avec l'autoconfiguration Spring Boot :
@@ -19,7 +18,6 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  */
 @EnableAsync
 @EnableCaching
-@EnableScheduling
 @SpringBootApplication
 @EnableAspectJAutoProxy
 @EntityScan(basePackages = "com.ypyit.neoelima")
