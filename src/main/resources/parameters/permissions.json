@@ -173,5 +173,19 @@
       "fr": "Gérer le transport : lignes, cars, chauffeurs, inscriptions",
       "en": "Manage school transport"
     }
+  },
+  {
+    "code": "writeoff:propose",
+    "name": {
+      "fr": "Proposer un passage en perte",
+      "en": "Propose a debt write-off"
+    }
+  },
+  {
+    "code": "writeoff:approve",
+    "name": {
+      "fr": "Valider un passage en perte",
+      "en": "Approve a debt write-off"
+    }
   }
 ]

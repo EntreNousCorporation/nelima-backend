@@ -32,6 +32,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import com.ypyit.neoelima.domain.writeoff.entity.DebtWriteOffEntity;
+import com.ypyit.neoelima.domain.writeoff.enums.WriteOffStatus;
+import com.ypyit.neoelima.domain.writeoff.repository.DebtWriteOffRepository;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -94,6 +97,7 @@ public class NotificationFeedService {
     private final JPAQueryFactory queryFactory;
     private final UserRepository userRepository;
     private final StudentRepository studentRepository;
+    private final DebtWriteOffRepository writeOffRepository;
     private final CurrentUserProvider currentUserProvider;
 
     public List<NotificationDto> feed() {
@@ -142,6 +146,7 @@ public class NotificationFeedService {
         if (this.currentUserProvider.hasPermission("fee:read")) {
             items.addAll(this.overdueInstalments(scope, since));
         }
+        items.addAll(this.writeOffs(scope, since));
         return items;
     }
 
@@ -220,6 +225,46 @@ public class NotificationFeedService {
                         .link("/app/paiements/transactions")
                         .build())
                 .toList();
+    }
+
+    /**
+     * Passages en perte : à valider pour la direction (sauf les siens), tranchés pour celui qui
+     * les a proposés.
+     */
+    private List<NotificationDto> writeOffs(UUID scope, Instant since) {
+        UUID me = this.currentUserProvider.currentUser().getId();
+        boolean approver = this.currentUserProvider.hasPermission("writeoff:approve");
+        boolean proposer = this.currentUserProvider.hasPermission("writeoff:propose");
+        if (!approver && !proposer) {
+            return List.of();
+        }
+        List<NotificationDto> items = new ArrayList<>();
+        for (DebtWriteOffEntity writeOff : this.writeOffRepository.findByEstablishment_IdOrderByProposedAtDesc(scope)) {
+            StudentEntity child = writeOff.getInstallment().getStudentFee().getStudent();
+            String who = String.format("%s %s · %s", child.getLastName(), child.getFirstName(), XofFormat.format(writeOff.getAmount()));
+            boolean mine = writeOff.getProposedBy().getId().equals(me);
+            if (approver && !mine && writeOff.getStatus() == WriteOffStatus.PROPOSED) {
+                items.add(NotificationDto.builder()
+                        .id("writeoff@" + writeOff.getId())
+                        .kind(NotificationKind.WRITE_OFF_TO_APPROVE)
+                        .title("Perte à valider")
+                        .detail(who)
+                        .occurredAt(writeOff.getProposedAt())
+                        .link("/app/paiements/pertes")
+                        .build());
+            } else if (mine && writeOff.getStatus() != WriteOffStatus.PROPOSED
+                    && Objects.nonNull(writeOff.getDecidedAt()) && writeOff.getDecidedAt().isAfter(since)) {
+                items.add(NotificationDto.builder()
+                        .id("writeoff-decided@" + writeOff.getId())
+                        .kind(NotificationKind.WRITE_OFF_DECIDED)
+                        .title(writeOff.getStatus() == WriteOffStatus.APPROVED ? "Perte validée" : "Perte refusée")
+                        .detail(who)
+                        .occurredAt(writeOff.getDecidedAt())
+                        .link("/app/paiements/pertes")
+                        .build());
+            }
+        }
+        return items;
     }
 
     /**

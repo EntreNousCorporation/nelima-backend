@@ -88,6 +88,12 @@
       },
       {
         "code": "transport:write"
+      },
+      {
+        "code": "writeoff:propose"
+      },
+      {
+        "code": "writeoff:approve"
       }
     ]
   },
@@ -172,6 +178,12 @@
       },
       {
         "code": "transport:write"
+      },
+      {
+        "code": "writeoff:propose"
+      },
+      {
+        "code": "writeoff:approve"
       }
     ]
   },
@@ -223,6 +235,9 @@
       },
       {
         "code": "transport:read"
+      },
+      {
+        "code": "writeoff:propose"
       }
     ]
   },

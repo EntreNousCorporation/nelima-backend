@@ -5,10 +5,13 @@ package com.ypyit.neoelima.domain.establishment.enums;
  *
  * <p>Une tranche est indivisible en V1 : elle se règle en une fois, il n'existe donc pas d'état
  * « partiellement payée ». {@code CANCELLED} couvre l'annulation manuelle par le comptable, par
- * exemple après le départ d'un élève.
+ * exemple après le départ d'un élève. {@code WRITTEN_OFF} est une dette reconnue irrécouvrable :
+ * proposée par la comptabilité, validée par la direction ({@code DebtWriteOffService}). Elle n'est
+ * plus réclamée, mais reste lisible comme une perte, à la différence d'une annulation.
  */
 public enum InstallmentStatus {
     PENDING,
     PAID,
-    CANCELLED
+    CANCELLED,
+    WRITTEN_OFF
 }

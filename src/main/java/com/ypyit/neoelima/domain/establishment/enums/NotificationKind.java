@@ -24,6 +24,12 @@ public enum NotificationKind {
     /** Une échéance est arrivée à terme sans règlement. Lue des deux côtés. */
     INSTALLMENT_OVERDUE,
 
+    /** Un passage en perte attend la direction. */
+    WRITE_OFF_TO_APPROVE,
+
+    /** La direction a tranché une demande de passage en perte que j'ai proposée. */
+    WRITE_OFF_DECIDED,
+
     /* ---------- Côté famille ---------- */
 
     /**

@@ -42,5 +42,11 @@ public enum AuditAction {
     PORTAL_ACCESS_GRANTED,
 
     /** Accès au portail fermé. */
-    PORTAL_ACCESS_REVOKED
+    PORTAL_ACCESS_REVOKED,
+
+    DEBT_WRITE_OFF_PROPOSED,
+
+    DEBT_WRITE_OFF_APPROVED,
+
+    DEBT_WRITE_OFF_REJECTED
 }

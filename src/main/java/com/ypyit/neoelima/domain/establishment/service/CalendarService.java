@@ -158,9 +158,10 @@ public class CalendarService {
 
         Map<String, List<InstallmentEntity>> grouped = new LinkedHashMap<>();
         for (InstallmentEntity installment : installments) {
-            if (InstallmentStatus.CANCELLED.equals(installment.getStatus())) {
-                // Une tranche annulée n'est plus due : la compter gonflerait l'attendu d'une somme
-                // que personne ne réclame.
+            if (InstallmentStatus.CANCELLED.equals(installment.getStatus())
+                    || InstallmentStatus.WRITTEN_OFF.equals(installment.getStatus())) {
+                // Une tranche annulée ou passée en perte n'est plus due : la compter gonflerait
+                // l'attendu d'une somme que personne ne réclame.
                 continue;
             }
             FeeEntity fee = installment.getStudentFee().getFee();
