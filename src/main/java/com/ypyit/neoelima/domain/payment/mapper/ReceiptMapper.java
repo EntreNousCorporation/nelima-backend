@@ -15,6 +15,8 @@ import java.util.List;
         unmappedTargetPolicy = ReportingPolicy.IGNORE)
 public interface ReceiptMapper {
 
+    @org.mapstruct.Mapping(target = "studentId", source = "paymentIntent.installment.studentFee.student.id")
+    @org.mapstruct.Mapping(target = "studentPhotoId", source = "paymentIntent.installment.studentFee.student.photoDocumentId")
     ReceiptDto toDto(ReceiptEntity receipt);
 
     List<ReceiptDto> toDtos(List<ReceiptEntity> receipts);

@@ -110,6 +110,8 @@ public class TransactionService {
                 .providerType(intent.getProviderType())
                 .studentLabel(String.format("%s %s", student.getLastName(), student.getFirstName()))
                 .studentRegistrationNumber(student.getRegistrationNumber())
+                .studentId(student.getId())
+                .studentPhotoId(student.getPhotoDocumentId())
                 .installmentLabel(installment.getLabel())
                 .payerName(intent.getPayerName())
                 // Repris tels quels : les montants sont séparés dès l'initiation du paiement.

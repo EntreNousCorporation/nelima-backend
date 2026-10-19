@@ -41,6 +41,9 @@ public class TransactionDto {
 
     private String studentLabel;
     private String studentRegistrationNumber;
+    /** Élève et photo d'identité, pour la pastille ; la photo est servie par /students/{id}/photo. */
+    private java.util.UUID studentId;
+    private java.util.UUID studentPhotoId;
 
     /** Ce qui était dû : le libellé de la tranche réglée. */
     private String installmentLabel;
