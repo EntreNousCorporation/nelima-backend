@@ -277,6 +277,44 @@ class CanteenServiceTest extends AbstractIntegrationTest {
         assertThatThrownBy(() -> this.canteenService.createFormula(both)).isInstanceOf(BadRequestException.class);
     }
 
+    @Autowired
+    private com.ypyit.neoelima.domain.establishment.service.AcademicYearContext academicYearContext;
+    @Autowired
+    private com.ypyit.neoelima.domain.establishment.repository.SchoolYearRepository schoolYearRepository;
+
+    @Test
+    @DisplayName("au trimestre : une tranche par trimestre, au tarif mensuel fois les mois couverts depuis l'arrivée")
+    void termBilling() {
+        CanteenForms.Subscription form = new CanteenForms.Subscription();
+        form.setStudentId(this.awa.getId());
+        form.setFormulaId(UUID.fromString(this.fourDays.getId()));
+        form.setStartDate(LocalDate.of(2026, 10, 1));
+        form.setBillingPeriod(com.ypyit.neoelima.domain.establishment.enums.BillingPeriod.TERM);
+        assertThatThrownBy(() -> this.canteenService.subscribe(form))
+                .as("sans trimestres définis").isInstanceOf(BadRequestException.class);
+
+        var schoolYear = this.academicYearContext.schoolYear(this.school.getId(), this.year);
+        int position = 1;
+        for (LocalDate[] term : List.of(
+                new LocalDate[]{LocalDate.of(2026, 9, 1), LocalDate.of(2026, 12, 18)},
+                new LocalDate[]{LocalDate.of(2027, 1, 5), LocalDate.of(2027, 3, 27)},
+                new LocalDate[]{LocalDate.of(2027, 4, 13), LocalDate.of(2027, 6, 30)})) {
+            schoolYear.getPeriods().add(com.ypyit.neoelima.domain.establishment.entity.AcademicPeriodEntity.builder()
+                    .label("Trimestre " + position).startDate(term[0]).endDate(term[1]).position(position++)
+                    .schoolYear(schoolYear).build());
+        }
+        this.schoolYearRepository.saveAndFlush(schoolYear);
+
+        CanteenDtos.Subscriber subscriber = this.canteenService.subscribe(form);
+        assertThat(subscriber.getBillingPeriod()).isEqualTo(com.ypyit.neoelima.domain.establishment.enums.BillingPeriod.TERM);
+        assertThat(this.installmentsOf(this.awa))
+                .extracting(InstallmentEntity::getLabel, i -> i.getAmount().intValue(), InstallmentEntity::getDueDate)
+                .containsExactlyInAnyOrder(
+                        org.assertj.core.groups.Tuple.tuple("4 jours — Trimestre 1", 45000, LocalDate.of(2026, 10, 1)),
+                        org.assertj.core.groups.Tuple.tuple("4 jours — Trimestre 2", 45000, LocalDate.of(2027, 1, 5)),
+                        org.assertj.core.groups.Tuple.tuple("4 jours — Trimestre 3", 45000, LocalDate.of(2027, 4, 13)));
+    }
+
     private String schoolUser;
 
     private CanteenDtos.Subscriber subscribe(StudentEntity student, CanteenDtos.Formula formula, LocalDate start) {

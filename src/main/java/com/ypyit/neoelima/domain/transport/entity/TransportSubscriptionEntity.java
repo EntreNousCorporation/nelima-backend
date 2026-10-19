@@ -11,6 +11,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -57,6 +58,12 @@ public class TransportSubscriptionEntity extends BaseEntity {
 
     @Column(nullable = false)
     private LocalDate startDate;
+
+    /** Facturation au mois ou au trimestre, choisie à l'inscription. */
+    @Builder.Default
+    @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
+    @Column(name = "billing_period", nullable = false, length = 8)
+    private com.ypyit.neoelima.domain.establishment.enums.BillingPeriod billingPeriod = com.ypyit.neoelima.domain.establishment.enums.BillingPeriod.MONTHLY;
 
     private LocalDate endDate;
 

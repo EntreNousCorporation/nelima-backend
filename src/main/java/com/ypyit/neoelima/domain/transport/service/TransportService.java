@@ -286,6 +286,7 @@ public class TransportService {
         Map<UUID, String> classes = this.classNames(subscriptions.stream().map(s -> s.getStudent().getId()).toList());
         return subscriptions.stream().map(s -> TransportDtos.Rider.builder()
                 .subscriptionId(s.getId().toString())
+                .billingPeriod(s.getBillingPeriod())
                 .studentId(s.getStudent().getId())
                 .studentName(String.format("%s %s", s.getStudent().getLastName(), s.getStudent().getFirstName()))
                 .registrationNumber(s.getStudent().getRegistrationNumber())
@@ -334,10 +335,15 @@ public class TransportService {
         }
         StudentFeeEntity studentFee = this.studentFeeRepository.saveAndFlush(StudentFeeEntity.builder()
                 .student(student).fee(line.getFee()).name(line.getFee().getName()).build());
-        this.monthlyBilling.bill(studentFee, "Transport " + line.getName(), line.getMonthlyPrice(), start, line.getAcademicYear());
+        com.ypyit.neoelima.domain.establishment.enums.BillingPeriod period = Objects.requireNonNullElse(form.getBillingPeriod(), com.ypyit.neoelima.domain.establishment.enums.BillingPeriod.MONTHLY);
+        if (period == com.ypyit.neoelima.domain.establishment.enums.BillingPeriod.TERM) {
+            this.monthlyBilling.billByTerm(studentFee, "Transport " + line.getName(), line.getMonthlyPrice(), start, this.termsOf(scope, line.getAcademicYear()));
+        } else {
+            this.monthlyBilling.bill(studentFee, "Transport " + line.getName(), line.getMonthlyPrice(), start, line.getAcademicYear());
+        }
         TransportSubscriptionEntity saved = this.subscriptionRepository.saveAndFlush(TransportSubscriptionEntity.builder()
                 .student(student).line(line).stop(stop).academicYear(line.getAcademicYear())
-                .startDate(start).studentFee(studentFee).build());
+                .startDate(start).billingPeriod(period).studentFee(studentFee).build());
         log.info("TRANSPORT_SUBSCRIBED: student {} line {}", student.getId(), line.getName());
         return this.riders(line.getId()).stream()
                 .filter(r -> r.getSubscriptionId().equals(saved.getId().toString())).findFirst().orElseThrow();
@@ -520,6 +526,18 @@ public class TransportService {
         if (this.linesOfYear(scope).stream().anyMatch(l -> !l.getId().equals(except) && l.getName().equalsIgnoreCase(name.trim()))) {
             throw new BadRequestException(String.format("Une ligne nommée %s existe déjà.", name.trim()));
         }
+    }
+
+    /** Les trimestres de l'école pour l'année : sans eux, pas de facturation au trimestre. */
+    private List<com.ypyit.neoelima.domain.establishment.entity.AcademicPeriodEntity> termsOf(UUID scope, AcademicYearEntity year) {
+        if (Objects.isNull(year)) {
+            throw new BadRequestException("Sans année scolaire, la facturation au trimestre n'est pas possible.");
+        }
+        List<com.ypyit.neoelima.domain.establishment.entity.AcademicPeriodEntity> periods = this.academicYearContext.schoolYear(scope, year).getPeriods();
+        if (periods.isEmpty()) {
+            throw new BadRequestException("Définissez les trimestres de l'année dans Paramètres pour facturer au trimestre.");
+        }
+        return periods;
     }
 
     private TransportLineEntity loadLine(UUID id, UUID scope) {

@@ -185,12 +185,18 @@ public class CanteenService {
         AcademicYearEntity year = formula.getAcademicYear();
         StudentFeeEntity studentFee = this.studentFeeRepository.saveAndFlush(StudentFeeEntity.builder()
                 .student(student).fee(formula.getFee()).name(formula.getFee().getName()).build());
-        if (!formula.perMeal()) {
+        com.ypyit.neoelima.domain.establishment.enums.BillingPeriod period = formula.perMeal() ? com.ypyit.neoelima.domain.establishment.enums.BillingPeriod.MONTHLY
+                : java.util.Objects.requireNonNullElse(form.getBillingPeriod(), com.ypyit.neoelima.domain.establishment.enums.BillingPeriod.MONTHLY);
+        if (formula.perMeal()) {
+            // Facturée au repas servi, au fil des pointages.
+        } else if (period == com.ypyit.neoelima.domain.establishment.enums.BillingPeriod.TERM) {
+            this.monthlyBilling.billByTerm(studentFee, formula.getName(), formula.getMonthlyPrice(), start, this.termsOf(scope, year));
+        } else {
             this.monthlyBilling.bill(studentFee, formula.getName(), formula.getMonthlyPrice(), start, year);
         }
 
         CanteenSubscriptionEntity subscription = this.subscriptionRepository.saveAndFlush(CanteenSubscriptionEntity.builder()
-                .student(student).formula(formula).academicYear(year).startDate(start).studentFee(studentFee).build());
+                .student(student).formula(formula).academicYear(year).startDate(start).billingPeriod(period).studentFee(studentFee).build());
         if (form.isNotifyFamily()) {
             this.notifyFamily(student, formula, start);
         }
@@ -290,6 +296,18 @@ public class CanteenService {
     private void cancel(InstallmentEntity installment) {
         installment.setStatus(InstallmentStatus.CANCELLED);
         this.installmentRepository.save(installment);
+    }
+
+    /** Les trimestres de l'école pour l'année : sans eux, pas de facturation au trimestre. */
+    private List<com.ypyit.neoelima.domain.establishment.entity.AcademicPeriodEntity> termsOf(UUID scope, AcademicYearEntity year) {
+        if (Objects.isNull(year)) {
+            throw new BadRequestException("Sans année scolaire, la facturation au trimestre n'est pas possible.");
+        }
+        List<com.ypyit.neoelima.domain.establishment.entity.AcademicPeriodEntity> periods = this.academicYearContext.schoolYear(scope, year).getPeriods();
+        if (periods.isEmpty()) {
+            throw new BadRequestException("Définissez les trimestres de l'année dans Paramètres pour facturer au trimestre.");
+        }
+        return periods;
     }
 
     /** Un forfait mensuel, ou un prix au repas sans jour fixe : jamais les deux, jamais aucun. */
@@ -399,6 +417,7 @@ public class CanteenService {
             CanteenAttendanceStatus status = Objects.nonNull(mark) ? mark : expected ? CanteenAttendanceStatus.SERVED : null;
             rows.add(CanteenDtos.Subscriber.builder()
                     .subscriptionId(s.getId().toString())
+                    .billingPeriod(s.getBillingPeriod())
                     .studentId(student.getId())
                     .studentName(String.format("%s %s", student.getLastName(), student.getFirstName()))
                     .registrationNumber(student.getRegistrationNumber())

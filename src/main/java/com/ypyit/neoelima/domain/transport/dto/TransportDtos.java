@@ -91,6 +91,7 @@ public final class TransportDtos {
     @Builder
     public static class Rider {
         private String subscriptionId;
+        private com.ypyit.neoelima.domain.establishment.enums.BillingPeriod billingPeriod;
         private UUID studentId;
         private String studentName;
         private String registrationNumber;

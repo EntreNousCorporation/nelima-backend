@@ -50,6 +50,8 @@ public final class CanteenForms {
         private LocalDate startDate;
         /** Prévenir la famille : menu de la semaine et montant mensuel. */
         private boolean notifyFamily;
+        /** Au mois (par défaut) ou au trimestre ; sans objet pour une formule au repas. */
+        private com.ypyit.neoelima.domain.establishment.enums.BillingPeriod billingPeriod;
     }
 
     @Getter

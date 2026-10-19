@@ -60,6 +60,7 @@ public final class CanteenDtos {
     @Builder
     public static class Subscriber {
         private String subscriptionId;
+        private com.ypyit.neoelima.domain.establishment.enums.BillingPeriod billingPeriod;
         private UUID studentId;
         private String studentName;
         private String registrationNumber;

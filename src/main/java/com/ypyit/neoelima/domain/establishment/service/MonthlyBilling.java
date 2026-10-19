@@ -54,6 +54,30 @@ public class MonthlyBilling {
         }
     }
 
+    /**
+     * Facture au trimestre : une tranche par trimestre de l'école, au tarif mensuel multiplié par
+     * les mois qu'il couvre à partir de l'arrivée. Payable au début du trimestre, ou le jour de
+     * l'arrivée en cours de trimestre. Les trimestres déjà terminés à l'arrivée ne sont pas dus.
+     */
+    @Transactional
+    public void billByTerm(StudentFeeEntity studentFee, String label, BigDecimal monthlyPrice, LocalDate start,
+                           java.util.List<com.ypyit.neoelima.domain.establishment.entity.AcademicPeriodEntity> periods) {
+        periods.stream()
+                .sorted(java.util.Comparator.comparing(com.ypyit.neoelima.domain.establishment.entity.AcademicPeriodEntity::getStartDate))
+                .filter(period -> !period.getEndDate().isBefore(start))
+                .forEach(period -> {
+                    LocalDate from = period.getStartDate().isBefore(start) ? start : period.getStartDate();
+                    long months = java.time.temporal.ChronoUnit.MONTHS.between(YearMonth.from(from), YearMonth.from(period.getEndDate())) + 1;
+                    this.installmentRepository.save(InstallmentEntity.builder()
+                            .studentFee(studentFee)
+                            .label(String.format("%s — %s", label, period.getLabel()))
+                            .amount(monthlyPrice.multiply(BigDecimal.valueOf(months)))
+                            .dueDate(from)
+                            .status(InstallmentStatus.PENDING)
+                            .build());
+                });
+    }
+
     @Transactional
     public void stopAfter(StudentFeeEntity studentFee, LocalDate lastDay) {
         if (Objects.isNull(studentFee)) {

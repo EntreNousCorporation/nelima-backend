@@ -93,6 +93,8 @@ public final class TransportForms {
         private UUID lineId;
         private UUID stopId;
         private LocalDate startDate;
+        /** Au mois (par défaut) ou au trimestre. */
+        private com.ypyit.neoelima.domain.establishment.enums.BillingPeriod billingPeriod;
     }
 
     @Getter
