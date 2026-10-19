@@ -2,6 +2,7 @@ package com.ypyit.neoelima.common.service.push;
 
 import com.ypyit.neoelima.config.properties.OneSignalProperties;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.ClientHttpRequestFactory;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -35,12 +36,18 @@ public class OneSignalPushNotificationService implements PushNotificationService
     private final OneSignalProperties properties;
     private final RestClient restClient;
 
+    @Autowired
     public OneSignalPushNotificationService(OneSignalProperties properties, RestClient.Builder builder) {
-        this.properties = properties;
-        this.restClient = builder
+        this(properties, builder
                 .baseUrl(properties.getBaseUrl())
                 .requestFactory(timeoutFactory(properties.getTimeoutSeconds()))
-                .build();
+                .build());
+    }
+
+    /** Client fourni tel quel : les tests y branchent un serveur simulé. */
+    OneSignalPushNotificationService(OneSignalProperties properties, RestClient restClient) {
+        this.properties = properties;
+        this.restClient = restClient;
     }
 
     /**
@@ -65,18 +72,39 @@ public class OneSignalPushNotificationService implements PushNotificationService
         }
 
         try {
-            this.restClient.post()
+            Map<?, ?> response = this.restClient.post()
                     .uri("/notifications")
                     .contentType(MediaType.APPLICATION_JSON)
                     .header("Authorization", "Key " + this.properties.getRestApiKey())
                     .body(this.payload(externalIds, title, message, data))
                     .retrieve()
-                    .toBodilessEntity();
-            log.info("PUSH_SENT: « {} » à {} destinataire(s)", title, externalIds.size());
+                    .body(Map.class);
+            this.report(title, externalIds.size(), response);
         } catch (RuntimeException e) {
             // Volontairement avalé : la notification est un confort, pas une garantie.
             log.error("PUSH_FAILED: « {} » non envoyée à {} destinataire(s) : {}",
                     title, externalIds.size(), e.getMessage());
+        }
+    }
+
+    /**
+     * OneSignal répond 200 même quand rien ne part : quota dépassé, destinataires sans appareil.
+     * Ce qu'il dit est dans le corps de la réponse, et c'est là qu'il faut le lire ; sans cela le
+     * journal affirmerait un envoi qui n'a pas eu lieu.
+     */
+    private void report(String title, int recipients, Map<?, ?> response) {
+        Object warnings = Objects.isNull(response) ? null : response.get("warnings");
+        Object errors = Objects.isNull(response) ? null : response.get("errors");
+        Object id = Objects.isNull(response) ? null : response.get("id");
+        if (Objects.nonNull(warnings)) {
+            log.warn("PUSH_SUPPRESSED: « {} » ({} destinataire(s)) : {}", title, recipients, warnings);
+        } else if (Objects.isNull(id) || String.valueOf(id).isBlank()) {
+            log.warn("PUSH_NOT_SENT: « {} » ({} destinataire(s)) : {}", title, recipients, errors);
+        } else if (Objects.nonNull(errors)) {
+            // Typiquement des destinataires sans appareil abonné : les autres ont été joints.
+            log.info("PUSH_SENT: « {} » à {} destinataire(s), avec réserves : {}", title, recipients, errors);
+        } else {
+            log.info("PUSH_SENT: « {} » à {} destinataire(s)", title, recipients);
         }
     }
 
