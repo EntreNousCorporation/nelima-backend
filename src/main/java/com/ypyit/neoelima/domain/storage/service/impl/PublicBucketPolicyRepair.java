@@ -4,6 +4,7 @@ import com.ypyit.neoelima.domain.establishment.repository.EstablishmentRepositor
 import com.ypyit.neoelima.domain.storage.service.StorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
@@ -34,7 +35,7 @@ public class PublicBucketPolicyRepair implements ApplicationRunner {
                 this.storageService.enforceReadOnlyPolicy(bucket);
                 repaired++;
             } catch (RuntimeException e) {
-                log.warn("PUBLIC_BUCKET_POLICY_NOT_REPAIRED: {} : {}", bucket, e.getMessage());
+                log.warn("PUBLIC_BUCKET_POLICY_NOT_REPAIRED: {} : {}", bucket, ExceptionUtils.getRootCauseMessage(e));
             }
         }
         log.info("PUBLIC_BUCKET_POLICY_REPAIRED: {} bucket(s) d'établissement vérifié(s)", repaired);
