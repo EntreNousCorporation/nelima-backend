@@ -14,6 +14,9 @@ public interface StorageService {
 
     void createBucket(String bucketName) throws StorageException;
 
+    /** Rend un bucket existant public en lecture seule ; sans effet s'il n'existe pas. */
+    void enforceReadOnlyPolicy(String bucketName) throws StorageException;
+
     void deleteQuietly(String rootDir, String fileName) throws StorageException;
 
     Optional<String> uploadDynamicFile(StorageDto storageDto) throws StorageException;

@@ -19,6 +19,7 @@ import io.minio.SetBucketPolicyArgs;
 import io.minio.UploadObjectArgs;
 import io.minio.messages.Item;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.springframework.stereotype.Service;
@@ -41,8 +42,10 @@ public class StorageServiceImpl implements StorageService {
     public StorageServiceImpl(StorageProperties storageProperties) {
         try {
             this.storageProperties = storageProperties;
+            // Les échanges avec MinIO passent par le réseau des conteneurs ; l'adresse publique ne
+            // sert qu'aux liens donnés au navigateur (buildFileUrl).
             this.minioClient = MinioClient.builder()
-                    .endpoint(storageProperties.getUrl())
+                    .endpoint(StringUtils.defaultIfBlank(storageProperties.getInternalUrl(), storageProperties.getUrl()))
                     .credentials(storageProperties.getApiKey(), storageProperties.getApiSecret())
                     .build();
         } catch (Exception e) {
@@ -218,6 +221,20 @@ public class StorageServiceImpl implements StorageService {
         }
     }
 
+    /**
+     * Rend un bucket public en lecture seule : n'importe qui lit un objet dont il connaît l'adresse,
+     * personne ne liste, ne dépose ni ne supprime sans clé.
+     *
+     * <p>La politique d'origine permettait tout cela anonymement ; les buckets créés avant la
+     * correction sont remis d'aplomb au démarrage ({@code PublicBucketPolicyRepair}).
+     */
+    @Override
+    public void enforceReadOnlyPolicy(String bucketName) throws StorageException {
+        if (this.bucketExists(bucketName)) {
+            this.applyPolicyToBucket(bucketName);
+        }
+    }
+
     private void applyPolicyToBucket(String bucketName) {
         try {
             Optional<String> policyIsLoad = StorageUtils.loadPolicy();
@@ -225,7 +242,7 @@ public class StorageServiceImpl implements StorageService {
                 throw new StorageException("Policy cannot be loaded");
             }
 
-            String policy = String.format(policyIsLoad.get(), bucketName, bucketName);
+            String policy = String.format(policyIsLoad.get(), bucketName);
             this.minioClient.setBucketPolicy(SetBucketPolicyArgs
                     .builder()
                     .bucket(bucketName)

@@ -20,4 +20,8 @@ public interface EstablishmentRepository extends JpaRepository<EstablishmentEnti
 
     /** Écoles actuellement sous une formule : elles en interdisent la suppression. */
     long countBySubscriptionPlan(String subscriptionPlan);
+
+    /** Buckets publics des établissements (logo, couverture). */
+    @org.springframework.data.jpa.repository.Query("select e.bucketName from EstablishmentEntity e where e.bucketName is not null")
+    List<String> findBucketNames();
 }
