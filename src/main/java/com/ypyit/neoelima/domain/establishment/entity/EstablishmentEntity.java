@@ -114,6 +114,11 @@ public class EstablishmentEntity extends BaseEntity {
     @ToString.Exclude
     @JoinColumn(name = "parent_id", referencedColumnName = "id")
     private EstablishmentEntity parent;
+    /** Groupe scolaire dont l'établissement est un site ; nul pour une école indépendante. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @ToString.Exclude
+    @JoinColumn(name = "school_group_id", referencedColumnName = "id")
+    private SchoolGroupEntity schoolGroup;
     @ToString.Exclude
     /* LAZY : même raison que l'adresse — une image de couverture n'a rien à faire dans le
      * chargement d'une tranche de scolarité. */

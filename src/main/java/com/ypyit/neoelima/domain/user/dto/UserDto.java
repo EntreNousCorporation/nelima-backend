@@ -37,6 +37,10 @@ public class UserDto extends BaseDto {
     private UUID establishmentId;
 
     private String establishmentName;
+    /** Direction de groupe : peut afficher les autres sites de son groupe. */
+    private boolean groupWide;
+    /** Groupe scolaire du site, s'il en fait partie. */
+    private String schoolGroupName;
 
     /** Code du rôle porté par le compte. */
     private String roleCode;

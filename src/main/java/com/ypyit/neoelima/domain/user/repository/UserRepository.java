@@ -49,4 +49,9 @@ public interface UserRepository extends JpaRepository<UserEntity, UUID> {
             "join contact c on c.id = uc.contact_id " +
             "where c.is_primary = true and c.value = :username)", nativeQuery = true)
     void setLastLogin(@Param("lastLogin") Instant lastLogin, @Param("username") String username);
+
+    /** Comptes d'école de ces établissements. */
+    @org.springframework.data.jpa.repository.Query("select u from EstablishmentUserEntity u where u.establishment.id in :ids")
+    java.util.List<com.ypyit.neoelima.domain.user.entity.EstablishmentUserEntity> findSchoolUsers(
+            @org.springframework.data.repository.query.Param("ids") java.util.Collection<java.util.UUID> ids);
 }

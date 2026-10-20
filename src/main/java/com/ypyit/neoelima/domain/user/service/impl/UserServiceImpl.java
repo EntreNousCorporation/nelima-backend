@@ -403,8 +403,17 @@ public class UserServiceImpl implements UserService {
             dto.setUserType(userTypeOf(current));
             if (current instanceof EstablishmentUserEntity establishmentUser
                     && Objects.nonNull(establishmentUser.getEstablishment())) {
-                dto.setEstablishmentId(establishmentUser.getEstablishment().getId());
-                dto.setEstablishmentName(establishmentUser.getEstablishment().getName());
+                // Le site affiché : le sien, ou celui qu'une direction de groupe a choisi.
+                UUID siteId = this.currentUserProvider.currentEstablishmentId()
+                        .orElse(establishmentUser.getEstablishment().getId());
+                this.establishmentRepository.findById(siteId).ifPresent(site -> {
+                    dto.setEstablishmentId(site.getId());
+                    dto.setEstablishmentName(site.getName());
+                    if (Objects.nonNull(site.getSchoolGroup())) {
+                        dto.setSchoolGroupName(site.getSchoolGroup().getName());
+                    }
+                });
+                dto.setGroupWide(establishmentUser.isGroupWide());
             }
             return dto;
         } catch (UnAuthenticatedUserException e) {

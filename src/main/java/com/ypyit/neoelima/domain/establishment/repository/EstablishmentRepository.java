@@ -24,4 +24,13 @@ public interface EstablishmentRepository extends JpaRepository<EstablishmentEnti
     /** Buckets publics des établissements (logo, couverture). */
     @org.springframework.data.jpa.repository.Query("select e.bucketName from EstablishmentEntity e where e.bucketName is not null")
     List<String> findBucketNames();
+
+    /** Vrai quand les deux établissements sont des sites du même groupe. */
+    @org.springframework.data.jpa.repository.Query("select count(b) > 0 from EstablishmentEntity a, EstablishmentEntity b "
+            + "where a.id = :own and b.id = :other and a.schoolGroup is not null and a.schoolGroup = b.schoolGroup")
+    boolean sameGroup(@org.springframework.data.repository.query.Param("own") UUID own,
+                      @org.springframework.data.repository.query.Param("other") UUID other);
+
+    /** Sites d'un groupe, par nom. */
+    List<EstablishmentEntity> findBySchoolGroup_IdOrderByNameAsc(UUID schoolGroupId);
 }

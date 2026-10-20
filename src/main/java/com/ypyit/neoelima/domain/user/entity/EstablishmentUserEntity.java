@@ -29,6 +29,16 @@ public class EstablishmentUserEntity extends UserEntity {
     @JoinColumn(name = "establishment_id", referencedColumnName = "id")
     private EstablishmentEntity establishment;
 
+    /** Direction de groupe : peut afficher n'importe quel site du groupe de son établissement. */
+    @jakarta.persistence.Column(name = "group_wide", nullable = false)
+    private boolean groupWide;
+
+    /** Site affiché par une direction de groupe ; nul : son propre établissement. */
+    @ManyToOne(fetch = jakarta.persistence.FetchType.LAZY)
+    @ToString.Exclude
+    @JoinColumn(name = "consulted_establishment_id", referencedColumnName = "id")
+    private EstablishmentEntity consultedEstablishment;
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;

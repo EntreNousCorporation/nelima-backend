@@ -64,7 +64,9 @@ public class ClosedYearWriteInterceptor implements HandlerInterceptor {
         }
         Optional<AcademicYearEntity> consulted = this.academicYearContext.consulted();
         if (consulted.isPresent()
-                && this.schoolYearGuard.isClosed(schoolUser.getEstablishment().getId(), consulted.get().getId())) {
+                // Le site affiché, pour une direction de groupe : c'est sur lui que l'écriture porte.
+                && this.schoolYearGuard.isClosed(this.currentUserProvider.currentEstablishmentId()
+                        .orElse(schoolUser.getEstablishment().getId()), consulted.get().getId())) {
             throw new BadRequestException(SchoolYearGuard.closedMessage(consulted.get().getLabel()));
         }
         return true;

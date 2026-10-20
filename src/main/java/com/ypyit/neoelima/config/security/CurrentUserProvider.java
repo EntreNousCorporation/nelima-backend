@@ -6,6 +6,7 @@ import com.ypyit.neoelima.domain.user.entity.AdminUserEntity;
 import com.ypyit.neoelima.domain.user.entity.EstablishmentUserEntity;
 import com.ypyit.neoelima.domain.user.entity.UserEntity;
 import com.ypyit.neoelima.domain.user.service.impl.UserDetailsServiceImpl;
+import com.ypyit.neoelima.domain.establishment.entity.EstablishmentEntity;
 import lombok.RequiredArgsConstructor;
 import org.hibernate.Hibernate;
 import org.springframework.security.access.AccessDeniedException;
@@ -37,6 +38,7 @@ import java.util.UUID;
 public class CurrentUserProvider {
 
     private final UserDetailsServiceImpl userDetailsService;
+    private final com.ypyit.neoelima.domain.establishment.repository.EstablishmentRepository establishmentRepository;
 
     public UserEntity currentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -61,7 +63,7 @@ public class CurrentUserProvider {
     }
 
     public Optional<UUID> currentEstablishmentId() {
-        return establishmentIdOf(this.currentUser());
+        return this.establishmentIdOf(this.currentUser());
     }
 
     /**
@@ -73,7 +75,7 @@ public class CurrentUserProvider {
      */
     public boolean hasEstablishmentScope() {
         UserEntity user = this.currentUser();
-        return user instanceof AdminUserEntity || establishmentIdOf(user).isPresent();
+        return user instanceof AdminUserEntity || this.establishmentIdOf(user).isPresent();
     }
 
     /**
@@ -87,7 +89,7 @@ public class CurrentUserProvider {
         if (user instanceof AdminUserEntity) {
             return requestedEstablishmentId;
         }
-        return establishmentIdOf(user).orElseThrow(() -> new AccessDeniedException(
+        return this.establishmentIdOf(user).orElseThrow(() -> new AccessDeniedException(
                 "User is not attached to an establishment and cannot browse establishment data"));
     }
 
@@ -139,7 +141,7 @@ public class CurrentUserProvider {
         if (user instanceof AdminUserEntity) {
             return;
         }
-        UUID own = establishmentIdOf(user).orElseThrow(() -> new AccessDeniedException(
+        UUID own = this.establishmentIdOf(user).orElseThrow(() -> new AccessDeniedException(
                 "User is not attached to an establishment"));
         if (!own.equals(establishmentId)) {
             throw new AccessDeniedException(String.format(
@@ -178,7 +180,7 @@ public class CurrentUserProvider {
         if (user instanceof AdminUserEntity) {
             return;
         }
-        Optional<UUID> callerEstablishment = establishmentIdOf(user);
+        Optional<UUID> callerEstablishment = this.establishmentIdOf(user);
         if (callerEstablishment.isPresent()
                 && Objects.nonNull(student.getEstablishment())
                 && callerEstablishment.get().equals(student.getEstablishment().getId())) {
@@ -192,7 +194,32 @@ public class CurrentUserProvider {
         throw new AccessDeniedException("User is not allowed to access student " + student.getId());
     }
 
-    private static Optional<UUID> establishmentIdOf(UserEntity user) {
+    /**
+     * L'établissement au nom duquel l'appelant agit : le sien, ou — pour une direction de groupe —
+     * le site du groupe qu'il a choisi d'afficher.
+     *
+     * <p>Le site choisi n'est honoré qu'à deux conditions, vérifiées à chaque appel et non sur la
+     * foi de ce qui est mémorisé : l'appelant est direction de groupe, et ce site est bien du même
+     * groupe que son établissement. Un rattachement retiré entre-temps le ramène sur le sien.
+     */
+    private Optional<UUID> establishmentIdOf(UserEntity user) {
+        if (user instanceof EstablishmentUserEntity establishmentUser
+                && Objects.nonNull(establishmentUser.getEstablishment())) {
+            UUID own = establishmentUser.getEstablishment().getId();
+            EstablishmentEntity consulted = establishmentUser.getConsultedEstablishment();
+            if (establishmentUser.isGroupWide() && Objects.nonNull(consulted)
+                    && !own.equals(consulted.getId())
+                    && this.establishmentRepository.sameGroup(own, consulted.getId())) {
+                return Optional.of(consulted.getId());
+            }
+            return Optional.of(own);
+        }
+        return Optional.empty();
+    }
+
+    /** L'établissement de rattachement de l'appelant, quel que soit le site qu'il affiche. */
+    public Optional<UUID> ownEstablishmentId() {
+        UserEntity user = this.currentUser();
         if (user instanceof EstablishmentUserEntity establishmentUser
                 && Objects.nonNull(establishmentUser.getEstablishment())) {
             return Optional.of(establishmentUser.getEstablishment().getId());
