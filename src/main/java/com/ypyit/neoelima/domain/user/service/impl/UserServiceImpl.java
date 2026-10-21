@@ -113,6 +113,7 @@ public class UserServiceImpl implements UserService {
     private final SmsService smsService;
     private final StudentRepository studentRepository;
     private final StudentMapper studentMapper;
+    private final com.ypyit.neoelima.config.security.EffectivePermissions effectivePermissions;
 
     @Override
     public UserDto createPartnerRootUser(UserSignupForm signupForm) throws BusinessException {
@@ -415,6 +416,8 @@ public class UserServiceImpl implements UserService {
                 });
                 dto.setGroupWide(establishmentUser.isGroupWide());
             }
+            // Celles que l'école a réglées pour ce rôle : le portail n'affiche que ce que le serveur permet.
+            dto.setPermissions(this.effectivePermissions.of(current));
             return dto;
         } catch (UnAuthenticatedUserException e) {
             throw e;

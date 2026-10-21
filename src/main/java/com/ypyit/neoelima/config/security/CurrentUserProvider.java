@@ -39,6 +39,7 @@ public class CurrentUserProvider {
 
     private final UserDetailsServiceImpl userDetailsService;
     private final com.ypyit.neoelima.domain.establishment.repository.EstablishmentRepository establishmentRepository;
+    private final EffectivePermissions effectivePermissions;
 
     public UserEntity currentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -109,8 +110,8 @@ public class CurrentUserProvider {
         if (user instanceof AdminUserEntity) {
             return true;
         }
-        return user.getAuthorities().stream()
-                .anyMatch(authority -> code.equals(authority.getAuthority()));
+        // Les permissions réglées par l'école pour ce rôle, sinon celles du rôle.
+        return this.effectivePermissions.of(user).contains(code);
     }
 
     /**

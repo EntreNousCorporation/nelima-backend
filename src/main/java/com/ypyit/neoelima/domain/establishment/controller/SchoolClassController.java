@@ -37,7 +37,7 @@ public class SchoolClassController {
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "Classes de l'établissement, avec effectif et recouvrement")
-    @PreAuthorize("hasAuthority('class:read')")
+    @PreAuthorize("hasAnyAuthority('class:read', 'student:read')")
     public ResponseEntity<List<SchoolClassDto>> findAll() {
         return ResponseEntity.ok(this.schoolClassService.findAll());
     }

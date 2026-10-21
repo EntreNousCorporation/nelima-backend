@@ -86,15 +86,21 @@ public class SchoolClassService {
         // Trois agrégats groupés plutôt qu'une requête par classe : un tableau de vingt classes
         // aurait sinon coûté soixante allers-retours à l'affichage.
         Map<UUID, Long> headcounts = this.headcounts(scope);
-        Map<UUID, BigDecimal> outstanding = this.outstandingByClass(scope);
-        Map<UUID, BigDecimal> collected = this.collectedByClass(scope);
+        // Les montants ne sortent qu'avec la permission qui les ouvre : le reste dû avec les frais,
+        // l'encaissé avec la comptabilité. Sans elles, la liste des classes reste sans montants.
+        Map<UUID, BigDecimal> outstanding = this.currentUserProvider.hasPermission("fee:read")
+                ? this.outstandingByClass(scope) : Map.of();
+        Map<UUID, BigDecimal> collected = this.currentUserProvider.hasPermission("accounting:read")
+                ? this.collectedByClass(scope) : Map.of();
+        boolean dues = this.currentUserProvider.hasPermission("fee:read");
+        boolean money = this.currentUserProvider.hasPermission("accounting:read");
 
         Map<UUID, List<String>> teachers = this.teachersByClass(scope);
 
         return classes.stream().map(entity -> toDto(entity, this.teacherOf(entity),
                 headcounts.getOrDefault(entity.getId(), 0L),
-                outstanding.getOrDefault(entity.getId(), BigDecimal.ZERO),
-                collected.getOrDefault(entity.getId(), BigDecimal.ZERO),
+                dues ? outstanding.getOrDefault(entity.getId(), BigDecimal.ZERO) : null,
+                money ? collected.getOrDefault(entity.getId(), BigDecimal.ZERO) : null,
                 teachers.getOrDefault(entity.getId(), List.of()))).toList();
     }
 
@@ -102,8 +108,10 @@ public class SchoolClassService {
         SchoolClassEntity entity = this.load(id);
         return toDto(entity, this.teacherOf(entity),
                 this.headcounts(this.scope()).getOrDefault(id, 0L),
-                this.outstandingByClass(this.scope()).getOrDefault(id, BigDecimal.ZERO),
-                this.collectedByClass(this.scope()).getOrDefault(id, BigDecimal.ZERO),
+                this.currentUserProvider.hasPermission("fee:read")
+                        ? this.outstandingByClass(this.scope()).getOrDefault(id, BigDecimal.ZERO) : null,
+                this.currentUserProvider.hasPermission("accounting:read")
+                        ? this.collectedByClass(this.scope()).getOrDefault(id, BigDecimal.ZERO) : null,
                 this.teachersByClass(this.scope()).getOrDefault(id, List.of()));
     }
 

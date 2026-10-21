@@ -45,6 +45,7 @@ public class AuthService {
     private static final int MIN_SECRET_BYTES = 32;
 
     private final SessionService sessionService;
+    private final com.ypyit.neoelima.config.security.EffectivePermissions effectivePermissions;
     private final UserDetailsServiceImpl userDetailsService;
     private final AuthMapper authMapper;
     private final SecurityProperties securityProperties;
@@ -182,7 +183,7 @@ public class AuthService {
         }
         UserEntity userDetails = this.userDetailsService.loadUserByUsername(username);
         if (Objects.nonNull(userDetails) && this.validateToken(token)) {
-            return new UsernamePasswordAuthenticationToken(username, token, userDetails.getAuthorities());
+            return new UsernamePasswordAuthenticationToken(username, token, this.effectivePermissions.authoritiesOf(userDetails));
         }
         throw new IllegalArgumentException("cannot load user with username " + username);
     }
