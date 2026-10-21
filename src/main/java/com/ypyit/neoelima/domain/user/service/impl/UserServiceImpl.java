@@ -423,6 +423,27 @@ public class UserServiceImpl implements UserService {
         }
     }
 
+    /**
+     * Lire un compte : le sien, celui d'un collègue pour qui gère les accès du portail, ou tout
+     * compte pour l'équipe de la plateforme. Cette route n'avait aucun contrôle : n'importe quel
+     * compte connecté lisait l'identifiant, le téléphone et l'e-mail de n'importe quel autre.
+     */
+    private void assertCanReadAccount(UserEntity target) {
+        UserEntity caller = this.currentUserProvider.currentUser();
+        if (caller instanceof AdminUserEntity || Objects.equals(caller.getId(), target.getId())) {
+            return;
+        }
+        UserEntity concrete = org.hibernate.Hibernate.unproxy(target, UserEntity.class);
+        boolean colleague = concrete instanceof EstablishmentUserEntity schoolUser
+                && Objects.nonNull(schoolUser.getEstablishment())
+                && this.currentUserProvider.currentEstablishmentId()
+                        .map(id -> id.equals(schoolUser.getEstablishment().getId())).orElse(false);
+        if (colleague && this.currentUserProvider.hasPermission("user_access:write")) {
+            return;
+        }
+        throw new org.springframework.security.access.AccessDeniedException("User is not allowed to read account " + target.getId());
+    }
+
     private static String userTypeOf(UserEntity user) {
         if (user instanceof AdminUserEntity) {
             return UserType.ADMIN_USER;
@@ -460,9 +481,9 @@ public class UserServiceImpl implements UserService {
             UserEntity user = this.userRepository.findById(id)
                     .orElseThrow(() ->
                             new NotFoundException(String.format("Cannot find user with provided id %s", id)));
-
+            this.assertCanReadAccount(user);
             return this.userMapper.toDto(user);
-        } catch (UnAuthenticatedUserException e) {
+        } catch (UnAuthenticatedUserException | org.springframework.security.access.AccessDeniedException e) {
             throw e;
         } catch (Exception e) {
             throw new BusinessException(e);
