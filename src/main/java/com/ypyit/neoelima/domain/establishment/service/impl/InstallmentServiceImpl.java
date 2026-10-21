@@ -92,6 +92,7 @@ public class InstallmentServiceImpl implements InstallmentService {
     @Override
     public Page<InstallmentDto> findAll(InstallmentSearchForm searchForm, Pageable pageable) {
         try {
+            this.currentUserProvider.assertCanReadDues();
 
             BooleanBuilder builder = new BooleanBuilder();
             QInstallmentEntity installment = QInstallmentEntity.installmentEntity;

@@ -162,7 +162,7 @@ class ParentReceiptAccessTest extends AbstractIntegrationTest {
 
     private void authenticateAsSchoolAgent() {
         String email = "agent-" + UUID.randomUUID() + "@nelima.ci";
-        userRepository.saveAndFlush(EstablishmentUserEntity.builder()
+        userRepository.saveAndFlush(EstablishmentUserEntity.builder().role(roleWith("fee:read", "accounting:read", "collection:write"))
                 .firstName("Awa").lastName("Traoré").establishment(school)
                 .contacts(primaryEmail(email)).build());
         SecurityContextHolder.getContext().setAuthentication(

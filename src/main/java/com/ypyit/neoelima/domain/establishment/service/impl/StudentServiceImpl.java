@@ -300,13 +300,17 @@ public class StudentServiceImpl implements StudentService {
                 .forEach(row -> filed.computeIfAbsent(row.get(document.student.id), k -> new HashSet<>())
                         .add(row.get(document.kind)));
 
+        // Les montants dus ne sortent qu'avec les frais ou l'encaissement ; le statut, lui, reste lisible
+        // (il sert aux filtres de la liste et ne dit pas combien).
+        boolean dues = this.currentUserProvider.hasPermission("fee:read")
+                || this.currentUserProvider.hasPermission("collection:write");
         for (StudentDto dto : students) {
             BigDecimal[] found = balances.get(dto.getId());
             // Zéro et non nul : la requête a bien porté sur cet élève, il ne doit simplement rien.
             BigDecimal outstanding = found == null ? BigDecimal.ZERO : found[0];
             BigDecimal overdue = found == null ? BigDecimal.ZERO : found[1];
-            dto.setOutstandingAmount(outstanding);
-            dto.setOverdueAmount(overdue);
+            dto.setOutstandingAmount(dues ? outstanding : null);
+            dto.setOverdueAmount(dues ? overdue : null);
             // Mêmes règles que StudentFilters, appliquées aux montants déjà chargés.
             dto.setPaymentStatus(overdue.signum() > 0 ? StudentPaymentStatus.OVERDUE
                     : outstanding.signum() > 0 && havePaid.contains(dto.getId()) ? StudentPaymentStatus.DEPOSIT

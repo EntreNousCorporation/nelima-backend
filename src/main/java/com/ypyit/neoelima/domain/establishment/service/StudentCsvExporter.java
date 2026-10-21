@@ -38,8 +38,9 @@ public class StudentCsvExporter {
                     escape(Objects.isNull(student.getLevelOfStudy()) ? null : student.getLevelOfStudy().getCode()),
                     escape(Objects.isNull(student.getSchoolClass()) ? null : student.getSchoolClass().getName()),
                     escape(label(student.getPaymentStatus())),
-                    escape(Objects.requireNonNullElse(student.getOutstandingAmount(), BigDecimal.ZERO)
-                            .toPlainString().replace('.', ',')),
+                    // Vide, et non zéro, quand le solde n'est pas visible pour ce profil.
+                    escape(Objects.isNull(student.getOutstandingAmount()) ? null
+                            : student.getOutstandingAmount().toPlainString().replace('.', ',')),
                     escape(Boolean.TRUE.equals(student.getDossierComplete()) ? "Complet" : "Incomplet")
             )).append('\n');
         }

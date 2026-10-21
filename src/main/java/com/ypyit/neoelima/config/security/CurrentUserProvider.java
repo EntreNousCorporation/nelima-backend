@@ -127,6 +127,17 @@ public class CurrentUserProvider {
     }
 
     /**
+     * Côté école, les sommes dues (tranches, frais des élèves) se lisent avec les frais ou
+     * l'encaissement. Sans effet pour un parent, qui lit celles de ses enfants par d'autres
+     * contrôles, ni pour la plateforme.
+     */
+    public void assertCanReadDues() {
+        if (this.hasEstablishmentScope() && !this.hasPermission("fee:read") && !this.hasPermission("collection:write")) {
+            throw new AccessDeniedException("Permission fee:read is required");
+        }
+    }
+
+    /**
      * Vérifie que l'appelant a le droit d'agir sur cet établissement.
      *
      * <p>Un admin YPYit passe partout. Un utilisateur d'établissement ne passe que sur le sien. Un

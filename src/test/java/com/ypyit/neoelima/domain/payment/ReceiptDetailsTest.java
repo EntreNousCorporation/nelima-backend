@@ -232,7 +232,7 @@ class ReceiptDetailsTest extends AbstractIntegrationTest {
 
     private void authenticateAsSchoolUser() {
         String email = "agent-" + UUID.randomUUID() + "@ecole.ci";
-        this.userRepository.saveAndFlush(EstablishmentUserEntity.builder()
+        this.userRepository.saveAndFlush(EstablishmentUserEntity.builder().role(roleWith("fee:read", "accounting:read", "collection:write"))
                 .firstName("Awa").lastName("Traoré").establishment(this.establishment)
                 .contacts(new HashSet<>(Set.of(ContactEntity.builder()
                         .type(ContactType.EMAIL).value(email).isPrimary(true).build())))

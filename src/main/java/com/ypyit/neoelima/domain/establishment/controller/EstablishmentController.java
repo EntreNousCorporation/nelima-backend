@@ -47,6 +47,7 @@ public class EstablishmentController {
     private final EstablishmentService establishmentService;
 
     private final CurrentUserProvider currentUserProvider;
+    private final com.ypyit.neoelima.domain.user.repository.RoleRepository roleRepository;
 
     private final UserService userService;
 
@@ -68,6 +69,7 @@ public class EstablishmentController {
                     + "ailleurs donnerait accès à toutes les données de l'école visée.")
     public ResponseEntity<UserDto> createUsers(@RequestBody @Valid EstablishmentUserSignupForm creationForm, @PathVariable UUID id) {
         this.currentUserProvider.assertCanAdministerEstablishment(id);
+        this.assertGrantableRole(creationForm.getRoleId());
         var response = this.userService.createPartnerUser(id, creationForm);
         URI uri = ControllerUtils.buildMvcPathComponent(response.getId(), EstablishmentController.class);
         return ResponseEntity.created(uri).body(response);
@@ -87,7 +89,25 @@ public class EstablishmentController {
                     + "dernier est le seul qui fonctionne.")
     public ResponseEntity<UserDto> resendActivation(@PathVariable UUID id, @PathVariable UUID userId) {
         this.currentUserProvider.assertCanAdministerEstablishment(id);
+        // Émettre un nouveau lien invalide l'ancien : c'est gérer les accès du portail.
+        this.currentUserProvider.assertPermission("user_access:write");
         return ResponseEntity.ok(this.userService.resendActivationLink(id, userId));
+    }
+
+    /**
+     * Rôles qu'on peut donner à un compte d'école. Une école donne ceux de son équipe ; la
+     * plateforme y ajoute l'administrateur d'établissement. Jamais un rôle plateforme ou parent :
+     * un compte d'école marqué ADMIN aurait les accès de YPYit.
+     */
+    private void assertGrantableRole(java.util.UUID roleId) {
+        String code = this.roleRepository.findById(roleId).map(com.ypyit.neoelima.domain.user.entity.RoleEntity::getCode)
+                .orElseThrow(() -> new com.ypyit.neoelima.common.exception.NotFoundException("Rôle introuvable."));
+        java.util.Set<String> grantable = this.currentUserProvider.isPlatformAdmin()
+                ? java.util.Set.of("ESTABLISHMENT_ROOT", "DIRECTEUR", "COMPTABLE", "SECRETARIAT")
+                : java.util.Set.of("DIRECTEUR", "COMPTABLE", "SECRETARIAT");
+        if (!grantable.contains(code)) {
+            throw new org.springframework.security.access.AccessDeniedException("Ce rôle ne peut pas être attribué depuis ce compte.");
+        }
     }
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
@@ -144,7 +164,7 @@ public class EstablishmentController {
     }
 
     @PostMapping(value = "/{id}/level-of-studies", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasAuthority('fee:write')")
+    @PreAuthorize("hasAuthority('settings:write')")
     public ResponseEntity<EstablishmentLiteDto> createLevelOfStudies(@RequestBody @Valid EstablishmentLevelOfStudyCreationForm creationForm, @PathVariable UUID id) {
         this.currentUserProvider.assertCanAdministerEstablishment(id);
         var response = this.establishmentService.createLevelOfStudies(id, creationForm);

@@ -109,6 +109,8 @@ public class SchoolSiteService {
         if (!user.isGroupWide() || Objects.isNull(group)) {
             throw new AccessDeniedException("La vue « Tous les sites » est réservée à la direction du groupe.");
         }
+        // Des montants de tous les sites : la comptabilité est exigée, comme pour ceux d'un site.
+        this.currentUserProvider.assertPermission("accounting:read");
         List<EstablishmentEntity> sites = this.establishmentRepository.findBySchoolGroup_IdOrderByNameAsc(group.getId());
         List<UUID> ids = sites.stream().map(EstablishmentEntity::getId).toList();
         UUID year = this.academicYearContext.consultedId();
@@ -210,6 +212,10 @@ public class SchoolSiteService {
                 || Objects.isNull(schoolUser.getEstablishment())
                 || Objects.isNull(schoolUser.getEstablishment().getSchoolGroup())) {
             throw new BadRequestException("Seul un compte d'un site rattaché à un groupe peut être direction de groupe.");
+        }
+        if (groupWide && (Objects.isNull(schoolUser.getRole())
+                || !Set.of("ESTABLISHMENT_ROOT", "DIRECTEUR").contains(schoolUser.getRole().getCode()))) {
+            throw new BadRequestException("La direction de groupe se donne à un directeur ou à l'administrateur d'un site.");
         }
         schoolUser.setGroupWide(groupWide);
         if (!groupWide) {

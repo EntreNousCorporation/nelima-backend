@@ -43,4 +43,27 @@ public abstract class AbstractIntegrationTest {
         registry.add("security.jwt.secret",
                 () -> "secret-de-test-uniquement-32-caracteres-minimum");
     }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.ypyit.neoelima.domain.user.repository.RoleRepository testRoleRepository;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.ypyit.neoelima.domain.user.repository.PermissionRepository testPermissionRepository;
+
+    /**
+     * Un rôle de test portant exactement ces permissions. Les contrôles se jouent sur les
+     * permissions : un compte d'école sans rôle ne lit plus les montants, comme en vrai.
+     */
+    protected com.ypyit.neoelima.domain.user.entity.RoleEntity roleWith(String... permissions) {
+        java.util.Set<com.ypyit.neoelima.domain.user.entity.PermissionEntity> granted = new java.util.HashSet<>();
+        for (String code : permissions) {
+            granted.add(this.testPermissionRepository.findByCode(code)
+                    .orElseGet(() -> this.testPermissionRepository.saveAndFlush(com.ypyit.neoelima.domain.user.entity.PermissionEntity.builder()
+                            .code(code).name(com.ypyit.neoelima.domain.user.entity.TranslateEntity.builder().fr(code).en(code).build()).build())));
+        }
+        return this.testRoleRepository.saveAndFlush(com.ypyit.neoelima.domain.user.entity.RoleEntity.builder()
+                .code("TEST-" + java.util.UUID.randomUUID())
+                .name(com.ypyit.neoelima.domain.user.entity.TranslateEntity.builder().fr("Rôle de test").en("Test role").build())
+                .permissions(granted)
+                .build());
+    }
 }

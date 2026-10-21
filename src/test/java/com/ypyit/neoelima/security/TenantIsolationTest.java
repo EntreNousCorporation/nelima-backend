@@ -224,7 +224,7 @@ class TenantIsolationTest extends AbstractIntegrationTest {
     }
 
     private EstablishmentUserEntity saveSchoolUser(String email, EstablishmentEntity establishment) {
-        return userRepository.save(EstablishmentUserEntity.builder()
+        return userRepository.save(EstablishmentUserEntity.builder().role(roleWith("fee:read", "accounting:read", "collection:write"))
                 .firstName("Awa").lastName("Traoré")
                 .establishment(establishment)
                 .contacts(primaryEmail(email))

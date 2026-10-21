@@ -85,6 +85,14 @@ public class ReceiptService {
         }
 
         if (this.currentUserProvider.hasEstablishmentScope()) {
+            // Le journal des reçus est une donnée comptable : la comptabilité ou les frais. Au guichet,
+            // l'encaissement relit les reçus d'un élève donné, pas ceux de toute l'école.
+            boolean ledger = this.currentUserProvider.hasPermission("accounting:read")
+                    || this.currentUserProvider.hasPermission("fee:read");
+            boolean counter = Objects.nonNull(studentId) && this.currentUserProvider.hasPermission("collection:write");
+            if (!ledger && !counter) {
+                throw new org.springframework.security.access.AccessDeniedException("Permission accounting:read is required");
+            }
             UUID scope = this.currentUserProvider.resolveEstablishmentScope(requestedEstablishmentId);
             if (Objects.nonNull(scope)) {
                 builder.and(receipt.establishment.id.eq(scope));
@@ -151,6 +159,12 @@ public class ReceiptService {
         // Sinon la règle est celle de l'élève concerné : admin YPYit, école de l'élève, ou tuteur
         // rattaché. Plus juste qu'une comparaison d'établissement, qui excluait tout parent.
         this.currentUserProvider.assertCanAccessStudent(studentOf(receipt));
+        // Côté école, une quittance se lit avec les frais ou l'encaissement, pas avec le seul rattachement.
+        if (this.currentUserProvider.hasEstablishmentScope()
+                && !this.currentUserProvider.hasPermission("fee:read")
+                && !this.currentUserProvider.hasPermission("collection:write")) {
+            throw new org.springframework.security.access.AccessDeniedException("Permission fee:read is required");
+        }
         return receipt;
     }
 

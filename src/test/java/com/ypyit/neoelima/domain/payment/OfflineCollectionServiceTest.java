@@ -235,7 +235,7 @@ class OfflineCollectionServiceTest extends AbstractIntegrationTest {
 
     private void authenticateAsSchoolUserOf(EstablishmentEntity school) {
         String email = "comptable-" + UUID.randomUUID() + "@nelima.ci";
-        userRepository.saveAndFlush(EstablishmentUserEntity.builder()
+        userRepository.saveAndFlush(EstablishmentUserEntity.builder().role(roleWith("fee:read", "accounting:read", "collection:write"))
                 .firstName("Awa").lastName("Traoré")
                 .establishment(school)
                 .contacts(Set.of(ContactEntity.builder()

@@ -218,7 +218,7 @@ class DashboardServiceTest extends AbstractIntegrationTest {
 
     private void authenticateAgentOf(EstablishmentEntity school) {
         String email = "agent-" + UUID.randomUUID() + "@nelima.ci";
-        userRepository.saveAndFlush(EstablishmentUserEntity.builder()
+        userRepository.saveAndFlush(EstablishmentUserEntity.builder().role(roleWith("fee:read", "accounting:read", "collection:write"))
                 .firstName("Awa").lastName("Traoré").establishment(school)
                 .contacts(primaryEmail(email)).build());
         SecurityContextHolder.getContext().setAuthentication(

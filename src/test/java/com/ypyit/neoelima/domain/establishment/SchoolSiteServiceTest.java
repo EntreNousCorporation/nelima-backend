@@ -59,7 +59,8 @@ class SchoolSiteServiceTest extends AbstractIntegrationTest {
         this.marcory = this.school("Dubass Marcory");
         this.cocody = this.school("Dubass Cocody");
         this.elsewhere = this.school("Autre école");
-        this.director = this.user(EstablishmentUserEntity.builder().establishment(this.marcory));
+        this.director = this.user(EstablishmentUserEntity.builder().establishment(this.marcory)
+                .role(this.directorRole()));
         this.directorId = this.userRepository.findAll().stream()
                 .filter(u -> u.getContacts().stream().anyMatch(c -> c.getValue().equals(this.director)))
                 .findFirst().orElseThrow().getId();
@@ -146,5 +147,20 @@ class SchoolSiteServiceTest extends AbstractIntegrationTest {
 
     private void login(String email) {
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(email, "n/a", List.of()));
+    }
+
+    /** La direction de groupe se donne à un directeur, et « Tous les sites » demande la comptabilité. */
+    @Autowired
+    private com.ypyit.neoelima.domain.user.repository.RoleRepository roleRepository;
+
+    private com.ypyit.neoelima.domain.user.entity.RoleEntity directorRole() {
+        com.ypyit.neoelima.domain.user.entity.RoleEntity granted = roleWith("accounting:read");
+        com.ypyit.neoelima.domain.user.entity.RoleEntity director = this.roleRepository.findByCode("DIRECTEUR")
+                .orElseGet(() -> this.roleRepository.saveAndFlush(com.ypyit.neoelima.domain.user.entity.RoleEntity.builder()
+                        .code("DIRECTEUR")
+                        .name(com.ypyit.neoelima.domain.user.entity.TranslateEntity.builder().fr("Directeur").en("Director").build())
+                        .build()));
+        director.getPermissions().addAll(granted.getPermissions());
+        return this.roleRepository.saveAndFlush(director);
     }
 }

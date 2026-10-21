@@ -65,30 +65,42 @@ public class DashboardService {
         Instant startOfDay = today.atStartOfDay(ABIDJAN).toInstant();
         LocalDate firstOfMonth = today.withDayOfMonth(1);
 
-        return DashboardSummaryDto.builder()
+        // Les montants ne sortent qu'avec la permission qui les ouvre : les encaissements et les
+        // reçus avec la comptabilité, les sommes dues avec les frais. Sans elles, le tableau de bord
+        // reste celui de l'effectif et des classes.
+        boolean money = this.currentUserProvider.hasPermission("accounting:read");
+        boolean dues = money || this.currentUserProvider.hasPermission("fee:read");
+
+        DashboardSummaryDto.DashboardSummaryDtoBuilder summary = DashboardSummaryDto.builder()
                 .studentCount(this.countStudents(scope))
                 .levelCount(this.countLevels(scope))
                 .girlCount(this.countByGender(scope, Gender.FEMALE))
                 .boyCount(this.countByGender(scope, Gender.MALE))
                 .genderUnknownCount(this.countByGender(scope, null))
-                .collectedThisMonth(this.collectedBetween(scope, startOfMonth, null))
-                .receiptsThisMonth(this.countReceiptsSince(scope, startOfMonth))
-                .collectedToday(this.collectedBetween(scope, startOfDay, null))
-                .paymentsToday(this.countReceiptsSince(scope, startOfDay))
-                .expectedThisMonth(this.expectedBetween(scope, firstOfMonth, firstOfMonth.plusMonths(1)))
-                .expectedPreviousMonth(this.expectedBetween(scope,
-                        firstOfMonth.minusMonths(1), firstOfMonth))
-                .collectedPreviousMonth(this.collectedBetween(scope,
-                        firstOfMonth.minusMonths(1).atStartOfDay(ABIDJAN).toInstant(), startOfMonth))
-                .monthly(this.monthlySeries(scope, firstOfMonth))
                 .classFilling(this.classFilling(scope))
-                .pendingAmount(this.pendingAmount(scope, null))
-                .pendingCount(this.pendingCount(scope, null))
-                .overdueAmount(this.pendingAmount(scope, today))
-                .overdueCount(this.pendingCount(scope, today))
-                .topOverdue(this.topOverdue(scope, today))
-                .recentReceipts(this.recentReceipts(scope))
-                .build();
+                .monthly(List.of())
+                .topOverdue(List.of())
+                .recentReceipts(List.of());
+        if (money) {
+            summary.collectedThisMonth(this.collectedBetween(scope, startOfMonth, null))
+                    .receiptsThisMonth(this.countReceiptsSince(scope, startOfMonth))
+                    .collectedToday(this.collectedBetween(scope, startOfDay, null))
+                    .paymentsToday(this.countReceiptsSince(scope, startOfDay))
+                    .expectedThisMonth(this.expectedBetween(scope, firstOfMonth, firstOfMonth.plusMonths(1)))
+                    .expectedPreviousMonth(this.expectedBetween(scope, firstOfMonth.minusMonths(1), firstOfMonth))
+                    .collectedPreviousMonth(this.collectedBetween(scope,
+                            firstOfMonth.minusMonths(1).atStartOfDay(ABIDJAN).toInstant(), startOfMonth))
+                    .monthly(this.monthlySeries(scope, firstOfMonth))
+                    .recentReceipts(this.recentReceipts(scope));
+        }
+        if (dues) {
+            summary.pendingAmount(this.pendingAmount(scope, null))
+                    .pendingCount(this.pendingCount(scope, null))
+                    .overdueAmount(this.pendingAmount(scope, today))
+                    .overdueCount(this.pendingCount(scope, today))
+                    .topOverdue(this.topOverdue(scope, today));
+        }
+        return summary.build();
     }
 
     /**

@@ -46,6 +46,7 @@ public class StudentFeeServiceImpl implements StudentFeeService {
             // Les frais d'un élève sont lisibles par son école ou par un tuteur rattaché,
             // jamais par n'importe quel utilisateur authentifié qui connaîtrait l'identifiant.
             this.assertCanAccessStudent(studentId);
+            this.currentUserProvider.assertCanReadDues();
 
             BooleanBuilder builder = new BooleanBuilder();
             QStudentFeeEntity studentFee = QStudentFeeEntity.studentFeeEntity;
@@ -71,6 +72,7 @@ public class StudentFeeServiceImpl implements StudentFeeService {
     @Override
     public Page<StudentFeeDto> findAll(StudentFeeSearchForm searchForm, Pageable pageable) {
         try {
+            this.currentUserProvider.assertCanReadDues();
             BooleanBuilder builder = new BooleanBuilder();
             QStudentFeeEntity studentFee = QStudentFeeEntity.studentFeeEntity;
 
