@@ -86,8 +86,8 @@
   {
     "code": "accounting:read",
     "name": {
-      "fr": "Exporter le journal comptable",
-      "en": "Export the accounting journal"
+      "fr": "Consulter la comptabilité (encaissements, reçus, transactions, exports)",
+      "en": "Read accounting (collections, receipts, transactions, exports)"
     }
   },
   {
