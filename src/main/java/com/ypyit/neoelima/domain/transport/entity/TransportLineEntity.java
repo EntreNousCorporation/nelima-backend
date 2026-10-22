@@ -51,6 +51,12 @@ public class TransportLineEntity extends BaseEntity {
     @Column(nullable = false, length = 64)
     private String name;
 
+    /** Véhicule affecté ; immatriculation et places en sont recopiées sur la ligne. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @ToString.Exclude
+    @JoinColumn(name = "vehicle_id", referencedColumnName = "id")
+    private TransportVehicleEntity vehicle;
+
     @Column(length = 16)
     private String vehiclePlate;
 

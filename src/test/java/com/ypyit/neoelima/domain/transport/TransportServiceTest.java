@@ -57,6 +57,14 @@ class TransportServiceTest extends AbstractIntegrationTest {
 
     @MockitoBean
     private PushNotificationService pushNotificationService;
+    @MockitoBean
+    private com.ypyit.neoelima.common.service.email.service.EmailService emailService;
+    @Autowired
+    private com.ypyit.neoelima.domain.transport.service.TransportVehicleAlertJob vehicleAlertJob;
+    @Autowired
+    private org.thymeleaf.TemplateEngine templateEngine;
+    @Autowired
+    private com.ypyit.neoelima.domain.user.repository.RoleRepository roleRepository;
     @Autowired
     private TransportService transportService;
     @Autowired
@@ -90,6 +98,62 @@ class TransportServiceTest extends AbstractIntegrationTest {
         this.userRepository.saveAndFlush(EstablishmentUserEntity.builder().firstName("Awa").lastName("Traoré")
                 .establishment(this.school).contacts(this.email(director)).build());
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(director, "n/a", List.of()));
+    }
+
+    @Test
+    @DisplayName("une ligne affecte un véhicule du parc : elle en prend l'immatriculation et les places, et suit ses modifications")
+    void linesUseFleetVehicles() {
+        TransportDtos.Vehicle car = this.transportService.saveVehicle(null, this.vehicle("ab 4821  ci", 50, LocalDate.of(2027, 3, 31)));
+        assertThat(car.getPlate()).isEqualTo("AB 4821 CI");
+        assertThat(car.getLines()).isEmpty();
+
+        TransportForms.Line form = this.form("Ligne 4", 1, "Cocody");
+        form.setCapacity(null);
+        form.setVehicleId(UUID.fromString(car.getId()));
+        TransportDtos.Line line = this.transportService.saveLine(null, form);
+        assertThat(line.getVehiclePlate()).isEqualTo("AB 4821 CI");
+        assertThat(line.getCapacity()).isEqualTo(50);
+        assertThat(line.getVehicleId()).isEqualTo(car.getId());
+        assertThat(this.transportService.vehicles()).singleElement()
+                .satisfies(v -> assertThat(v.getLines()).containsExactly("Ligne 4"));
+
+        TransportForms.Vehicle edit = this.vehicle("AB 4821 CI", 30, LocalDate.of(2027, 3, 31));
+        this.transportService.saveVehicle(UUID.fromString(car.getId()), edit);
+        assertThat(this.transportService.lines()).singleElement()
+                .satisfies(l -> assertThat(l.getCapacity()).as("les places suivent le véhicule").isEqualTo(30));
+
+        assertThatThrownBy(() -> this.transportService.saveVehicle(null, this.vehicle("AB 4821 CI", 40, LocalDate.of(2027, 1, 1))))
+                .as("une immatriculation par école").isInstanceOf(BadRequestException.class);
+
+        TransportForms.Vehicle minibus = this.vehicle("AC 1000 CI", 50, LocalDate.of(2027, 1, 1));
+        minibus.setKind(com.ypyit.neoelima.domain.transport.enums.VehicleKind.MINIBUS);
+        assertThat(this.transportService.saveVehicle(null, minibus).getCapacity()).as("minibus : 9 places au plus").isEqualTo(9);
+    }
+
+    @Test
+    @DisplayName("la direction est prévenue une fois, 30 jours avant la fin d'assurance ; une nouvelle date réarme l'alerte")
+    void warnsDirectionBeforeInsuranceEnds() {
+        String directorEmail = "directeur-" + UUID.randomUUID() + "@ecole.ci";
+        com.ypyit.neoelima.domain.user.entity.RoleEntity director = this.roleRepository.findByCode("DIRECTEUR")
+                .orElseGet(() -> this.roleRepository.saveAndFlush(com.ypyit.neoelima.domain.user.entity.RoleEntity.builder().code("DIRECTEUR")
+                        .name(com.ypyit.neoelima.domain.user.entity.TranslateEntity.builder().fr("Directeur").en("Director").build()).build()));
+        this.userRepository.saveAndFlush(EstablishmentUserEntity.builder().firstName("Yao").lastName("Koffi").role(director)
+                .establishment(this.school).contacts(this.email(directorEmail)).build());
+        LocalDate today = LocalDate.of(2026, 11, 2);
+        TransportDtos.Vehicle car = this.transportService.saveVehicle(null, this.vehicle("AB 1907 CI", 30, today.plusDays(45)));
+
+        assertThat(this.vehicleAlertJob.run(today)).as("trop tôt").isZero();
+        assertThat(this.vehicleAlertJob.run(today.plusDays(15))).isEqualTo(1);
+        assertThat(this.vehicleAlertJob.run(today.plusDays(16))).as("une seule fois par échéance").isZero();
+        org.mockito.ArgumentCaptor<org.thymeleaf.context.Context> mail = org.mockito.ArgumentCaptor.forClass(org.thymeleaf.context.Context.class);
+        verify(this.emailService, org.mockito.Mockito.times(1)).send(mail.capture(),
+                org.mockito.ArgumentMatchers.eq(com.ypyit.neoelima.common.service.email.enums.EmailTemplateType.TRANSPORT_VEHICLE_EXPIRY));
+        assertThat(mail.getValue().getVariable("email")).isEqualTo(directorEmail);
+        String body = this.templateEngine.process("transport-vehicle-expiry_fr", mail.getValue());
+        assertThat(body).contains("AB 1907 CI").contains("Assurance").contains("dans 30 jours");
+
+        this.transportService.saveVehicle(UUID.fromString(car.getId()), this.vehicle("AB 1907 CI", 30, today.plusDays(40)));
+        assertThat(this.vehicleAlertJob.run(today.plusDays(20))).as("assurance renouvelée : nouvelle échéance").isEqualTo(1);
     }
 
     @Test
@@ -189,6 +253,14 @@ class TransportServiceTest extends AbstractIntegrationTest {
 
     private TransportDtos.Line line(String name, int capacity, String... stops) {
         return this.transportService.saveLine(null, this.form(name, capacity, stops));
+    }
+
+    private TransportForms.Vehicle vehicle(String plate, int capacity, LocalDate insurance) {
+        TransportForms.Vehicle form = new TransportForms.Vehicle();
+        form.setPlate(plate);
+        form.setCapacity(capacity);
+        form.setInsuranceExpiry(insurance);
+        return form;
     }
 
     private TransportForms.Line form(String name, int capacity, String... stops) {

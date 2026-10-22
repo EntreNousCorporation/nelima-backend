@@ -16,7 +16,9 @@ public enum EmailTemplateType {
     RECEIPT("receipt"),
     DEMO_REQUEST("demo-request"),
     /** Suggestion déposée par un parent depuis l'application. */
-    FEEDBACK("feedback");
+    FEEDBACK("feedback"),
+    /** Assurance ou visite technique d'un véhicule de transport qui arrive à échéance. */
+    TRANSPORT_VEHICLE_EXPIRY("transport-vehicle-expiry");
 
     private final String value;
 }

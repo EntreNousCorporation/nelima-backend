@@ -64,6 +64,27 @@ public class TransportController {
         return ResponseEntity.ok(this.transportService.setStatus(id, form));
     }
 
+    @GetMapping(value = "/vehicles", produces = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAuthority('transport:read')")
+    @Operation(summary = "Parc de véhicules de l'école et leurs affectations")
+    public ResponseEntity<List<TransportDtos.Vehicle>> vehicles() {
+        return ResponseEntity.ok(this.transportService.vehicles());
+    }
+
+    @PostMapping(value = "/vehicles", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAuthority('transport:write')")
+    @Operation(summary = "Ajouter un véhicule au parc")
+    public ResponseEntity<TransportDtos.Vehicle> createVehicle(@RequestBody @Valid TransportForms.Vehicle form) {
+        return ResponseEntity.ok(this.transportService.saveVehicle(null, form));
+    }
+
+    @PutMapping(value = "/vehicles/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAuthority('transport:write')")
+    @Operation(summary = "Modifier un véhicule ; les lignes qui l'affectent suivent")
+    public ResponseEntity<TransportDtos.Vehicle> updateVehicle(@PathVariable UUID id, @RequestBody @Valid TransportForms.Vehicle form) {
+        return ResponseEntity.ok(this.transportService.saveVehicle(id, form));
+    }
+
     @GetMapping(value = "/drivers", produces = MediaType.APPLICATION_JSON_VALUE)
     @PreAuthorize("hasAuthority('transport:read')")
     public ResponseEntity<List<TransportDtos.Driver>> drivers() {

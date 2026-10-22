@@ -1,5 +1,7 @@
 package com.ypyit.neoelima.domain.transport.service;
 
+import com.ypyit.neoelima.domain.transport.entity.TransportVehicleEntity;
+import com.ypyit.neoelima.domain.transport.enums.VehicleKind;
 import com.ypyit.neoelima.common.exception.BadRequestException;
 import com.ypyit.neoelima.common.exception.NotFoundException;
 import com.ypyit.neoelima.common.service.push.PushNotificationService;
@@ -76,6 +78,7 @@ public class TransportService {
     private static final List<String> DRIVER_DOCUMENTS = List.of("LICENSE", "ID", "RECORD", "MEDICAL");
 
     private final TransportDriverRepository driverRepository;
+    private final com.ypyit.neoelima.domain.transport.repository.TransportVehicleRepository vehicleRepository;
     private final TransportLineRepository lineRepository;
     private final TransportStopRepository stopRepository;
     private final TransportSubscriptionRepository subscriptionRepository;
@@ -124,6 +127,63 @@ public class TransportService {
         return toDto(this.driverRepository.saveAndFlush(driver), List.of());
     }
 
+    /* ------------------------------------------------------------------ Véhicules ---- */
+
+    public List<TransportDtos.Vehicle> vehicles() {
+        UUID scope = this.scope();
+        Map<UUID, List<String>> linesByVehicle = new HashMap<>();
+        this.linesOfYear(scope).forEach(line -> {
+            if (Objects.nonNull(line.getVehicle()) && line.isActive()) {
+                linesByVehicle.computeIfAbsent(line.getVehicle().getId(), k -> new ArrayList<>()).add(line.getName());
+            }
+        });
+        return this.vehicleRepository.findByEstablishment_IdOrderByPlateAsc(scope).stream()
+                .map(vehicle -> toDto(vehicle, linesByVehicle.getOrDefault(vehicle.getId(), List.of())))
+                .toList();
+    }
+
+    /**
+     * Ajoute ou modifie un véhicule. Une modification se reporte sur les lignes de l'année qui
+     * l'affectent : elles affichent son immatriculation et comptent ses places.
+     */
+    @Transactional
+    public TransportDtos.Vehicle saveVehicle(UUID id, TransportForms.Vehicle form) {
+        UUID scope = this.scope();
+        String plate = form.getPlate().trim().replaceAll("\\s+", " ").toUpperCase();
+        boolean taken = this.vehicleRepository.findByEstablishment_IdOrderByPlateAsc(scope).stream()
+                .anyMatch(v -> !v.getId().equals(id) && v.getPlate().equalsIgnoreCase(plate));
+        if (taken) {
+            throw new BadRequestException(String.format("Le véhicule %s est déjà enregistré.", plate));
+        }
+        TransportVehicleEntity vehicle = Objects.isNull(id)
+                ? TransportVehicleEntity.builder().establishment(this.establishmentRepository.getReferenceById(scope)).build()
+                : this.loadVehicle(id, scope);
+        VehicleKind kind = Objects.requireNonNullElse(form.getKind(), VehicleKind.CAR);
+        // Un minibus, c'est neuf places au plus : au-delà, il faut un permis D et c'est un car.
+        int capacity = kind == VehicleKind.MINIBUS ? Math.min(form.getCapacity(), 9) : form.getCapacity();
+        vehicle.setPlate(plate);
+        vehicle.setKind(kind);
+        vehicle.setModel(trim(form.getModel()));
+        vehicle.setCapacity(capacity);
+        vehicle.setInsuranceExpiry(form.getInsuranceExpiry());
+        vehicle.setTechnicalVisit(form.getTechnicalVisit());
+        vehicle.setActive(form.isActive());
+        TransportVehicleEntity saved = this.vehicleRepository.saveAndFlush(vehicle);
+
+        List<String> lines = new ArrayList<>();
+        for (TransportLineEntity line : this.linesOfYear(scope)) {
+            if (Objects.nonNull(line.getVehicle()) && line.getVehicle().getId().equals(saved.getId())) {
+                line.setVehiclePlate(saved.getPlate());
+                line.setCapacity(saved.getCapacity());
+                this.lineRepository.save(line);
+                if (line.isActive()) {
+                    lines.add(line.getName());
+                }
+            }
+        }
+        return toDto(saved, lines);
+    }
+
     /* ------------------------------------------------------------------ Lignes ---- */
 
     public List<TransportDtos.Line> lines() {
@@ -161,15 +221,29 @@ public class TransportService {
             }
         }
         line.setName(form.getName().trim());
-        line.setVehiclePlate(trim(form.getVehiclePlate()));
-        line.setCapacity(form.getCapacity());
+        if (Objects.nonNull(form.getVehicleId())) {
+            TransportVehicleEntity vehicle = this.loadVehicle(form.getVehicleId(), scope);
+            line.setVehicle(vehicle);
+            line.setVehiclePlate(vehicle.getPlate());
+            line.setCapacity(vehicle.getCapacity());
+        } else {
+            if (Objects.isNull(form.getCapacity())) {
+                throw new BadRequestException("Choisissez le véhicule de la ligne.");
+            }
+            line.setVehicle(null);
+            line.setVehiclePlate(trim(form.getVehiclePlate()));
+            line.setCapacity(form.getCapacity());
+        }
         line.setDriver(Objects.isNull(form.getDriverId()) ? null : this.loadDriver(form.getDriverId(), scope));
         line.setMorningDeparture(form.getMorningDeparture());
         line.setEveningDeparture(form.getEveningDeparture());
         line.setDays(Objects.isNull(form.getDays()) || form.getDays().isEmpty() ? "MONDAY,TUESDAY,WEDNESDAY,THURSDAY,FRIDAY"
                 : form.getDays().stream().distinct().sorted().map(Enum::name).collect(Collectors.joining(",")));
         line.setAttendant(trim(form.getAttendant()));
-        line.setStartDate(form.getStartDate());
+        // Sans date, les inscriptions sont ouvertes dès la création ; une date déjà fixée reste.
+        if (Objects.nonNull(form.getStartDate())) {
+            line.setStartDate(form.getStartDate());
+        }
         line.setMonthlyPrice(form.getMonthlyPrice());
         line.setActive(form.isActive());
         TransportLineEntity saved = this.lineRepository.saveAndFlush(line);
@@ -440,6 +514,7 @@ public class TransportService {
                 .id(line.getId().toString())
                 .name(line.getName())
                 .itinerary(itinerary)
+                .vehicleId(Objects.isNull(line.getVehicle()) ? null : line.getVehicle().getId().toString())
                 .vehiclePlate(line.getVehiclePlate())
                 .capacity(line.getCapacity())
                 .driverId(Objects.isNull(driver) ? null : driver.getId().toString())
@@ -481,6 +556,20 @@ public class TransportService {
                 .documents(documents)
                 .active(driver.isActive())
                 .dossierComplete(StringUtils.isNotBlank(driver.getPhone()) && licenseValid && documents.containsAll(DRIVER_DOCUMENTS))
+                .lines(lines)
+                .build();
+    }
+
+    private static TransportDtos.Vehicle toDto(TransportVehicleEntity vehicle, List<String> lines) {
+        return TransportDtos.Vehicle.builder()
+                .id(vehicle.getId().toString())
+                .plate(vehicle.getPlate())
+                .kind(vehicle.getKind())
+                .model(vehicle.getModel())
+                .capacity(vehicle.getCapacity())
+                .insuranceExpiry(vehicle.getInsuranceExpiry())
+                .technicalVisit(vehicle.getTechnicalVisit())
+                .active(vehicle.isActive())
                 .lines(lines)
                 .build();
     }
@@ -543,6 +632,11 @@ public class TransportService {
     private TransportLineEntity loadLine(UUID id, UUID scope) {
         return this.lineRepository.findById(id).filter(l -> l.getEstablishment().getId().equals(scope))
                 .orElseThrow(() -> new NotFoundException("Ligne introuvable."));
+    }
+
+    private TransportVehicleEntity loadVehicle(UUID id, UUID scope) {
+        return this.vehicleRepository.findById(id).filter(v -> v.getEstablishment().getId().equals(scope))
+                .orElseThrow(() -> new NotFoundException("Véhicule introuvable."));
     }
 
     private TransportDriverEntity loadDriver(UUID id, UUID scope) {

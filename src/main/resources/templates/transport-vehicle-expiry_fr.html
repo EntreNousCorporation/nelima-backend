@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org" lang="fr">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Nelima — échéances des véhicules</title>
+</head>
+<body style="margin:0; padding:0; background-color:#EEF2F9;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#EEF2F9;">
+    <tr>
+        <td align="center" style="padding:32px 16px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" style="max-width:560px; width:100%;">
+                <tr>
+                    <td align="center" style="padding-bottom:20px;">
+                        <span style="font-family:Arial,Helvetica,sans-serif; font-size:30px; font-weight:bold; color:#0061FF; letter-spacing:0.5px;">Nelima</span>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="background-color:#ffffff; border-radius:16px; padding:32px;">
+                        <!-- L'école concernée, avec son logo quand elle en a déposé un. -->
+                        <table th:if="${establishmentName != null}" role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px 0;">
+                            <tr>
+                                <td th:if="${schoolLogoUrl != null}" width="76" style="padding-right:12px; vertical-align:middle;">
+                                    <img th:src="${schoolLogoUrl}" src="" alt="" height="64" style="display:block; height:64px; width:auto; max-width:120px; border:0;" />
+                                </td>
+                                <td style="vertical-align:middle; font-family:Arial,Helvetica,sans-serif; font-size:16px; font-weight:bold; color:#0C285D;" th:text="${establishmentName}">École</td>
+                            </tr>
+                        </table>
+                        <h1 style="margin:0 0 16px 0; font-family:Arial,Helvetica,sans-serif; font-size:20px; font-weight:bold; color:#0C285D;">
+                            Échéances des véhicules
+                        </h1>
+                        <div style="font-family:Arial,Helvetica,sans-serif; font-size:15px; line-height:1.6; color:#3F4A5A;">
+                            Bonjour,<br/><br/>
+                            Les documents suivants du parc de transport arrivent à échéance. Un véhicule sans
+                            assurance ou sans visite technique valide ne doit pas transporter d'élèves.
+                        </div>
+                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0 0 0;">
+                            <tr th:each="item : ${items}">
+                                <td style="background-color:#F4F6FB; border-radius:12px; padding:14px 20px; font-family:Arial,Helvetica,sans-serif; font-size:15px; line-height:1.6; color:#3F4A5A; border-bottom:6px solid #ffffff;">
+                                    <strong style="color:#0C285D;" th:text="${item.plate}">AB 1234 CI</strong>
+                                    <span th:if="${item.lines != null}" th:text="'· ' + ${item.lines}">· Ligne 1</span><br/>
+                                    <span th:text="${item.label}">Assurance</span> :
+                                    <strong th:style="${item.expired} ? 'color:#D92D20;' : 'color:#0C285D;'" th:text="${item.when}">expire le 30/11/2026</strong>
+                                </td>
+                            </tr>
+                        </table>
+                        <div style="margin:20px 0 0 0; font-family:Arial,Helvetica,sans-serif; font-size:15px; line-height:1.6; color:#3F4A5A;">
+                            Mettez les dates à jour dans le portail, rubrique Transport → Véhicules, une fois les documents renouvelés.
+                        </div>
+                        <p style="margin:24px 0 0 0; font-family:Arial,Helvetica,sans-serif; font-size:15px; color:#3F4A5A;">
+                            Cordialement,<br/><strong style="color:#0C285D;">L'équipe Nelima</strong>
+                        </p>
+                    </td>
+                </tr>
+                <tr>
+                    <td align="center" style="padding:20px 16px;">
+                        <p style="margin:0; font-family:Arial,Helvetica,sans-serif; font-size:12px; line-height:1.5; color:#8A99AD;">
+                            Message envoyé automatiquement à la direction de l'établissement, 30 jours avant chaque échéance.
+                        </p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+</body>
+</html>

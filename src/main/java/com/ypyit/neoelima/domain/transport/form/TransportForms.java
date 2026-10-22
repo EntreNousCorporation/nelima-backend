@@ -44,6 +44,25 @@ public final class TransportForms {
 
     @Getter
     @Setter
+    public static class Vehicle {
+        @NotBlank
+        @Size(min = 6, max = 16)
+        private String plate;
+        private com.ypyit.neoelima.domain.transport.enums.VehicleKind kind;
+        @Size(max = 64)
+        private String model;
+        @NotNull
+        @Min(1)
+        @Max(120)
+        private Integer capacity;
+        @NotNull
+        private LocalDate insuranceExpiry;
+        private LocalDate technicalVisit;
+        private boolean active = true;
+    }
+
+    @Getter
+    @Setter
     public static class Stop {
         /** Présent pour un arrêt existant : ses abonnés le gardent. */
         private UUID id;
@@ -61,9 +80,10 @@ public final class TransportForms {
         @NotBlank
         @Size(max = 64)
         private String name;
+        /** Véhicule du parc ; à défaut, immatriculation et places saisies à la main. */
+        private UUID vehicleId;
         @Size(max = 16)
         private String vehiclePlate;
-        @NotNull
         @Min(1)
         @Max(120)
         private Integer capacity;

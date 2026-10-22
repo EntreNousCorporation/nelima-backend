@@ -35,6 +35,21 @@ public final class TransportDtos {
 
     @Getter
     @Builder
+    public static class Vehicle {
+        private String id;
+        private String plate;
+        private com.ypyit.neoelima.domain.transport.enums.VehicleKind kind;
+        private String model;
+        private int capacity;
+        private LocalDate insuranceExpiry;
+        private LocalDate technicalVisit;
+        private boolean active;
+        /** Lignes de l'année qui l'affectent ; vide, il est disponible. */
+        private List<String> lines;
+    }
+
+    @Getter
+    @Builder
     public static class Stop {
         private String id;
         private int position;
@@ -52,6 +67,7 @@ public final class TransportDtos {
         private String name;
         /** « Riviera 3 → Palmeraie → École » : du premier au dernier arrêt. */
         private String itinerary;
+        private String vehicleId;
         private String vehiclePlate;
         private int capacity;
         private String driverId;
