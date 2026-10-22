@@ -81,8 +81,8 @@ class SchoolPermissionBoundariesTest extends AbstractIntegrationTest {
                 .isInstanceOf(AccessDeniedException.class);
 
         this.login("collection:write");
-        assertThatThrownBy(() -> this.receiptService.search(null, null, null, null, null, null, PageRequest.of(0, 10)))
-                .as("pas tout le journal").isInstanceOf(AccessDeniedException.class);
+        assertThatCode(() -> this.receiptService.search(null, null, null, null, null, null, PageRequest.of(0, 10)))
+                .as("sa propre caisse, filtrée sur ses encaissements").doesNotThrowAnyException();
         assertThatCode(() -> this.receiptService.search(null, null, null, null, null, UUID.randomUUID(), PageRequest.of(0, 10)))
                 .as("les reçus d'un élève, au guichet").doesNotThrowAnyException();
         assertThatCode(() -> this.installmentService.findAll(new InstallmentSearchForm(), PageRequest.of(0, 10)))

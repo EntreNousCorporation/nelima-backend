@@ -86,12 +86,17 @@ public class ReceiptService {
 
         if (this.currentUserProvider.hasEstablishmentScope()) {
             // Le journal des reçus est une donnée comptable : la comptabilité ou les frais. Au guichet,
-            // l'encaissement relit les reçus d'un élève donné, pas ceux de toute l'école.
+            // l'encaissement relit les reçus d'un élève donné, et sa propre caisse — les reçus qu'il a
+            // encaissés lui-même —, pas ceux de toute l'école.
             boolean ledger = this.currentUserProvider.hasPermission("accounting:read")
                     || this.currentUserProvider.hasPermission("fee:read");
-            boolean counter = Objects.nonNull(studentId) && this.currentUserProvider.hasPermission("collection:write");
-            if (!ledger && !counter) {
-                throw new org.springframework.security.access.AccessDeniedException("Permission accounting:read is required");
+            if (!ledger) {
+                if (!this.currentUserProvider.hasPermission("collection:write")) {
+                    throw new org.springframework.security.access.AccessDeniedException("Permission accounting:read is required");
+                }
+                if (Objects.isNull(studentId)) {
+                    builder.and(receipt.paymentIntent.payer.id.eq(this.currentUserProvider.currentUser().getId()));
+                }
             }
             UUID scope = this.currentUserProvider.resolveEstablishmentScope(requestedEstablishmentId);
             if (Objects.nonNull(scope)) {
