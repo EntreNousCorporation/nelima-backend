@@ -114,6 +114,7 @@ public class UserServiceImpl implements UserService {
     private final StudentRepository studentRepository;
     private final StudentMapper studentMapper;
     private final com.ypyit.neoelima.config.security.EffectivePermissions effectivePermissions;
+    private final com.ypyit.neoelima.domain.establishment.service.SchoolLogo schoolLogo;
 
     @Override
     public UserDto createPartnerRootUser(UserSignupForm signupForm) throws BusinessException {
@@ -410,6 +411,7 @@ public class UserServiceImpl implements UserService {
                 this.establishmentRepository.findById(siteId).ifPresent(site -> {
                     dto.setEstablishmentId(site.getId());
                     dto.setEstablishmentName(site.getName());
+                    dto.setEstablishmentLogo(this.schoolLogo.publicUrl(site).orElse(null));
                     if (Objects.nonNull(site.getSchoolGroup())) {
                         dto.setSchoolGroupName(site.getSchoolGroup().getName());
                     }
@@ -551,9 +553,10 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public void sendStudentParentInvitation(ContactEntity contact) throws BusinessException {
+    public void sendStudentParentInvitation(ContactEntity contact,
+                                            com.ypyit.neoelima.domain.establishment.entity.EstablishmentEntity establishment) throws BusinessException {
         if (ContactType.EMAIL.equals(contact.getType())) {
-            this.sendStudentWelcomeParentEmail(contact.getValue());
+            this.sendStudentWelcomeParentEmail(contact.getValue(), establishment);
         }
         if (ContactType.PHONE_NUMBER.equals(contact.getType())) {
             this.sendStudentWelcomeParentSms(contact.getValue());
@@ -628,6 +631,10 @@ public class UserServiceImpl implements UserService {
             Context context = this.emailDefaultProperties.getDefaultContext();
             context.setVariable(EmailConstants.TOKEN_LINK, this.buildTokenLink(email, token, resetPasswordRequest.getTarget()));
             context.setVariable(EmailConstants.EMAIL, email);
+            // Un compte d'école : son nom et son logo dans le message de bienvenue.
+            if (org.hibernate.Hibernate.unproxy(user, UserEntity.class) instanceof EstablishmentUserEntity schoolUser) {
+                this.schoolLogo.addTo(context, schoolUser.getEstablishment());
+            }
             this.emailService.send(context, templateType);
         } catch (Exception e) {
             log.error("Error while fetching user with identifier ", e);
@@ -650,10 +657,13 @@ public class UserServiceImpl implements UserService {
         }
     }
 
-    public void sendStudentWelcomeParentEmail(String email) {
+    public void sendStudentWelcomeParentEmail(String email,
+                                              com.ypyit.neoelima.domain.establishment.entity.EstablishmentEntity establishment) {
         try {
             Context context = this.emailDefaultProperties.getDefaultContext();
             context.setVariable(EmailConstants.EMAIL, email);
+            // L'école qui invite, avec son logo : le parent reconnaît d'où vient le message.
+            this.schoolLogo.addTo(context, establishment);
             this.emailService.send(context, EmailTemplateType.INVITE_STUDENT_PARENT);
         } catch (Exception e) {
             log.error("Error while fetching user with identifier ", e);

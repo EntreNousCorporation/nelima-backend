@@ -20,6 +20,8 @@ public final class SchoolSiteDtos {
         private UUID id;
         private String name;
         private String city;
+        /** Logo déposé par le site, s'il y en a un. */
+        private String logo;
     }
 
     /** Le site affiché et ceux que l'appelant peut afficher. */

@@ -83,6 +83,16 @@ public class StorageServiceImpl implements StorageService {
     }
 
     @Override
+    public Optional<byte[]> read(String bucketName, String objectName) {
+        try (var stream = this.minioClient.getObject(io.minio.GetObjectArgs.builder().bucket(bucketName).object(objectName).build())) {
+            return Optional.of(stream.readAllBytes());
+        } catch (Exception e) {
+            log.warn("STORAGE_READ_FAILED: {}/{} : {}", bucketName, objectName, e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    @Override
     public Optional<String> uploadDynamicFile(StorageDto storageDto) throws StorageException {
         try {
             Assert.notNull(storageDto.getBucketName(), "Bucket name must be provided");

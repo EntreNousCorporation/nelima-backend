@@ -71,6 +71,8 @@ class OfflineCollectionServiceTest extends AbstractIntegrationTest {
     private ReceiptService receiptService;
     @Autowired
     private ReceiptPdfRenderer receiptPdfRenderer;
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    private com.ypyit.neoelima.domain.storage.service.StorageService storageService;
 
     private EstablishmentEntity establishment;
     private InstallmentEntity installment;
@@ -171,6 +173,35 @@ class OfflineCollectionServiceTest extends AbstractIntegrationTest {
 
         assertThat(page.getContent()).hasSize(1);
         assertThat(page.getContent().get(0).getNumber()).matches("\\d{4}-\\d{6}");
+    }
+
+    @Test
+    @DisplayName("le logo de l'école figure en tête du reçu PDF")
+    void rendersSchoolLogoOnReceipt() throws Exception {
+        // Une image PNG d'un pixel, servie par le stockage simulé.
+        byte[] png = java.util.Base64.getDecoder().decode(
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==");
+        org.mockito.Mockito.when(storageService.read("ecole-logo", "logo.png")).thenReturn(java.util.Optional.of(png));
+        establishment.setCoverImage(com.ypyit.neoelima.domain.transverse.entity.FileMediaEntity.builder()
+                .name("logo.png").link("https://storage.nelima.ci/ecole-logo/logo.png").build());
+        establishmentRepository.saveAndFlush(establishment);
+
+        ReceiptEntity receipt = offlineCollectionService.collect(OfflineCollectionForm.builder()
+                .installmentId(installment.getId()).channel(PaymentChannel.CASH).build());
+        byte[] pdf = receiptPdfRenderer.render(receipt);
+
+        try (org.apache.pdfbox.pdmodel.PDDocument document = org.apache.pdfbox.pdmodel.PDDocument.load(pdf)) {
+            var resources = document.getPage(0).getResources();
+            long images = java.util.stream.StreamSupport.stream(resources.getXObjectNames().spliterator(), false)
+                    .filter(name -> {
+                        try {
+                            return resources.getXObject(name) instanceof org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
+                        } catch (java.io.IOException e) {
+                            return false;
+                        }
+                    }).count();
+            assertThat(images).as("le logo est intégré au PDF").isEqualTo(1);
+        }
     }
 
     @Test

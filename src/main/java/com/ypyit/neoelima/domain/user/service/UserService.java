@@ -62,7 +62,7 @@ public interface UserService {
 
     void resendMobileOtp(String username) throws BusinessException;
 
-    void sendStudentParentInvitation(ContactEntity contact) throws BusinessException;
+    void sendStudentParentInvitation(ContactEntity contact, com.ypyit.neoelima.domain.establishment.entity.EstablishmentEntity establishment) throws BusinessException;
 
     List<StudentLiteDto> findStudents(UUID parentId) throws BusinessException;
 }

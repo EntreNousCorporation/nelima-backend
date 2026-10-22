@@ -61,6 +61,7 @@ public class SchoolSiteService {
     private final AcademicYearContext academicYearContext;
     private final CurrentUserProvider currentUserProvider;
     private final JPAQueryFactory queryFactory;
+    private final SchoolLogo schoolLogo;
 
     /* ------------------------------------------------------------------ Côté école ---- */
 
@@ -78,7 +79,7 @@ public class SchoolSiteService {
                 .groupWide(user.isGroupWide() && Objects.nonNull(group))
                 .homeId(home.getId())
                 .currentId(current)
-                .sites(sites.stream().map(SchoolSiteService::siteOf).toList())
+                .sites(sites.stream().map(this::siteOf).toList())
                 .build();
     }
 
@@ -237,7 +238,7 @@ public class SchoolSiteService {
         return SchoolSiteDtos.Group.builder()
                 .id(group.getId())
                 .name(group.getName())
-                .sites(sites.stream().map(SchoolSiteService::siteOf).toList())
+                .sites(sites.stream().map(this::siteOf).toList())
                 .members(members)
                 .build();
     }
@@ -252,8 +253,9 @@ public class SchoolSiteService {
                 .build();
     }
 
-    private static SchoolSiteDtos.Site siteOf(EstablishmentEntity site) {
-        return SchoolSiteDtos.Site.builder().id(site.getId()).name(site.getName()).city(site.getCity()).build();
+    private SchoolSiteDtos.Site siteOf(EstablishmentEntity site) {
+        return SchoolSiteDtos.Site.builder().id(site.getId()).name(site.getName()).city(site.getCity())
+                .logo(this.schoolLogo.publicUrl(site).orElse(null)).build();
     }
 
     /* ------------------------------------------------------------------ Chiffres ---- */

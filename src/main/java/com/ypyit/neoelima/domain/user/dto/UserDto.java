@@ -41,6 +41,8 @@ public class UserDto extends BaseDto {
     private boolean groupWide;
     /** Groupe scolaire du site, s'il en fait partie. */
     private String schoolGroupName;
+    /** Logo de l'école affichée, s'il a été déposé. */
+    private String establishmentLogo;
 
     /** Code du rôle porté par le compte. */
     private String roleCode;

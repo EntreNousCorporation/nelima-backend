@@ -517,7 +517,7 @@ public class StudentServiceImpl implements StudentService {
             student.getParentUsers().add(parent.get());
             ContactEntity contact = parent.get().getContacts().stream()
                     .filter(ContactEntity::isPrimary).findFirst().get();
-            this.userService.sendStudentParentInvitation(contact);
+            this.userService.sendStudentParentInvitation(contact, student.getEstablishment());
         }
     }
 }

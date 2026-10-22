@@ -43,6 +43,7 @@ public class ReceiptPdfRenderer {
             PaymentChannel.BANK_TRANSFER, "Virement bancaire");
 
     private final TemplateEngine templateEngine;
+    private final com.ypyit.neoelima.domain.establishment.service.SchoolLogo schoolLogo;
 
     /**
      * Le rendu traverse les relations du reçu, qui sont paresseuses : l'appel doit donc se faire
@@ -78,7 +79,10 @@ public class ReceiptPdfRenderer {
         BigDecimal commission = Objects.isNull(intent.getAmountCommission())
                 ? BigDecimal.ZERO : intent.getAmountCommission();
 
+        // Le logo de l'école en tête du reçu, intégré au document : vide s'il n'y en a pas.
+        String logo = this.schoolLogo.dataUri(receipt.getEstablishment()).orElse("");
         return Map.ofEntries(
+                Map.entry("logo", logo),
                 Map.entry("number", receipt.getNumber()),
                 Map.entry("establishmentName", nullSafe(receipt.getEstablishment().getName())),
                 Map.entry("issuedAt", ISSUED_AT.format(receipt.getIssuedAt().atZone(ABIDJAN))),

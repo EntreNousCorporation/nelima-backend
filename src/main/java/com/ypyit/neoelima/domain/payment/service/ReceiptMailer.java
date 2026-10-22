@@ -48,6 +48,7 @@ import java.util.Set;
 public class ReceiptMailer {
 
     private final EmailService emailService;
+    private final com.ypyit.neoelima.domain.establishment.service.SchoolLogo schoolLogo;
     private final ReceiptPdfRenderer receiptPdfRenderer;
 
     @Transactional(readOnly = true)
@@ -89,6 +90,7 @@ public class ReceiptMailer {
         context.setVariable(EmailConstants.PLATFORM_NAME, "Nelima");
         context.setVariable("receiptNumber", receipt.getNumber());
         context.setVariable("establishmentName", receipt.getEstablishment().getName());
+        context.setVariable("schoolLogoUrl", this.schoolLogo.publicUrl(receipt.getEstablishment()).orElse(null));
         context.setVariable("studentLabel", receipt.getStudentLabel());
         context.setVariable("studentRegistrationNumber", receipt.getStudentRegistrationNumber());
         context.setVariable("amountTotal", formatXof(receipt.getAmount()));

@@ -21,6 +21,9 @@ public interface StorageService {
 
     Optional<String> uploadDynamicFile(StorageDto storageDto) throws StorageException;
 
+    /** Contenu d'un fichier déposé ; vide s'il n'existe pas ou n'est pas lisible. */
+    Optional<byte[]> read(String bucketName, String objectName);
+
     Optional<String> uploadStaticFile(StorageDto storageDto) throws StorageException;
 
     List<StorageResponse> getStaticFiles() throws StorageException;

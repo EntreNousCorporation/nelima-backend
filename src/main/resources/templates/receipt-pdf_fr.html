@@ -34,6 +34,9 @@
     <table style="width:100%; border-collapse:collapse;">
         <tr>
             <td>
+                <!-- Le logo de l'école, intégré au document ; absent, le nom suffit. -->
+                <img th:if="${logo != null and !logo.isEmpty()}" th:src="${logo}" alt=""
+                     style="max-height: 16mm; max-width: 40mm; display: block; margin-bottom: 6px;" />
                 <div class="ecole" th:text="${establishmentName}">Établissement</div>
             </td>
             <td style="text-align:right;">
