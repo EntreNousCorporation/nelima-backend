@@ -16,6 +16,9 @@ set -euo pipefail
 JAVA_HOME="${JAVA_HOME:-/Library/Java/JavaVirtualMachines/amazon-corretto-21.jdk/Contents/Home}"
 REMOTE="${REMOTE:-nelima}"
 REMOTE_DIR="${REMOTE_DIR:-deployment/nelima}"
+# Adresse publique vérifiée en fin de déploiement : celle de l'environnement visé.
+# Staging : REMOTE=nelima-stg API_URL=https://api-stg.nelima.ci ./deploy.sh
+API_URL="${API_URL:-https://api.nelima.ci}"
 SKIP_TESTS="${SKIP_TESTS:-false}"
 
 say() { printf '\n==> %s\n' "$1"; }
@@ -100,4 +103,4 @@ ssh "$REMOTE" '
 '
 
 say "Vérification externe"
-curl -s -o /dev/null -w "    health HTTP %{http_code}\n" --max-time 30 https://api.nelima.ci/actuator/health
+curl -s -o /dev/null -w "    health HTTP %{http_code}\n" --max-time 30 "$API_URL/actuator/health"
