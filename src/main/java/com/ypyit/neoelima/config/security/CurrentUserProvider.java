@@ -10,6 +10,7 @@ import com.ypyit.neoelima.domain.establishment.entity.EstablishmentEntity;
 import lombok.RequiredArgsConstructor;
 import org.hibernate.Hibernate;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -43,7 +44,13 @@ public class CurrentUserProvider {
 
     public UserEntity currentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        // Une requête publique (définir son mot de passe, demande de démo, webhook de paiement)
+        // porte un AnonymousAuthenticationToken : il se dit « authentifié », sous le nom
+        // `anonymousUser`. Le chercher en base lèverait un « utilisateur introuvable » (404) au lieu
+        // de dire qu'il n'y a pas d'appelant — ce qui bloquait toutes les écritures publiques
+        // derrière le ClosedYearWriteInterceptor.
         if (Objects.isNull(authentication)
+                || authentication instanceof AnonymousAuthenticationToken
                 || !authentication.isAuthenticated()
                 || Objects.isNull(authentication.getName())) {
             throw new UnAuthenticatedUserException("No authenticated user in the security context");
