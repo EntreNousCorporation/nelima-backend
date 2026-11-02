@@ -1,6 +1,7 @@
 package com.ypyit.neoelima.domain.establishment.controller;
 
 import com.ypyit.neoelima.domain.establishment.dto.EstablishmentSetupDto;
+import com.ypyit.neoelima.domain.establishment.dto.EstablishmentSetupProgressDto;
 import com.ypyit.neoelima.domain.establishment.service.EstablishmentSetupService;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
@@ -10,6 +11,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -24,6 +26,13 @@ import java.util.UUID;
 public class AdminEstablishmentSetupController {
 
     private final EstablishmentSetupService establishmentSetupService;
+
+    @GetMapping(value = "/admin/establishments/setup", produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Progression de la configuration de toutes les écoles (back-office YPYit)",
+            description = "Pour la liste du parc : même calcul que la fiche, groupé par école.")
+    public ResponseEntity<List<EstablishmentSetupProgressDto>> progress() {
+        return ResponseEntity.ok(this.establishmentSetupService.progressOfAll());
+    }
 
     @GetMapping(value = "/admin/establishments/{id}/setup", produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "Avancement de la configuration d'une école (back-office YPYit)",

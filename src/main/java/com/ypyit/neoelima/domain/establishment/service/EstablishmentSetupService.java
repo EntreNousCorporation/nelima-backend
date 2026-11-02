@@ -3,6 +3,7 @@ package com.ypyit.neoelima.domain.establishment.service;
 import com.ypyit.neoelima.common.exception.NotFoundException;
 import com.ypyit.neoelima.domain.establishment.dto.EstablishmentSetupDto;
 import com.ypyit.neoelima.domain.establishment.dto.EstablishmentSetupDto.Step;
+import com.ypyit.neoelima.domain.establishment.dto.EstablishmentSetupProgressDto;
 import com.ypyit.neoelima.domain.establishment.entity.AcademicYearEntity;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
@@ -10,10 +11,13 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -22,13 +26,15 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Avancement de la configuration d'une école, pour la console YPYit.
+ * Avancement de la configuration des écoles, pour la console YPYit.
  *
- * <p>Comptages en SQL natif et non par chargement d'entités : la fiche s'ouvre d'un clic depuis la
- * liste du parc, elle ne doit pas hydrater 400 élèves pour en dire le nombre.
+ * <p>Une seule logique pour la fiche d'une école et pour la liste du parc : chaque comptage est
+ * groupé par école, si bien que la liste coûte le même nombre de requêtes pour sept écoles ou pour
+ * trois cents, et qu'une école affiche le même pourcentage dans la liste et sur sa fiche.
  *
- * <p>Classes, périodes et frais se lisent sur l'année en cours : une école qui a tout paramétré
- * l'an dernier et rien pour la rentrée n'est pas prête.
+ * <p>Comptages en SQL natif et non par chargement d'entités : dire qu'une école a 400 élèves ne
+ * doit pas en hydrater 400. Classes, périodes et frais se lisent sur l'année en cours : une école
+ * qui a tout paramétré l'an dernier et rien pour la rentrée n'est pas prête.
  */
 @Service
 @RequiredArgsConstructor
@@ -44,99 +50,168 @@ public class EstablishmentSetupService {
     private final EntityManager entityManager;
     private final AcademicYearContext academicYearContext;
 
+    /** Fiche d'une école : étapes détaillées et modules complémentaires. */
     public EstablishmentSetupDto setupOf(UUID establishmentId) {
-        Object[] school = this.single("""
-                select e.name, e.city, e.file_id, e.subscription_plan, e.principal_id,
-                       (select p.label from subscription_plan p where p.code = e.subscription_plan)
-                from establishment e where e.id = :id
-                """, Map.of("id", establishmentId))
-                .orElseThrow(() -> new NotFoundException("École introuvable"));
         Optional<AcademicYearEntity> year = this.academicYearContext.current();
         UUID yearId = year.map(AcademicYearEntity::getId).orElse(null);
-
-        List<Step> steps = new ArrayList<>();
-        steps.add(this.identity(establishmentId, school));
-        steps.add(this.principal((UUID) school[4]));
-        steps.add(this.subscription((String) school[3], (String) school[5]));
-
-        long levels = this.count("select count(*) from establishment_level_of_studies where establishment_id = :id",
-                establishmentId, null);
-        steps.add(step("levels", "Niveaux enseignés", "Un élève ne s'inscrit que dans un niveau déclaré",
-                levels, plural(levels, "niveau", "niveaux")));
-
-        long classes = this.count("select count(*) from school_class where establishment_id = :id", establishmentId, null);
-        steps.add(step("classes", "Classes", "Salles, capacités et titulaires",
-                classes, plural(classes, "classe", "classes")));
-
-        long periods = this.count("""
-                select count(*) from academic_period p join school_year sy on sy.id = p.school_year_id
-                where sy.establishment_id = :id and sy.academic_year_id = :year
-                """, establishmentId, yearId);
-        steps.add(step("periods", "Périodes de l'année", "Trimestres ou semestres de l'année en cours",
-                periods, plural(periods, "période", "périodes")));
-
-        long fees = this.count("select count(*) from fee where establishment_id = :id and academic_year_id = :year",
-                establishmentId, yearId);
-        steps.add(step("fees", "Frais", "Scolarité, inscription, cantine, transport…",
-                fees, plural(fees, "frais défini", "frais définis")));
-
-        long scheduled = this.count("""
-                select count(distinct f.id) from fee f join fee_schedule s on s.fee_id = f.id
-                where f.establishment_id = :id and f.academic_year_id = :year
-                """, establishmentId, yearId);
-        steps.add(Step.builder().key("schedules").label("Échéanciers des frais")
-                .hint("Le découpage en tranches de chaque frais")
-                .count(scheduled)
-                .done(fees > 0 && scheduled >= fees)
-                .detail(fees == 0 ? null : scheduled + " frais sur " + fees + " avec échéancier")
-                .build());
-
-        long staff = this.count("select count(*) from staff where establishment_id = :id and active", establishmentId, null);
-        steps.add(step("staff", "Personnel", "Enseignants et administratifs",
-                staff, plural(staff, "membre actif", "membres actifs")));
-
-        long students = this.count("select count(*) from student where establishment_id = :id", establishmentId, null);
-        steps.add(step("students", "Élèves inscrits", "Saisie une par une ou import CSV",
-                students, plural(students, "élève", "élèves")));
-
-        long withParent = this.count("""
-                select count(distinct s.id) from student s join student_parents sp on sp.student_id = s.id
-                where s.establishment_id = :id
-                """, establishmentId, null);
-        steps.add(Step.builder().key("parents").label("Parents rattachés")
-                .hint("Au moins 80 % des élèves reliés à un parent, pour le paiement en ligne")
-                .count(withParent)
-                .done(students > 0 && withParent >= Math.ceil(students * PARENT_COVERAGE))
-                .detail(students == 0 ? null
-                        : withParent + " élève" + (withParent > 1 ? "s" : "") + " sur " + students
-                        + " (" + Math.round(100.0 * withParent / students) + " %)")
-                .build());
-
-        long receipts = this.count("select count(*) from receipt where establishment_id = :id", establishmentId, null);
-        steps.add(step("payments", "Premier encaissement", "Au guichet ou en ligne",
-                receipts, plural(receipts, "reçu émis", "reçus émis")));
-
-        int done = (int) steps.stream().filter(Step::isDone).count();
+        Facts facts = this.factsOf(List.of(establishmentId), yearId).get(establishmentId);
+        if (Objects.isNull(facts)) {
+            throw new NotFoundException("École introuvable");
+        }
+        List<Step> steps = steps(facts);
+        int done = done(steps);
         return EstablishmentSetupDto.builder()
                 .steps(steps)
                 .modules(this.modules(establishmentId, yearId))
                 .done(done)
                 .total(steps.size())
-                .progress(Math.round(100f * done / steps.size()))
+                .progress(progress(done, steps.size()))
                 .academicYear(year.map(AcademicYearEntity::getLabel).orElse(null))
                 .build();
     }
 
+    /** Liste du parc : la seule progression, pour toutes les écoles, en une poignée de requêtes. */
+    public List<EstablishmentSetupProgressDto> progressOfAll() {
+        UUID yearId = this.academicYearContext.currentId();
+        List<UUID> ids = this.ids("select id from establishment");
+        List<EstablishmentSetupProgressDto> result = new ArrayList<>();
+        this.factsOf(ids, yearId).forEach((id, facts) -> {
+            List<Step> steps = steps(facts);
+            int done = done(steps);
+            result.add(EstablishmentSetupProgressDto.builder()
+                    .establishmentId(id)
+                    .done(done)
+                    .total(steps.size())
+                    .progress(progress(done, steps.size()))
+                    .build());
+        });
+        return result;
+    }
+
+    /* ------------------------------------------------------------- Faits ---- */
+
+    /** Ce qu'il faut savoir d'une école pour juger de ses étapes. */
+    private static final class Facts {
+        String city;
+        Object logo;
+        String plan;
+        String planLabel;
+        UUID principalId;
+        Object principalPassword;
+        Object principalLastLogin;
+        long phones, emails, levels, classes, periods, fees, scheduled, staff, students, withParent, receipts;
+    }
+
+    private Map<UUID, Facts> factsOf(Collection<UUID> ids, UUID yearId) {
+        Map<UUID, Facts> facts = new HashMap<>();
+        if (ids.isEmpty()) {
+            return facts;
+        }
+        Query schools = this.entityManager.createNativeQuery("""
+                select e.id, e.city, e.file_id, e.subscription_plan, e.principal_id,
+                       (select p.label from subscription_plan p where p.code = e.subscription_plan),
+                       u.password_id, u.last_login
+                from establishment e left join users u on u.id = e.principal_id
+                where e.id in (:ids)
+                """);
+        schools.setParameter("ids", ids);
+        for (Object row : schools.getResultList()) {
+            Object[] r = (Object[]) row;
+            Facts f = new Facts();
+            f.city = (String) r[1];
+            f.logo = r[2];
+            f.plan = (String) r[3];
+            f.principalId = (UUID) r[4];
+            f.planLabel = (String) r[5];
+            f.principalPassword = r[6];
+            f.principalLastLogin = r[7];
+            facts.put((UUID) r[0], f);
+        }
+
+        this.grouped("""
+                select ec.establishment_id, count(*) from establishment_contacts ec join contact c on c.id = ec.contact_id
+                where ec.establishment_id in (:ids) and c.type = 'PHONE_NUMBER' group by 1
+                """, ids, null).forEach((id, n) -> with(facts, id).phones = n);
+        this.grouped("""
+                select ec.establishment_id, count(*) from establishment_contacts ec join contact c on c.id = ec.contact_id
+                where ec.establishment_id in (:ids) and c.type = 'EMAIL' group by 1
+                """, ids, null).forEach((id, n) -> with(facts, id).emails = n);
+        this.grouped("select establishment_id, count(*) from establishment_level_of_studies where establishment_id in (:ids) group by 1",
+                ids, null).forEach((id, n) -> with(facts, id).levels = n);
+        this.grouped("select establishment_id, count(*) from school_class where establishment_id in (:ids) group by 1",
+                ids, null).forEach((id, n) -> with(facts, id).classes = n);
+        this.grouped("""
+                select sy.establishment_id, count(*) from academic_period p join school_year sy on sy.id = p.school_year_id
+                where sy.establishment_id in (:ids) and sy.academic_year_id = :year group by 1
+                """, ids, yearId).forEach((id, n) -> with(facts, id).periods = n);
+        this.grouped("select establishment_id, count(*) from fee where establishment_id in (:ids) and academic_year_id = :year group by 1",
+                ids, yearId).forEach((id, n) -> with(facts, id).fees = n);
+        this.grouped("""
+                select f.establishment_id, count(distinct f.id) from fee f join fee_schedule s on s.fee_id = f.id
+                where f.establishment_id in (:ids) and f.academic_year_id = :year group by 1
+                """, ids, yearId).forEach((id, n) -> with(facts, id).scheduled = n);
+        this.grouped("select establishment_id, count(*) from staff where establishment_id in (:ids) and active group by 1",
+                ids, null).forEach((id, n) -> with(facts, id).staff = n);
+        this.grouped("select establishment_id, count(*) from student where establishment_id in (:ids) group by 1",
+                ids, null).forEach((id, n) -> with(facts, id).students = n);
+        this.grouped("""
+                select s.establishment_id, count(distinct s.id) from student s join student_parents sp on sp.student_id = s.id
+                where s.establishment_id in (:ids) group by 1
+                """, ids, null).forEach((id, n) -> with(facts, id).withParent = n);
+        this.grouped("select establishment_id, count(*) from receipt where establishment_id in (:ids) group by 1",
+                ids, null).forEach((id, n) -> with(facts, id).receipts = n);
+        return facts;
+    }
+
+    /** Un comptage qui citerait une école absente (rare course à la suppression) ne crée rien. */
+    private static Facts with(Map<UUID, Facts> facts, UUID id) {
+        return facts.getOrDefault(id, new Facts());
+    }
+
     /* ------------------------------------------------------------- Étapes ---- */
 
-    private Step identity(UUID establishmentId, Object[] school) {
+    private static List<Step> steps(Facts f) {
+        List<Step> steps = new ArrayList<>();
+        steps.add(identity(f));
+        steps.add(principal(f));
+        steps.add(subscription(f));
+        steps.add(step("levels", "Niveaux enseignés", "Un élève ne s'inscrit que dans un niveau déclaré",
+                f.levels, plural(f.levels, "niveau", "niveaux")));
+        steps.add(step("classes", "Classes", "Salles, capacités et titulaires",
+                f.classes, plural(f.classes, "classe", "classes")));
+        steps.add(step("periods", "Périodes de l'année", "Trimestres ou semestres de l'année en cours",
+                f.periods, plural(f.periods, "période", "périodes")));
+        steps.add(step("fees", "Frais", "Scolarité, inscription, cantine, transport…",
+                f.fees, plural(f.fees, "frais défini", "frais définis")));
+        steps.add(Step.builder().key("schedules").label("Échéanciers des frais")
+                .hint("Le découpage en tranches de chaque frais")
+                .count(f.scheduled)
+                .done(f.fees > 0 && f.scheduled >= f.fees)
+                .detail(f.fees == 0 ? null : f.scheduled + " frais sur " + f.fees + " avec échéancier")
+                .build());
+        steps.add(step("staff", "Personnel", "Enseignants et administratifs",
+                f.staff, plural(f.staff, "membre actif", "membres actifs")));
+        steps.add(step("students", "Élèves inscrits", "Saisie une par une ou import CSV",
+                f.students, plural(f.students, "élève", "élèves")));
+        steps.add(Step.builder().key("parents").label("Parents rattachés")
+                .hint("Au moins 80 % des élèves reliés à un parent, pour le paiement en ligne")
+                .count(f.withParent)
+                .done(f.students > 0 && f.withParent >= Math.ceil(f.students * PARENT_COVERAGE))
+                .detail(f.students == 0 ? null
+                        : f.withParent + " élève" + (f.withParent > 1 ? "s" : "") + " sur " + f.students
+                        + " (" + Math.round(100.0 * f.withParent / f.students) + " %)")
+                .build());
+        steps.add(step("payments", "Premier encaissement", "Au guichet ou en ligne",
+                f.receipts, plural(f.receipts, "reçu émis", "reçus émis")));
+        return steps;
+    }
+
+    private static Step identity(Facts f) {
         List<String> missing = new ArrayList<>();
-        if (Objects.isNull(school[2])) missing.add("logo");
-        if (isBlank(school[1])) missing.add("ville");
-        long phones = this.contacts(establishmentId, "PHONE_NUMBER");
-        long emails = this.contacts(establishmentId, "EMAIL");
-        if (phones == 0) missing.add("téléphone");
-        if (emails == 0) missing.add("e-mail");
+        if (Objects.isNull(f.logo)) missing.add("logo");
+        if (Objects.isNull(f.city) || f.city.isBlank()) missing.add("ville");
+        if (f.phones == 0) missing.add("téléphone");
+        if (f.emails == 0) missing.add("e-mail");
         return Step.builder().key("identity").label("Fiche de l'établissement")
                 .hint("Logo, ville, téléphone et e-mail de contact")
                 .done(missing.isEmpty())
@@ -145,34 +220,27 @@ public class EstablishmentSetupService {
                 .build();
     }
 
-    private Step principal(UUID principalId) {
+    private static Step principal(Facts f) {
         Step.StepBuilder step = Step.builder().key("principal").label("Compte de direction")
                 .hint("Le directeur a défini son mot de passe");
-        if (Objects.isNull(principalId)) {
+        if (Objects.isNull(f.principalId)) {
             return step.done(false).detail("Aucun directeur désigné").build();
         }
-        Object[] user = this.single("select u.password_id, u.last_login from users u where u.id = :id",
-                Map.of("id", principalId)).orElse(new Object[]{null, null});
-        boolean activated = Objects.nonNull(user[0]);
-        String detail;
-        if (!activated) {
-            detail = "En attente d'activation";
-        } else if (user[1] instanceof Instant login) {
-            detail = "Activé · dernière connexion le " + DAY.format(login.atZone(ABIDJAN));
-        } else if (user[1] instanceof java.sql.Timestamp login) {
-            detail = "Activé · dernière connexion le " + DAY.format(login.toInstant().atZone(ABIDJAN));
-        } else {
-            detail = "Activé · jamais connecté";
-        }
+        boolean activated = Objects.nonNull(f.principalPassword);
+        Instant login = f.principalLastLogin instanceof Instant instant ? instant
+                : f.principalLastLogin instanceof Timestamp timestamp ? timestamp.toInstant() : null;
+        String detail = !activated ? "En attente d'activation"
+                : Objects.nonNull(login) ? "Activé · dernière connexion le " + DAY.format(login.atZone(ABIDJAN))
+                : "Activé · jamais connecté";
         return step.done(activated).count(activated ? 1 : 0).detail(detail).build();
     }
 
-    private Step subscription(String plan, String label) {
-        boolean done = Objects.nonNull(plan);
+    private static Step subscription(Facts f) {
+        boolean done = Objects.nonNull(f.plan);
         return Step.builder().key("subscription").label("Abonnement Nelima")
                 .hint("La formule qui fixe le nombre d'élèves inclus")
                 .done(done).count(done ? 1 : 0)
-                .detail(done ? Objects.requireNonNullElse(label, plan) : "Formule à définir")
+                .detail(done ? Objects.requireNonNullElse(f.planLabel, f.plan) : "Formule à définir")
                 .build();
     }
 
@@ -218,6 +286,14 @@ public class EstablishmentSetupService {
 
     /* ------------------------------------------------------------- Outils ---- */
 
+    private static int done(List<Step> steps) {
+        return (int) steps.stream().filter(Step::isDone).count();
+    }
+
+    private static int progress(int done, int total) {
+        return Math.round(100f * done / total);
+    }
+
     private static Step step(String key, String label, String hint, long count, String detail) {
         return Step.builder().key(key).label(label).hint(hint).count(count).done(count > 0)
                 .detail(count > 0 ? detail : null).build();
@@ -227,24 +303,33 @@ public class EstablishmentSetupService {
         return n + " " + (n > 1 ? many : one);
     }
 
-    private static boolean isBlank(Object value) {
-        return Objects.isNull(value) || value.toString().isBlank();
-    }
-
-    private long contacts(UUID establishmentId, String type) {
-        Query query = this.entityManager.createNativeQuery("""
-                select count(*) from establishment_contacts ec join contact c on c.id = ec.contact_id
-                where ec.establishment_id = :id and c.type = :type
-                """);
-        query.setParameter("id", establishmentId);
-        query.setParameter("type", type);
-        return ((Number) query.getSingleResult()).longValue();
+    private List<UUID> ids(String sql) {
+        return this.entityManager.createNativeQuery(sql).getResultList().stream()
+                .map(UUID.class::cast).toList();
     }
 
     /**
-     * Comptage scopé à l'école, et à l'année quand la requête la cite. Sans année déclarée sur la
-     * plateforme, une requête qui en dépend compte zéro : l'étape reste à faire.
+     * Comptage groupé par école. Sans année déclarée sur la plateforme, une requête qui en dépend
+     * ne compte rien : l'étape reste à faire.
      */
+    private Map<UUID, Long> grouped(String sql, Collection<UUID> ids, UUID yearId) {
+        Map<UUID, Long> counts = new HashMap<>();
+        if (sql.contains(":year") && Objects.isNull(yearId)) {
+            return counts;
+        }
+        Query query = this.entityManager.createNativeQuery(sql);
+        query.setParameter("ids", ids);
+        if (sql.contains(":year")) {
+            query.setParameter("year", yearId);
+        }
+        for (Object row : query.getResultList()) {
+            Object[] r = (Object[]) row;
+            counts.put((UUID) r[0], ((Number) r[1]).longValue());
+        }
+        return counts;
+    }
+
+    /** Comptage d'une seule école, pour les modules de la fiche. */
     private long count(String sql, UUID establishmentId, UUID yearId) {
         if (sql.contains(":year") && Objects.isNull(yearId)) {
             return 0;
@@ -255,12 +340,5 @@ public class EstablishmentSetupService {
             query.setParameter("year", yearId);
         }
         return ((Number) query.getSingleResult()).longValue();
-    }
-
-    private Optional<Object[]> single(String sql, Map<String, Object> parameters) {
-        Query query = this.entityManager.createNativeQuery(sql);
-        parameters.forEach(query::setParameter);
-        List<?> rows = query.getResultList();
-        return rows.isEmpty() ? Optional.empty() : Optional.of((Object[]) rows.get(0));
     }
 }

@@ -91,6 +91,40 @@ class EstablishmentSetupTest extends AbstractIntegrationTest {
                 .isEqualTo(Math.round(100f * 2 / setup.get("total").asInt()));
     }
 
+    @Test
+    @DisplayName("la liste du parc est fermée aux écoles")
+    void theListIsRefusedToSchools() throws Exception {
+        String token = this.tokenOfDirector(this.school());
+
+        int status = this.mockMvc.perform(MockMvcRequestBuilders.get("/admin/establishments/setup")
+                .header("Authorization", "Bearer " + token)).andReturn().getResponse().getStatus();
+
+        assertThat(status).isIn(401, 403);
+    }
+
+    @Test
+    @DisplayName("la liste donne, pour chaque école, le pourcentage de sa fiche")
+    void theListMatchesTheSheet() throws Exception {
+        EstablishmentEntity school = this.school();
+        this.jdbcTemplate.update("insert into school_class (id, name, capacity, establishment_id) values (?, ?, 40, ?)",
+                UUID.randomUUID(), "6e A", school.getId());
+
+        JsonNode sheet = this.setupOf(school);
+        MvcResult result = this.mockMvc.perform(MockMvcRequestBuilders.get("/admin/establishments/setup")
+                .header("Authorization", "Bearer " + this.tokenOfAdmin())).andReturn();
+        assertThat(result.getResponse().getStatus()).isEqualTo(200);
+        JsonNode row = null;
+        for (JsonNode entry : this.objectMapper.readTree(result.getResponse().getContentAsString())) {
+            if (school.getId().toString().equals(entry.get("establishmentId").asText())) {
+                row = entry;
+            }
+        }
+
+        assertThat(row).as("l'école doit figurer dans la liste").isNotNull();
+        assertThat(row.get("progress").asInt()).isEqualTo(sheet.get("progress").asInt());
+        assertThat(row.get("done").asInt()).isEqualTo(sheet.get("done").asInt()).isEqualTo(1);
+    }
+
     /* ---------- outillage ---------- */
 
     private JsonNode setupOf(EstablishmentEntity school) throws Exception {

@@ -51,6 +51,7 @@ public final class SecurityUtils {
             "/dashboard/platform",
             "/admin/parents",
             "/admin/receipts",
+            "/admin/establishments/setup",
             "/admin/establishments/*/setup"
     };
 
