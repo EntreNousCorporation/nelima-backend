@@ -100,6 +100,18 @@ class AcademicYearServiceTest extends AbstractIntegrationTest {
     }
 
     @Test
+    @DisplayName("l'année en cours, mémorisée pour la requête, suit un changement fait dans la même requête")
+    void currentYearCacheFollowsAChange() {
+        this.login(this.adminEmail);
+        AcademicYearDto first = this.academicYearService.create(this.form("2025-2026", 2025, true));
+        assertThat(this.academicYearContext.currentId()).isEqualTo(UUID.fromString(first.getId()));
+
+        AcademicYearDto second = this.academicYearService.create(this.form("2026-2027", 2026, true));
+
+        assertThat(this.academicYearContext.currentId()).isEqualTo(UUID.fromString(second.getId()));
+    }
+
+    @Test
     @DisplayName("chaque école pose ses trimestres, sans toucher à ceux des autres")
     void periodsBelongToEachSchool() {
         this.login(this.adminEmail);

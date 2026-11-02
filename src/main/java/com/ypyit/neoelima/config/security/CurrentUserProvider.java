@@ -14,6 +14,8 @@ import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
+import org.springframework.web.context.request.RequestAttributes;
+import org.springframework.web.context.request.RequestContextHolder;
 
 import java.util.Objects;
 import java.util.Optional;
@@ -42,6 +44,8 @@ public class CurrentUserProvider {
     private final com.ypyit.neoelima.domain.establishment.repository.EstablishmentRepository establishmentRepository;
     private final EffectivePermissions effectivePermissions;
 
+    private static final String CURRENT_USER_ATTRIBUTE = CurrentUserProvider.class.getName() + ".user.";
+
     public UserEntity currentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         // Une requête publique (définir son mot de passe, demande de démo, webhook de paiement)
@@ -55,7 +59,26 @@ public class CurrentUserProvider {
                 || Objects.isNull(authentication.getName())) {
             throw new UnAuthenticatedUserException("No authenticated user in the security context");
         }
-        UserEntity user = this.userDetailsService.loadUserByUsername(authentication.getName());
+        // Mémorisé le temps de la requête HTTP : un même écran appelait currentUser() des dizaines
+        // de fois (une par agrégat du tableau de bord), chacune relançant une requête SQL native que
+        // le cache de session Hibernate ne court-circuite pas. Avec open-in-view, la session reste
+        // ouverte toute la requête : l'entité mémorisée est l'instance gérée elle-même. Hors requête
+        // web (tâches planifiées, tests), rien n'est mémorisé.
+        RequestAttributes request = RequestContextHolder.getRequestAttributes();
+        String key = CURRENT_USER_ATTRIBUTE + authentication.getName();
+        if (Objects.nonNull(request)
+                && request.getAttribute(key, RequestAttributes.SCOPE_REQUEST) instanceof UserEntity cached) {
+            return cached;
+        }
+        UserEntity user = this.loadCurrentUser(authentication.getName());
+        if (Objects.nonNull(request)) {
+            request.setAttribute(key, user, RequestAttributes.SCOPE_REQUEST);
+        }
+        return user;
+    }
+
+    private UserEntity loadCurrentUser(String username) {
+        UserEntity user = this.userDetailsService.loadUserByUsername(username);
         // Dé-proxification indispensable. Quand une requête charge un établissement AVANT de résoudre
         // l'appelant — affecter un élève à une classe charge la classe, donc son établissement, donc
         // son `principal` en proxy LAZY —, `loadUserByUsername` renvoie ce proxy déjà en session,

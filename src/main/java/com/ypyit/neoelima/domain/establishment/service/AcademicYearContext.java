@@ -13,6 +13,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.context.request.RequestAttributes;
+import org.springframework.web.context.request.RequestContextHolder;
 
 import java.util.Objects;
 import java.util.Optional;
@@ -39,9 +41,34 @@ public class AcademicYearContext {
     private final EstablishmentRepository establishmentRepository;
     private final CurrentUserProvider currentUserProvider;
 
-    /** L'année en cours de la plateforme. */
+    private static final String CURRENT_YEAR_ATTRIBUTE = AcademicYearContext.class.getName() + ".current";
+
+    /**
+     * L'année en cours de la plateforme.
+     *
+     * <p>Mémorisée le temps de la requête HTTP : un écran la demandait une fois par agrégat. Toute
+     * écriture qui change l'année en cours doit appeler {@link #forgetCurrent()}.
+     */
+    @SuppressWarnings("unchecked")
     public Optional<AcademicYearEntity> current() {
-        return this.academicYearRepository.findByActiveTrue();
+        RequestAttributes request = RequestContextHolder.getRequestAttributes();
+        if (Objects.nonNull(request)
+                && request.getAttribute(CURRENT_YEAR_ATTRIBUTE, RequestAttributes.SCOPE_REQUEST) instanceof Optional<?> cached) {
+            return (Optional<AcademicYearEntity>) cached;
+        }
+        Optional<AcademicYearEntity> year = this.academicYearRepository.findByActiveTrue();
+        if (Objects.nonNull(request)) {
+            request.setAttribute(CURRENT_YEAR_ATTRIBUTE, year, RequestAttributes.SCOPE_REQUEST);
+        }
+        return year;
+    }
+
+    /** Oublie l'année en cours mémorisée pour la requête : à appeler après l'avoir changée. */
+    public void forgetCurrent() {
+        RequestAttributes request = RequestContextHolder.getRequestAttributes();
+        if (Objects.nonNull(request)) {
+            request.removeAttribute(CURRENT_YEAR_ATTRIBUTE, RequestAttributes.SCOPE_REQUEST);
+        }
     }
 
     /** L'année que l'utilisateur connecté consulte : son choix, ou l'année en cours. */

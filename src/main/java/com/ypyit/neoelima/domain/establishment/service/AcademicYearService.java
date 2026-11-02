@@ -147,6 +147,7 @@ public class AcademicYearService {
                     "Des écoles travaillent sur l'année %s : elle ne peut plus être supprimée.", entity.getLabel()));
         }
         this.academicYearRepository.delete(entity);
+        this.academicYearContext.forgetCurrent();
         log.info("ACADEMIC_YEAR_DELETED: {}", id);
     }
 
@@ -209,6 +210,7 @@ public class AcademicYearService {
         entity.setStartDate(form.getStartDate());
         entity.setEndDate(form.getEndDate());
         entity.setActive(form.isActive());
+        this.academicYearContext.forgetCurrent();
     }
 
     private List<SchoolYearEntity> schoolYearsOf(UUID yearId) {
