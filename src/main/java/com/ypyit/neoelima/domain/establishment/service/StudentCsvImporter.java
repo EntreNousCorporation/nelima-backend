@@ -23,16 +23,20 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.text.Normalizer;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.time.format.ResolverStyle;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -134,6 +138,27 @@ public class StudentCsvImporter {
     }
 
     /**
+     * Clé de recherche d'un niveau : casse, accents et espaces ignorés.
+     *
+     * <p>L'école voit partout « 4ème », jamais le code {@code QUATRIEME} : exiger le code refusait
+     * des fichiers justes. « 4ème », « 4EME » et « quatrieme » désignent le même niveau.
+     */
+    private static String levelKey(String value) {
+        if (Objects.isNull(value)) {
+            return "";
+        }
+        String unaccented = Normalizer.normalize(value, Normalizer.Form.NFD).replaceAll("\\p{M}", "");
+        return unaccented.replaceAll("\\s+", "").toLowerCase(Locale.ROOT);
+    }
+
+    /** Ce que l'école lit d'un niveau : son libellé, à défaut son code. */
+    private static String levelLabel(LevelOfStudyEntity level) {
+        return Objects.nonNull(level.getName()) && StringUtils.isNotBlank(level.getName().getFr())
+                ? level.getName().getFr()
+                : level.getCode();
+    }
+
+    /**
      * Le modèle à télécharger : l'en-tête complet et une ligne d'exemple.
      *
      * <p>Produit ici, à partir des mêmes constantes que le contrôle d'en-tête. Un modèle écrit à
@@ -189,9 +214,16 @@ public class StudentCsvImporter {
         EstablishmentEntity establishment = this.establishmentRepository.findById(establishmentId)
                 .orElseThrow(() -> new BadRequestException("Établissement introuvable"));
 
-        Map<String, LevelOfStudyEntity> levelsByCode = new LinkedHashMap<>();
-        establishment.getLevelOfStudies().forEach(level -> levelsByCode.put(level.getCode(), level));
-        if (levelsByCode.isEmpty()) {
+        // Indexés par code et par libellé : le fichier peut porter l'un ou l'autre.
+        Map<String, LevelOfStudyEntity> levelsByKey = new LinkedHashMap<>();
+        List<LevelOfStudyEntity> levels = establishment.getLevelOfStudies().stream()
+                .sorted(Comparator.comparingInt(LevelOfStudyEntity::getPosition))
+                .toList();
+        levels.forEach(level -> levelsByKey.putIfAbsent(levelKey(level.getCode()), level));
+        levels.forEach(level -> levelsByKey.putIfAbsent(levelKey(levelLabel(level)), level));
+        String acceptedLevels = levels.stream().map(StudentCsvImporter::levelLabel)
+                .collect(Collectors.joining(", "));
+        if (levels.isEmpty()) {
             throw new BadRequestException(
                     "Aucun niveau n'est déclaré pour l'établissement : renseignez-les avant d'importer");
         }
@@ -225,7 +257,7 @@ public class StudentCsvImporter {
                     throw new BadRequestException(String.format(
                             "Le fichier dépasse %d élèves : découpez-le en plusieurs imports", MAX_ROWS));
                 }
-                this.parseRow(line, lineNumber, establishment, levelsByCode, classesByName, optional,
+                this.parseRow(line, lineNumber, establishment, levelsByKey, acceptedLevels, classesByName, optional,
                         students, errors);
             }
         } catch (IOException e) {
@@ -290,7 +322,7 @@ public class StudentCsvImporter {
     }
 
     private void parseRow(String line, int lineNumber, EstablishmentEntity establishment,
-                          Map<String, LevelOfStudyEntity> levelsByCode,
+                          Map<String, LevelOfStudyEntity> levelsByKey, String acceptedLevels,
                           Map<String, SchoolClassEntity> classesByName, Map<String, Integer> optional,
                           List<StudentEntity> students, List<String> errors) {
         String[] cells = line.split(SEPARATOR, -1);
@@ -321,10 +353,10 @@ public class StudentCsvImporter {
             return;
         }
 
-        LevelOfStudyEntity level = levelsByCode.get(levelCode);
+        LevelOfStudyEntity level = levelsByKey.get(levelKey(levelCode));
         if (Objects.isNull(level)) {
-            errors.add(String.format("ligne %d : niveau « %s » non enseigné par l'établissement",
-                    lineNumber, levelCode));
+            errors.add(String.format("ligne %d : niveau « %s » non enseigné par l'établissement (niveaux : %s)",
+                    lineNumber, levelCode, acceptedLevels));
             return;
         }
 
@@ -370,7 +402,7 @@ public class StudentCsvImporter {
             if (Objects.nonNull(schoolClass.getLevelOfStudy())
                     && !schoolClass.getLevelOfStudy().getId().equals(level.getId())) {
                 errors.add(String.format("ligne %d : la classe « %s » n'est pas du niveau %s",
-                        lineNumber, className, levelCode));
+                        lineNumber, className, levelLabel(level)));
                 return;
             }
         }

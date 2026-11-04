@@ -13,6 +13,7 @@ import com.ypyit.neoelima.domain.establishment.repository.StudentRepository;
 import com.ypyit.neoelima.domain.establishment.service.StudentCsvImporter;
 import com.ypyit.neoelima.domain.user.entity.ContactEntity;
 import com.ypyit.neoelima.domain.user.entity.EstablishmentUserEntity;
+import com.ypyit.neoelima.domain.user.entity.TranslateEntity;
 import com.ypyit.neoelima.domain.user.enums.ContactType;
 import com.ypyit.neoelima.domain.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -127,6 +128,36 @@ class StudentCsvImporterTest extends AbstractIntegrationTest {
                 "2022001;Koffi;Aaron;31-02-2012;Abidjan;" + levelCode + "\n")))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("JJ-MM-AAAA");
+    }
+
+    @Test
+    @DisplayName("le niveau s'écrit comme l'école le lit : libellé, casse et accents indifférents")
+    void acceptsTheLevelLabel() {
+        String code = "QUATRIEME-" + UUID.randomUUID().toString().substring(0, 6);
+        school.getLevelOfStudies().add(levelOfStudyRepository.saveAndFlush(LevelOfStudyEntity.builder()
+                .code(code).position(12)
+                .name(TranslateEntity.builder().fr("4ème").en("8th grade").build()).build()));
+        school = establishmentRepository.saveAndFlush(school);
+
+        var report = importer.importFrom(csv(
+                "2024001;Kadio;Marc;20-06-2012;Sikensi;4ème \n"
+                        + "2024002;Konan;Jean;01-03-2012;Sikensi;4EME\n"
+                        + "2024003;Assanvo;Aaron;02-03-2012;Sikensi;" + code.toLowerCase() + "\n"));
+
+        assertThat(report.getImported()).isEqualTo(3);
+        assertThat(studentRepository.findAllByEstablishment_Id(school.getId(),
+                org.springframework.data.domain.Pageable.unpaged()).getContent())
+                .extracting(student -> student.getLevelOfStudy().getCode())
+                .containsOnly(code);
+    }
+
+    @Test
+    @DisplayName("un niveau refusé dit ceux que l'école enseigne")
+    void unknownLevelListsTheAcceptedOnes() {
+        assertThatThrownBy(() -> importer.importFrom(csv(
+                "2022001;Koffi;Aaron;03-04-2012;Abidjan;TERMINALE\n")))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("niveaux : " + levelCode);
     }
 
     @Test
