@@ -52,7 +52,8 @@ public final class SecurityUtils {
             "/admin/parents",
             "/admin/receipts",
             "/admin/establishments/setup",
-            "/admin/establishments/*/setup"
+            "/admin/establishments/*/setup",
+            "/admin/establishments/*/overview"
     };
 
     /**

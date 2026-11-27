@@ -1,7 +1,9 @@
 package com.ypyit.neoelima.domain.establishment.controller;
 
+import com.ypyit.neoelima.domain.establishment.dto.EstablishmentOverviewDto;
 import com.ypyit.neoelima.domain.establishment.dto.EstablishmentSetupDto;
 import com.ypyit.neoelima.domain.establishment.dto.EstablishmentSetupProgressDto;
+import com.ypyit.neoelima.domain.establishment.service.EstablishmentOverviewService;
 import com.ypyit.neoelima.domain.establishment.service.EstablishmentSetupService;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +28,7 @@ import java.util.UUID;
 public class AdminEstablishmentSetupController {
 
     private final EstablishmentSetupService establishmentSetupService;
+    private final EstablishmentOverviewService establishmentOverviewService;
 
     @GetMapping(value = "/admin/establishments/setup", produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "Progression de la configuration de toutes les écoles (back-office YPYit)",
@@ -39,5 +42,12 @@ public class AdminEstablishmentSetupController {
             description = "Étapes essentielles, avec leur progression, et modules complémentaires déjà paramétrés.")
     public ResponseEntity<EstablishmentSetupDto> setup(@PathVariable UUID id) {
         return ResponseEntity.ok(this.establishmentSetupService.setupOf(id));
+    }
+
+    @GetMapping(value = "/admin/establishments/{id}/overview", produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Composition d'une école (back-office YPYit)",
+            description = "Comptes du portail, personnel (sans les salaires), niveaux et classes avec leurs effectifs.")
+    public ResponseEntity<EstablishmentOverviewDto> overview(@PathVariable UUID id) {
+        return ResponseEntity.ok(this.establishmentOverviewService.overviewOf(id));
     }
 }
