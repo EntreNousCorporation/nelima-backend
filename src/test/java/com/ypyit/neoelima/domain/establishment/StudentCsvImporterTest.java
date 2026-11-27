@@ -98,7 +98,7 @@ class StudentCsvImporterTest extends AbstractIntegrationTest {
     void rejectsWholeFileOnSingleInvalidRow() {
         assertThatThrownBy(() -> importer.importFrom(csv(
                 "2022001;Koffi;Aaron;03-04-2012;Abidjan;" + levelCode + "\n"
-                        + "2022002;Diallo;Fatou;21/09/2011;Bouaké;" + levelCode + "\n")))
+                        + "2022002;Diallo;Fatou;21.09.2011;Bouaké;" + levelCode + "\n")))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("ligne 3");
 
@@ -119,6 +119,33 @@ class StudentCsvImporterTest extends AbstractIntegrationTest {
                 .extracting(StudentEntity::getBirthDay)
                 .as("le 3 avril, et non le 4 mars : c'est toute la différence entre les deux formats")
                 .isEqualTo(LocalDate.of(2012, 4, 3));
+    }
+
+    @Test
+    @DisplayName("la date s'écrit avec des tirets ou des barres, toujours jour-mois-année")
+    void acceptsDashesAndSlashes() {
+        importer.importFrom(csv(
+                "2022001;Koffi;Aaron;09-05-2012;Abidjan;" + levelCode + "\n"
+                        + "2022002;Diallo;Fatou;09/05/2012;Bouaké;" + levelCode + "\n"));
+
+        assertThat(studentRepository.findAllByEstablishment_Id(school.getId(),
+                org.springframework.data.domain.Pageable.unpaged()).getContent())
+                .extracting(StudentEntity::getBirthDay)
+                .as("le 9 mai dans les deux écritures")
+                .containsOnly(LocalDate.of(2012, 5, 9));
+    }
+
+    @Test
+    @DisplayName("barres ou tirets, mais pas les deux dans une même date, ni un jour impossible")
+    void rejectsMixedSeparatorsAndImpossibleSlashDates() {
+        assertThatThrownBy(() -> importer.importFrom(csv(
+                "2022001;Koffi;Aaron;09/05-2012;Abidjan;" + levelCode + "\n")))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("JJ/MM/AAAA");
+        assertThatThrownBy(() -> importer.importFrom(csv(
+                "2022001;Koffi;Aaron;31/02/2012;Abidjan;" + levelCode + "\n")))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("31/02/2012");
     }
 
     @Test

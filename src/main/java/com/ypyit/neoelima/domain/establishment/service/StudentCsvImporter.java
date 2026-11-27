@@ -73,6 +73,16 @@ public class StudentCsvImporter {
             DateTimeFormatter.ofPattern("dd-MM-uuuu").withResolverStyle(ResolverStyle.STRICT);
 
     /**
+     * La même date, séparée par des barres : {@code 09/05/2022}.
+     *
+     * <p>C'est l'écriture la plus courante dans les listes des écoles, et celle qu'un tableur en
+     * français rend par défaut. Refuser l'une ou l'autre faisait reformater toute une colonne
+     * pour un simple séparateur. Un séparateur par date : {@code 09/05-2022} reste refusé.
+     */
+    private static final DateTimeFormatter BIRTH_DAY_SLASH_FORMAT =
+            DateTimeFormatter.ofPattern("dd/MM/uuuu").withResolverStyle(ResolverStyle.STRICT);
+
+    /**
      * Les six colonnes de l'état civil, exigées de tout fichier.
      */
     private static final List<String> REQUIRED_HEADERS =
@@ -174,21 +184,21 @@ public class StudentCsvImporter {
     /**
      * Date de naissance d'une ligne, nulle si elle n'est pas lisible.
      *
-     * <p>Le format annoncé est {@code JJ-MM-AAAA}, et c'est celui du modèle. L'ISO reste accepté
+     * <p>Le format annoncé est {@code JJ-MM-AAAA} ou {@code JJ/MM/AAAA} ; le modèle porte le premier. L'ISO reste accepté
      * en second essai, sans être proposé : les fichiers préparés sous l'ancienne consigne ne
      * doivent pas se voir refuser du jour au lendemain, et les deux écritures ne peuvent pas se
      * confondre — l'année tient quatre chiffres, en tête ou en queue, jamais les deux.
      */
     private static LocalDate parsedBirthDay(String raw) {
-        try {
-            return LocalDate.parse(raw, BIRTH_DAY_FORMAT);
-        } catch (DateTimeParseException expected) {
+        for (DateTimeFormatter format : List.of(BIRTH_DAY_FORMAT, BIRTH_DAY_SLASH_FORMAT,
+                DateTimeFormatter.ISO_LOCAL_DATE)) {
             try {
-                return LocalDate.parse(raw);
-            } catch (DateTimeParseException unreadable) {
-                return null;
+                return LocalDate.parse(raw, format);
+            } catch (DateTimeParseException tryNext) {
+                // format suivant
             }
         }
+        return null;
     }
 
     @Getter
@@ -348,7 +358,7 @@ public class StudentCsvImporter {
 
         LocalDate birthDay = parsedBirthDay(birthDayRaw);
         if (Objects.isNull(birthDay)) {
-            errors.add(String.format("ligne %d : date de naissance « %s » attendue au format JJ-MM-AAAA",
+            errors.add(String.format("ligne %d : date de naissance « %s » attendue au format JJ-MM-AAAA ou JJ/MM/AAAA",
                     lineNumber, birthDayRaw));
             return;
         }
